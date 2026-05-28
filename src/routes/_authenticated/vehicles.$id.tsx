@@ -15,13 +15,27 @@ function VehicleDetailPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [heroUrl, setHeroUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     void (async () => {
       setLoading(true);
-      const { data } = await supabase.from("vehicles").select("*").eq("id", id).maybeSingle();
+      const [{ data }, { data: photos }] = await Promise.all([
+        supabase.from("vehicles").select("*").eq("id", id).maybeSingle(),
+        supabase
+          .from("photos")
+          .select("image_url, shot_type, sort_order, created_at, is_main")
+          .eq("vehicle_id", id),
+      ]);
       setVehicle(data as Vehicle | null);
+      const rows = (photos as { image_url: string; shot_type: string | null; sort_order: number; created_at: string; is_main: boolean }[]) || [];
+      const main = rows.find((p) => p.is_main);
+      const front = rows.find((p) => p.shot_type === "Front");
+      const first = [...rows].sort((a, b) =>
+        a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : a.created_at.localeCompare(b.created_at),
+      )[0];
+      setHeroUrl(main?.image_url ?? front?.image_url ?? first?.image_url ?? null);
       setLoading(false);
     })();
   }, [id]);
