@@ -15,6 +15,7 @@ export function AppNav() {
           <nav className="flex items-center gap-1">
             <NavLink to="/dashboard">Dashboard</NavLink>
             <NavLink to="/inventory">Inventory</NavLink>
+            <NavLink to="/overlays">Overlays</NavLink>
             {isOwner && <NavLink to="/dealerships">Dealerships</NavLink>}
           </nav>
         </div>
