@@ -46,6 +46,19 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
   const [uploading, setUploading] = useState<string | null>(null);
   const [customLabel, setCustomLabel] = useState("");
   const [addingCustom, setAddingCustom] = useState(false);
+  const [dealershipId, setDealershipId] = useState<string | null>(null);
+  const [overlayPhoto, setOverlayPhoto] = useState<Photo | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase
+        .from("vehicles")
+        .select("dealership_id")
+        .eq("id", vehicleId)
+        .maybeSingle();
+      setDealershipId((data?.dealership_id as string) || null);
+    })();
+  }, [vehicleId]);
 
   const load = async () => {
     const { data } = await supabase
