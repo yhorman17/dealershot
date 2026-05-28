@@ -445,46 +445,44 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 bg-background border-t border-border">
-                    <div className="flex items-center gap-1">
-                      {!it.is_main && (
-                        <>
-                          <button
-                            onClick={() => void moveItem(it, -1)}
-                            disabled={!canMoveUp}
-                            aria-label="Move earlier"
-                            className="h-10 w-10 flex items-center justify-center rounded bg-secondary text-foreground text-lg font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary/80"
-                          >↑</button>
-                          <button
-                            onClick={() => void moveItem(it, 1)}
-                            disabled={!canMoveDown}
-                            aria-label="Move later"
-                            className="h-10 w-10 flex items-center justify-center rounded bg-secondary text-foreground text-lg font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary/80"
-                          >↓</button>
-                        </>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 flex-wrap justify-end">
+                  <div className="flex flex-col gap-2 p-2 bg-background border-t border-border">
+                    {!it.is_main && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => void moveItem(it, -1)}
+                          disabled={!canMoveUp}
+                          aria-label="Move earlier"
+                          className="h-11 w-11 flex items-center justify-center rounded bg-secondary text-foreground text-lg font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary/80"
+                        >↑</button>
+                        <button
+                          onClick={() => void moveItem(it, 1)}
+                          disabled={!canMoveDown}
+                          aria-label="Move later"
+                          className="h-11 w-11 flex items-center justify-center rounded bg-secondary text-foreground text-lg font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary/80"
+                        >↓</button>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-stretch gap-1.5">
                       {!isDoc && dealershipId && it.photo && (
                         <>
                           <button
                             onClick={() => setOverlayPhoto(it.photo!)}
-                            className="rounded bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
+                            className="flex-1 min-w-[6.5rem] min-h-[44px] rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80"
                           >
                             Add Overlay
                           </button>
                           <button
                             onClick={() => setBgPhoto(it.photo!)}
-                            className="rounded bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
+                            className="flex-1 min-w-[6.5rem] min-h-[44px] rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80"
                           >
-                            Change Background
+                            Change BG
                           </button>
                         </>
                       )}
                       {!it.is_main && (
                         <button
                           onClick={() => void setAsMain(it)}
-                          className="rounded bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
+                          className="flex-1 min-w-[6.5rem] min-h-[44px] rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80"
                         >
                           Set as main
                         </button>
@@ -492,14 +490,14 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                       {isDoc ? (
                         <button
                           onClick={() => void detachDocument(it.link!)}
-                          className="rounded border border-border bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
+                          className="flex-1 min-w-[6.5rem] min-h-[44px] rounded border border-border bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80"
                         >
                           Detach
                         </button>
                       ) : (
                         <button
                           onClick={() => void deletePhoto(it.photo!)}
-                          className="rounded bg-destructive px-2 py-1.5 text-[10px] font-medium text-destructive-foreground hover:bg-destructive/90"
+                          className="flex-1 min-w-[6.5rem] min-h-[44px] rounded bg-destructive px-2 py-1.5 text-[11px] font-medium text-destructive-foreground hover:bg-destructive/90"
                         >
                           Delete
                         </button>
