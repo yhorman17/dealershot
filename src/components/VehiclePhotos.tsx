@@ -520,6 +520,15 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
         />
       )}
 
+      {bgPhoto && dealershipId && (
+        <BackgroundEditor
+          photo={bgPhoto}
+          dealershipId={dealershipId}
+          onClose={() => setBgPhoto(null)}
+          onSaved={() => { setBgPhoto(null); void load(); }}
+        />
+      )}
+
       {showAttachDoc && dealershipId && (
         <PickDocumentModal
           dealershipId={dealershipId}
