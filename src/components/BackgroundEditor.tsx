@@ -895,7 +895,8 @@ export function BackgroundEditor({
   const TABS: { key: TabKey; label: string }[] = [
     { key: "background", label: "Background" },
     { key: "adjust", label: "Adjust" },
-    { key: "compositing", label: "Compositing" },
+    { key: "shadow", label: "Shadow" },
+    { key: "reflection", label: "Reflection" },
     { key: "overlay", label: "Overlay" },
   ];
 
