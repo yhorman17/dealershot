@@ -103,7 +103,7 @@ function OverlaysPage() {
           <button
             onClick={() => setShowForm(true)}
             disabled={!selectedDealershipId}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             Add Overlay
           </button>
@@ -239,7 +239,7 @@ function OverlayForm({
             <button
               type="submit"
               disabled={saving}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
             >
               {saving ? "Uploading…" : "Create"}
             </button>
