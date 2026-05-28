@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { removeBackground } from "@imgly/background-removal";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -25,7 +25,9 @@ type Photo = {
   is_main: boolean;
 };
 
-// Defaults for compositing controls
+type TabKey = "background" | "compositing" | "overlay";
+
+// Defaults
 const DEFAULTS = {
   shadowIntensity: 60,
   shadowSoftness: 25,
@@ -71,8 +73,33 @@ function carRect(cutout: HTMLImageElement, targetW: number, targetH: number) {
   return { x: (targetW - w) / 2, y: (targetH - h) / 2, w, h };
 }
 
+// Find the true bottom edge of the silhouette in cutout image space
+function findSilhouetteBounds(img: HTMLImageElement): { top: number; bottom: number; left: number; right: number } {
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(img, 0, 0);
+  const { data, width, height } = ctx.getImageData(0, 0, c.width, c.height);
+  let top = height, bottom = 0, left = width, right = 0;
+  const threshold = 32;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (data[(y * width + x) * 4 + 3] > threshold) {
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+        if (x < left) left = x;
+        if (x > right) right = x;
+      }
+    }
+  }
+  if (bottom < top) { top = 0; bottom = height; left = 0; right = width; }
+  return { top, bottom, left, right };
+}
+
 function buildShadowCanvas(
   cutout: HTMLImageElement,
+  bounds: { top: number; bottom: number; left: number; right: number },
   targetW: number,
   targetH: number,
   opacity: number,
@@ -87,17 +114,30 @@ function buildShadowCanvas(
   c.height = targetH;
   const ctx = c.getContext("2d")!;
   const r = carRect(cutout, targetW, targetH);
-  const baseShadowH = r.h * 0.18;
+  // Convert silhouette bounds from cutout-space to target-space
+  const sx = r.w / cutout.naturalWidth;
+  const sy = r.h / cutout.naturalHeight;
+  const carWidth = (bounds.right - bounds.left) * sx;
+  const carBottomY = r.y + bounds.bottom * sy;
+  const carCenterX = r.x + ((bounds.left + bounds.right) / 2) * sx;
+
   const s = scalePct / 100;
-  const shadowW = r.w * s;
+  // Shadow size based on actual car silhouette, not full cutout bbox
+  const baseShadowH = carWidth * 0.22; // proportional to car width for a believable ellipse
+  const shadowW = carWidth * 1.1 * s;
   const shadowH = baseShadowH * s;
-  const cx = r.x + r.w / 2 + offsetX;
-  const cy = r.y + r.h + offsetY;
+  const cx = carCenterX + offsetX;
+  const cy = carBottomY + offsetY;
+
   ctx.filter = `blur(${blur}px)`;
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate((angleDeg * Math.PI) / 180);
-  ctx.drawImage(cutout, -shadowW / 2, -shadowH / 2, shadowW, shadowH);
+  // Draw vertically-squashed silhouette so the shadow has car-like shape
+  const scaleSilY = shadowH / r.h;
+  const scaleSilX = shadowW / r.w;
+  ctx.scale(scaleSilX, scaleSilY);
+  ctx.drawImage(cutout, -r.x - r.w / 2, -r.y - r.h / 2, r.w, r.h);
   ctx.restore();
   ctx.filter = "none";
   ctx.globalCompositeOperation = "source-in";
@@ -108,6 +148,7 @@ function buildShadowCanvas(
 
 function buildTireContactCanvas(
   cutout: HTMLImageElement,
+  bounds: { top: number; bottom: number; left: number; right: number },
   targetW: number,
   targetH: number,
   opacity: number,
@@ -117,19 +158,25 @@ function buildTireContactCanvas(
   c.height = targetH;
   const ctx = c.getContext("2d")!;
   const r = carRect(cutout, targetW, targetH);
-  // Thin tight band of silhouette near bottom — squashed and slightly heavier blur
-  const bandH = r.h * 0.06;
-  ctx.filter = `blur(${Math.max(4, r.w * 0.005)}px)`;
-  ctx.drawImage(cutout, r.x, r.y + r.h - bandH * 0.4, r.w, bandH);
-  ctx.filter = "none";
-  ctx.globalCompositeOperation = "source-in";
+  const sx = r.w / cutout.naturalWidth;
+  const sy = r.h / cutout.naturalHeight;
+  const carWidth = (bounds.right - bounds.left) * sx;
+  const carBottomY = r.y + bounds.bottom * sy;
+  const carCenterX = r.x + ((bounds.left + bounds.right) / 2) * sx;
+  const bandW = carWidth * 0.95;
+  const bandH = carWidth * 0.04;
+  ctx.filter = `blur(${Math.max(3, carWidth * 0.008)}px)`;
+  ctx.beginPath();
+  ctx.ellipse(carCenterX, carBottomY, bandW / 2, bandH, 0, 0, Math.PI * 2);
   ctx.fillStyle = `rgba(0,0,0,${opacity})`;
-  ctx.fillRect(0, 0, targetW, targetH);
+  ctx.fill();
+  ctx.filter = "none";
   return c;
 }
 
 function buildReflectionCanvas(
   cutout: HTMLImageElement,
+  bounds: { top: number; bottom: number; left: number; right: number },
   targetW: number,
   targetH: number,
   intensity: number,
@@ -141,21 +188,20 @@ function buildReflectionCanvas(
   c.height = targetH;
   const ctx = c.getContext("2d")!;
   const r = carRect(cutout, targetW, targetH);
-  const groundY = r.y + r.h + offsetY;
-  // Flipped copy directly below the car (with offsets)
+  const sy = r.h / cutout.naturalHeight;
+  const carBottomY = r.y + bounds.bottom * sy;
+  const groundY = carBottomY + offsetY;
   ctx.save();
   ctx.translate(r.x + offsetX, groundY + r.h);
   ctx.scale(1, -1);
   ctx.drawImage(cutout, 0, 0, r.w, r.h);
   ctx.restore();
-  // Fade from `intensity` at top of reflection down to 0 over half the car's height
   ctx.globalCompositeOperation = "destination-in";
   const grad = ctx.createLinearGradient(0, groundY, 0, groundY + r.h * 0.5);
   grad.addColorStop(0, `rgba(0,0,0,${intensity})`);
   grad.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = grad;
   ctx.fillRect(0, groundY, targetW, r.h);
-  // Make sure nothing leaks above the ground line
   ctx.globalCompositeOperation = "destination-out";
   ctx.fillStyle = "black";
   ctx.fillRect(0, 0, targetW, groundY);
@@ -164,6 +210,7 @@ function buildReflectionCanvas(
 
 type ComposeOpts = {
   cutout: HTMLImageElement;
+  bounds: { top: number; bottom: number; left: number; right: number };
   backdrop: HTMLImageElement;
   overlay: HTMLImageElement | null;
   overlayPos: Position;
@@ -186,39 +233,33 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
   const { targetW, targetH } = o;
   ctx.clearRect(0, 0, targetW, targetH);
 
-  // 1. Backdrop (cover)
   const bScale = Math.max(targetW / o.backdrop.naturalWidth, targetH / o.backdrop.naturalHeight);
   const bw = o.backdrop.naturalWidth * bScale;
   const bh = o.backdrop.naturalHeight * bScale;
   ctx.drawImage(o.backdrop, (targetW - bw) / 2, (targetH - bh) / 2, bw, bh);
 
-  // 2. Floor reflection
   if (o.reflectionIntensity > 0) {
-    const ref = buildReflectionCanvas(o.cutout, targetW, targetH, o.reflectionIntensity, o.reflectionX, o.reflectionY);
+    const ref = buildReflectionCanvas(o.cutout, o.bounds, targetW, targetH, o.reflectionIntensity, o.reflectionX, o.reflectionY);
     ctx.drawImage(ref, 0, 0);
   }
 
-  // 3. Ground shadow
   if (o.shadowOpacity > 0) {
     const sh = buildShadowCanvas(
-      o.cutout, targetW, targetH,
+      o.cutout, o.bounds, targetW, targetH,
       o.shadowOpacity, o.shadowBlur,
       o.shadowX, o.shadowY, o.shadowAngle, o.shadowScale,
     );
     ctx.drawImage(sh, 0, 0);
   }
 
-  // 3b. Tire contact shadows (small/tight, sits above the main ground shadow but under the car)
   if (o.tireContacts && o.tireIntensity > 0) {
-    const tc = buildTireContactCanvas(o.cutout, targetW, targetH, o.tireIntensity);
+    const tc = buildTireContactCanvas(o.cutout, o.bounds, targetW, targetH, o.tireIntensity);
     ctx.drawImage(tc, 0, 0);
   }
 
-  // 4. Cut-out car
   const r = carRect(o.cutout, targetW, targetH);
   ctx.drawImage(o.cutout, r.x, r.y, r.w, r.h);
 
-  // 5. Overlay banner
   if (o.overlay) {
     const dr = destRect(targetW, targetH, o.overlay.naturalWidth, o.overlay.naturalHeight, o.overlayPos);
     ctx.drawImage(o.overlay, dr.x, dr.y, dr.w, dr.h);
@@ -238,6 +279,7 @@ export function BackgroundEditor({
 }) {
   const [backdrops, setBackdrops] = useState<Backdrop[]>([]);
   const [overlays, setOverlays] = useState<OverlayTemplate[]>([]);
+  const [defaultBackdropId, setDefaultBackdropId] = useState<string>("");
   const [backdropId, setBackdropId] = useState<string>("");
   const [overlayId, setOverlayId] = useState<string>("");
   const [overlayPos, setOverlayPos] = useState<Position>("bottom");
@@ -251,8 +293,8 @@ export function BackgroundEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [comparing, setComparing] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>("background");
 
-  // Compositing controls
   const [shadowIntensity, setShadowIntensity] = useState(DEFAULTS.shadowIntensity);
   const [shadowSoftness, setShadowSoftness] = useState(DEFAULTS.shadowSoftness);
   const [shadowX, setShadowX] = useState(DEFAULTS.shadowX);
@@ -268,6 +310,9 @@ export function BackgroundEditor({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cutoutUrlRef = useRef<string | null>(null);
 
+  // Compute silhouette bounds once per cutout
+  const bounds = useMemo(() => (cutoutImg ? findSilhouetteBounds(cutoutImg) : null), [cutoutImg]);
+
   const resetCompositing = () => {
     setShadowIntensity(DEFAULTS.shadowIntensity);
     setShadowSoftness(DEFAULTS.shadowSoftness);
@@ -282,6 +327,12 @@ export function BackgroundEditor({
     setTireIntensity(DEFAULTS.tireIntensity);
   };
 
+  const resetCurrentTab = () => {
+    if (activeTab === "background") setBackdropId(defaultBackdropId);
+    else if (activeTab === "compositing") resetCompositing();
+    else if (activeTab === "overlay") { setOverlayId(""); setOverlayPos("bottom"); }
+  };
+
   useEffect(() => {
     void (async () => {
       const [{ data: bs }, { data: os }] = await Promise.all([
@@ -292,11 +343,13 @@ export function BackgroundEditor({
       const oList = (os as OverlayTemplate[]) || [];
       setBackdrops(bList);
       setOverlays(oList);
-      if (bList.length > 0) setBackdropId(bList[0].id);
+      if (bList.length > 0) {
+        setBackdropId(bList[0].id);
+        setDefaultBackdropId(bList[0].id);
+      }
     })();
   }, [dealershipId]);
 
-  // Background removal
   useEffect(() => {
     let cancelled = false;
     setRemoving(true);
@@ -326,7 +379,6 @@ export function BackgroundEditor({
     };
   }, [photo.image_url]);
 
-  // Load backdrop image
   useEffect(() => {
     const sel = backdrops.find((b) => b.id === backdropId);
     if (!sel) { setBackdropImg(null); return; }
@@ -335,7 +387,6 @@ export function BackgroundEditor({
     return () => { cancelled = true; };
   }, [backdropId, backdrops]);
 
-  // Load overlay image
   useEffect(() => {
     const sel = overlays.find((o) => o.id === overlayId);
     if (!sel) { setOverlayImg(null); return; }
@@ -344,16 +395,16 @@ export function BackgroundEditor({
     return () => { cancelled = true; };
   }, [overlayId, overlays]);
 
-  // Live preview render
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !cutoutImg || !backdropImg || !baseSize) return;
+    if (!canvas || !cutoutImg || !backdropImg || !baseSize || !bounds) return;
     canvas.width = baseSize.w;
     canvas.height = baseSize.h;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     compose(ctx, {
       cutout: cutoutImg,
+      bounds,
       backdrop: backdropImg,
       overlay: overlayImg,
       overlayPos,
@@ -372,7 +423,7 @@ export function BackgroundEditor({
       tireIntensity: tireIntensity / 100,
     });
   }, [
-    cutoutImg, backdropImg, overlayImg, overlayPos, baseSize,
+    cutoutImg, bounds, backdropImg, overlayImg, overlayPos, baseSize,
     shadowIntensity, shadowSoftness, shadowX, shadowY, shadowAngle, shadowScale,
     reflectionIntensity, reflectionX, reflectionY,
     tireContacts, tireIntensity,
@@ -427,6 +478,12 @@ export function BackgroundEditor({
 
   const ready = !!cutoutImg && !!backdropImg && !!baseSize && !removing;
 
+  const TABS: { key: TabKey; label: string }[] = [
+    { key: "background", label: "Background" },
+    { key: "compositing", label: "Compositing" },
+    { key: "overlay", label: "Overlay" },
+  ];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-auto">
       <div className="w-full max-w-3xl rounded-xl border border-border bg-card p-6 shadow-2xl my-8">
@@ -446,39 +503,14 @@ export function BackgroundEditor({
           </div>
         ) : (
           <>
-            <div className="grid sm:grid-cols-3 gap-3 mb-4">
-              <div>
-                <label className="block text-xs font-medium text-card-foreground mb-1.5">Backdrop</label>
-                <select value={backdropId} onChange={(e) => setBackdropId(e.target.value)} className="form-input">
-                  {backdrops.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-card-foreground mb-1.5">Overlay (optional)</label>
-                <select value={overlayId} onChange={(e) => setOverlayId(e.target.value)} className="form-input">
-                  <option value="">None</option>
-                  {overlays.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}{o.category ? ` — ${o.category}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-card-foreground mb-1.5">Overlay position</label>
-                <select
-                  value={overlayPos}
-                  onChange={(e) => setOverlayPos(e.target.value as Position)}
-                  disabled={!overlayId}
-                  className="form-input disabled:opacity-50"
-                >
-                  {POSITIONS.map((p) => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
-                  ))}
-                </select>
-              </div>
+            {/* Always-visible workspace: backdrop dropdown + preview */}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-card-foreground mb-1.5">Backdrop</label>
+              <select value={backdropId} onChange={(e) => setBackdropId(e.target.value)} className="form-input">
+                {backdrops.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
             </div>
 
             <div
@@ -498,7 +530,6 @@ export function BackgroundEditor({
                 />
               )}
 
-              {/* Compare toggle */}
               {ready && (
                 <button
                   type="button"
@@ -533,70 +564,128 @@ export function BackgroundEditor({
               )}
             </div>
 
-            <div className="mt-5 rounded-lg border border-border bg-secondary/30 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-card-foreground">
-                  Compositing
-                </h3>
+            {/* Tab bar */}
+            <div className="mt-5 border-b border-border flex gap-1">
+              {TABS.map((t) => {
+                const active = activeTab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setActiveTab(t.key)}
+                    className={`relative px-4 py-3 text-sm font-medium transition-colors min-h-[44px] ${
+                      active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {t.label}
+                    {active && (
+                      <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-primary rounded-full" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tab content */}
+            <div className="mt-4">
+              <div className="flex items-center justify-end mb-2">
                 <button
                   type="button"
-                  onClick={resetCompositing}
+                  onClick={resetCurrentTab}
                   className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
                 >
                   Reset to defaults
                 </button>
               </div>
 
-              {/* Shadow sub-group */}
-              <div className="rounded-md border border-border/60 bg-background/30 p-3 mb-3">
-                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Shadow</h4>
-                <div className="space-y-3">
-                  <SliderRow label="Intensity" value={shadowIntensity} min={0} max={100} suffix="%" onChange={setShadowIntensity} />
-                  <SliderRow label="Softness" value={shadowSoftness} min={0} max={50} suffix="px" onChange={setShadowSoftness} />
-                  <SliderRow label="Position X" value={shadowX} min={-200} max={200} suffix="px" onChange={setShadowX} />
-                  <SliderRow label="Position Y" value={shadowY} min={-100} max={100} suffix="px" onChange={setShadowY} />
-                  <SliderRow label="Angle" value={shadowAngle} min={-45} max={45} suffix="°" onChange={setShadowAngle} />
-                  <SliderRow label="Scale" value={shadowScale} min={50} max={150} suffix="%" onChange={setShadowScale} />
-
-                  <label className="flex items-center gap-2 pt-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={tireContacts}
-                      onChange={(e) => setTireContacts(e.target.checked)}
-                      className="h-4 w-4 accent-primary"
-                    />
-                    <span className="text-xs font-medium text-card-foreground">Add tire contact shadows</span>
-                  </label>
-                  {tireContacts && (
-                    <SliderRow
-                      label="Tire Contact Intensity"
-                      value={tireIntensity}
-                      min={0}
-                      max={100}
-                      suffix="%"
-                      onChange={setTireIntensity}
-                    />
-                  )}
+              {activeTab === "background" && (
+                <div className="rounded-lg border border-border bg-secondary/30 p-4 text-xs text-muted-foreground">
+                  Choose a backdrop above. The preview updates instantly. Use the Compositing tab to refine
+                  shadows and reflections, and the Overlay tab to add a banner.
                 </div>
-              </div>
+              )}
 
-              {/* Reflection sub-group */}
-              <div className="rounded-md border border-border/60 bg-background/30 p-3">
-                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Reflection</h4>
-                <div className="space-y-3">
-                  <SliderRow
-                    label="Intensity"
-                    value={reflectionIntensity}
-                    min={0}
-                    max={100}
-                    suffix="%"
-                    onChange={setReflectionIntensity}
-                    hint={reflectionIntensity === 0 ? "Disabled" : undefined}
-                  />
-                  <SliderRow label="Position X" value={reflectionX} min={-200} max={200} suffix="px" onChange={setReflectionX} />
-                  <SliderRow label="Position Y" value={reflectionY} min={-50} max={100} suffix="px" onChange={setReflectionY} />
+              {activeTab === "compositing" && (
+                <div className="rounded-lg border border-border bg-secondary/30 p-4">
+                  <div className="rounded-md border border-border/60 bg-background/30 p-3 mb-3">
+                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Shadow</h4>
+                    <div className="space-y-3">
+                      <SliderRow label="Intensity" value={shadowIntensity} min={0} max={100} suffix="%" onChange={setShadowIntensity} />
+                      <SliderRow label="Softness" value={shadowSoftness} min={0} max={50} suffix="px" onChange={setShadowSoftness} />
+                      <SliderRow label="Position X" value={shadowX} min={-200} max={200} suffix="px" onChange={setShadowX} />
+                      <SliderRow label="Position Y" value={shadowY} min={-100} max={100} suffix="px" onChange={setShadowY} />
+                      <SliderRow label="Angle" value={shadowAngle} min={-45} max={45} suffix="°" onChange={setShadowAngle} />
+                      <SliderRow label="Scale" value={shadowScale} min={50} max={150} suffix="%" onChange={setShadowScale} />
+
+                      <label className="flex items-center gap-2 pt-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={tireContacts}
+                          onChange={(e) => setTireContacts(e.target.checked)}
+                          className="h-4 w-4 accent-primary"
+                        />
+                        <span className="text-xs font-medium text-card-foreground">Add tire contact shadows</span>
+                      </label>
+                      {tireContacts && (
+                        <SliderRow
+                          label="Tire Contact Intensity"
+                          value={tireIntensity}
+                          min={0}
+                          max={100}
+                          suffix="%"
+                          onChange={setTireIntensity}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-border/60 bg-background/30 p-3">
+                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Reflection</h4>
+                    <div className="space-y-3">
+                      <SliderRow
+                        label="Intensity"
+                        value={reflectionIntensity}
+                        min={0}
+                        max={100}
+                        suffix="%"
+                        onChange={setReflectionIntensity}
+                        hint={reflectionIntensity === 0 ? "Disabled" : undefined}
+                      />
+                      <SliderRow label="Position X" value={reflectionX} min={-200} max={200} suffix="px" onChange={setReflectionX} />
+                      <SliderRow label="Position Y" value={reflectionY} min={-50} max={100} suffix="px" onChange={setReflectionY} />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {activeTab === "overlay" && (
+                <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-card-foreground mb-1.5">Overlay</label>
+                    <select value={overlayId} onChange={(e) => setOverlayId(e.target.value)} className="form-input">
+                      <option value="">None</option>
+                      {overlays.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.name}{o.category ? ` — ${o.category}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-card-foreground mb-1.5">Overlay position</label>
+                    <select
+                      value={overlayPos}
+                      onChange={(e) => setOverlayPos(e.target.value as Position)}
+                      disabled={!overlayId}
+                      className="form-input disabled:opacity-50"
+                    >
+                      {POSITIONS.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
 
             {error && (
