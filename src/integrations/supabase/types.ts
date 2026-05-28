@@ -44,6 +44,38 @@ export type Database = {
         }
         Relationships: []
       }
+      documents: {
+        Row: {
+          created_at: string
+          dealership_id: string
+          id: string
+          image_url: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          dealership_id: string
+          id?: string
+          image_url: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          dealership_id?: string
+          id?: string
+          image_url?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_dealership_id_fkey"
+            columns: ["dealership_id"]
+            isOneToOne: false
+            referencedRelation: "dealerships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       overlay_templates: {
         Row: {
           category: string | null
@@ -151,6 +183,45 @@ export type Database = {
             columns: ["dealership_id"]
             isOneToOne: false
             referencedRelation: "dealerships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_documents: {
+        Row: {
+          created_at: string
+          document_id: string
+          id: string
+          sort_order: number
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          id?: string
+          sort_order?: number
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          id?: string
+          sort_order?: number
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_documents_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_documents_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
