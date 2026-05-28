@@ -110,6 +110,12 @@ function VehicleDetailPage() {
         </div>
       </div>
 
+      {heroUrl && (
+        <div className="mt-6 aspect-[16/9] rounded-xl overflow-hidden bg-secondary border border-border">
+          <img src={heroUrl} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`} className="w-full h-full object-cover" />
+        </div>
+      )}
+
       <div className="mt-6">
         <VehiclePhotos vehicleId={id} />
       </div>
