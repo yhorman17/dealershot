@@ -910,8 +910,9 @@ export function BackgroundEditor({
   const overlayCrop = pendingCrop ?? adjustCrop;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-auto">
-      <div className="w-full max-w-3xl rounded-xl border border-border bg-card p-6 shadow-2xl my-8">
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-background/80 backdrop-blur-sm p-0 sm:p-4 overflow-auto">
+      <div className="w-full sm:max-w-3xl sm:rounded-xl border-0 sm:border border-border bg-card p-4 sm:p-6 shadow-2xl sm:my-8 min-h-screen sm:min-h-0">
+
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold text-card-foreground">Change Background</h2>
