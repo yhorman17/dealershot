@@ -70,18 +70,25 @@ function InventoryPage() {
       if (ids.length > 0) {
         const { data: photoRows } = await supabase
           .from("photos")
-          .select("vehicle_id, image_url, shot_type, created_at")
+          .select("vehicle_id, image_url, shot_type, created_at, sort_order, is_main")
           .in("vehicle_id", ids);
-        const byVehicle = new Map<string, { url: string; isFront: boolean; created: string }>();
-        for (const row of (photoRows as { vehicle_id: string; image_url: string; shot_type: string | null; created_at: string }[]) || []) {
+        type PRow = { vehicle_id: string; image_url: string; shot_type: string | null; created_at: string; sort_order: number; is_main: boolean };
+        // Priority: is_main (1) > Front (2) > anything else (3); within same rank, lower sort_order then older created_at.
+        const rank = (r: PRow) => (r.is_main ? 1 : r.shot_type === "Front" ? 2 : 3);
+        const byVehicle = new Map<string, PRow>();
+        for (const row of (photoRows as PRow[]) || []) {
           const cur = byVehicle.get(row.vehicle_id);
-          const isFront = row.shot_type === "Front";
-          if (!cur || (isFront && !cur.isFront) || (isFront === cur.isFront && row.created_at < cur.created)) {
-            byVehicle.set(row.vehicle_id, { url: row.image_url, isFront, created: row.created_at });
+          if (
+            !cur ||
+            rank(row) < rank(cur) ||
+            (rank(row) === rank(cur) && row.sort_order < cur.sort_order) ||
+            (rank(row) === rank(cur) && row.sort_order === cur.sort_order && row.created_at < cur.created_at)
+          ) {
+            byVehicle.set(row.vehicle_id, row);
           }
         }
         for (const v of list) {
-          v.thumbnail_url = byVehicle.get(v.id)?.url ?? null;
+          v.thumbnail_url = byVehicle.get(v.id)?.image_url ?? null;
         }
       }
       setVehicles(list);

@@ -84,24 +84,30 @@ export type Database = {
           created_at: string
           id: string
           image_url: string
+          is_main: boolean
           overlay_id: string | null
           shot_type: string | null
+          sort_order: number
           vehicle_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           image_url: string
+          is_main?: boolean
           overlay_id?: string | null
           shot_type?: string | null
+          sort_order?: number
           vehicle_id: string
         }
         Update: {
           created_at?: string
           id?: string
           image_url?: string
+          is_main?: boolean
           overlay_id?: string | null
           shot_type?: string | null
+          sort_order?: number
           vehicle_id?: string
         }
         Relationships: [
