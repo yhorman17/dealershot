@@ -100,7 +100,7 @@ function DocumentsPage() {
             Reusable images you can attach to any vehicle (window stickers, disclosures, etc.)
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {isOwner && (
             <select
               value={selectedDealershipId || ""}
@@ -115,7 +115,7 @@ function DocumentsPage() {
           <button
             onClick={() => setShowForm(true)}
             disabled={!selectedDealershipId}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             Add Document
           </button>
@@ -459,7 +459,7 @@ function BulkAttachModal({
           <button
             onClick={() => void handleConfirm()}
             disabled={saving || checked.size === 0}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {saving ? "Attaching…" : `Attach to ${checked.size}`}
           </button>
@@ -497,7 +497,7 @@ function ModalFooter({ onClose, saving, label, savingLabel }: {
       <button
         type="submit"
         disabled={saving}
-        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+        className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
       >
         {saving ? savingLabel : label}
       </button>

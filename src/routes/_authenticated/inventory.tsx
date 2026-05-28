@@ -120,7 +120,7 @@ function InventoryPage() {
             {filtered.length} vehicle{filtered.length === 1 ? "" : "s"}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {isOwner && (
             <select
               value={selectedDealershipId || ""}
@@ -135,7 +135,7 @@ function InventoryPage() {
           <Link
             to="/vehicles/new"
             search={selectedDealershipId ? { dealership: selectedDealershipId } : undefined}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             Add Vehicle
           </Link>

@@ -288,24 +288,26 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
             {SHOT_TYPES.map((shot) => {
               const taken = photos.find((p) => p.shot_type === shot.name);
               return (
-                <li key={shot.name} className="flex items-start gap-4 p-3 rounded-lg border border-border bg-background">
-                  <div className="flex-shrink-0 w-20 h-20 rounded-md overflow-hidden bg-secondary flex items-center justify-center">
-                    {taken ? (
-                      <img src={taken.image_url} alt={shot.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      {taken && (
-                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500/20 text-green-400 text-[10px]">✓</span>
+                <li key={shot.name} className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 p-3 rounded-lg border border-border bg-background">
+                  <div className="flex items-start gap-3 sm:contents w-full">
+                    <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-secondary flex items-center justify-center">
+                      {taken ? (
+                        <img src={taken.image_url} alt={shot.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
-                      <h4 className="text-sm font-medium text-card-foreground">{shot.name}</h4>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">{shot.tip}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        {taken && (
+                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500/20 text-green-400 text-[10px]">✓</span>
+                        )}
+                        <h4 className="text-sm font-medium text-card-foreground">{shot.name}</h4>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{shot.tip}</p>
+                    </div>
                   </div>
-                  <label className="flex-shrink-0 cursor-pointer rounded-md border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground hover:bg-secondary/80">
+                  <label className="w-full sm:w-auto sm:flex-shrink-0 cursor-pointer rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] flex items-center justify-center text-xs font-medium text-secondary-foreground hover:bg-secondary/80">
                     {uploading === shot.name ? "..." : taken ? "Replace" : "Capture"}
                     <input
                       type="file"
@@ -443,46 +445,44 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 bg-background border-t border-border">
-                    <div className="flex items-center gap-1">
-                      {!it.is_main && (
-                        <>
-                          <button
-                            onClick={() => void moveItem(it, -1)}
-                            disabled={!canMoveUp}
-                            aria-label="Move earlier"
-                            className="h-10 w-10 flex items-center justify-center rounded bg-secondary text-foreground text-lg font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary/80"
-                          >↑</button>
-                          <button
-                            onClick={() => void moveItem(it, 1)}
-                            disabled={!canMoveDown}
-                            aria-label="Move later"
-                            className="h-10 w-10 flex items-center justify-center rounded bg-secondary text-foreground text-lg font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary/80"
-                          >↓</button>
-                        </>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 flex-wrap justify-end">
+                  <div className="flex flex-col gap-2 p-2 bg-background border-t border-border">
+                    {!it.is_main && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => void moveItem(it, -1)}
+                          disabled={!canMoveUp}
+                          aria-label="Move earlier"
+                          className="h-11 w-11 flex items-center justify-center rounded bg-secondary text-foreground text-lg font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary/80"
+                        >↑</button>
+                        <button
+                          onClick={() => void moveItem(it, 1)}
+                          disabled={!canMoveDown}
+                          aria-label="Move later"
+                          className="h-11 w-11 flex items-center justify-center rounded bg-secondary text-foreground text-lg font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary/80"
+                        >↓</button>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-stretch gap-1.5">
                       {!isDoc && dealershipId && it.photo && (
                         <>
                           <button
                             onClick={() => setOverlayPhoto(it.photo!)}
-                            className="rounded bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
+                            className="flex-1 min-w-[6.5rem] min-h-[44px] rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80"
                           >
                             Add Overlay
                           </button>
                           <button
                             onClick={() => setBgPhoto(it.photo!)}
-                            className="rounded bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
+                            className="flex-1 min-w-[6.5rem] min-h-[44px] rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80"
                           >
-                            Change Background
+                            Change BG
                           </button>
                         </>
                       )}
                       {!it.is_main && (
                         <button
                           onClick={() => void setAsMain(it)}
-                          className="rounded bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
+                          className="flex-1 min-w-[6.5rem] min-h-[44px] rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80"
                         >
                           Set as main
                         </button>
@@ -490,14 +490,14 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                       {isDoc ? (
                         <button
                           onClick={() => void detachDocument(it.link!)}
-                          className="rounded border border-border bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
+                          className="flex-1 min-w-[6.5rem] min-h-[44px] rounded border border-border bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80"
                         >
                           Detach
                         </button>
                       ) : (
                         <button
                           onClick={() => void deletePhoto(it.photo!)}
-                          className="rounded bg-destructive px-2 py-1.5 text-[10px] font-medium text-destructive-foreground hover:bg-destructive/90"
+                          className="flex-1 min-w-[6.5rem] min-h-[44px] rounded bg-destructive px-2 py-1.5 text-[11px] font-medium text-destructive-foreground hover:bg-destructive/90"
                         >
                           Delete
                         </button>

@@ -70,64 +70,114 @@ function DealershipsPage() {
         </button>
       </div>
 
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-sm text-muted-foreground text-center">Loading…</div>
-        ) : dealerships.length === 0 ? (
-          <div className="p-8 text-sm text-muted-foreground text-center">No dealerships yet.</div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/50 text-left text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Address</th>
-                <th className="px-4 py-3 font-medium">Phone</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium w-32 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dealerships.map((d) => (
-                <tr key={d.id} className="border-t border-border">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      {d.logo_url ? (
-                        <img src={d.logo_url} alt="" className="h-8 w-8 rounded object-cover bg-secondary" />
-                      ) : (
-                        <div className="h-8 w-8 rounded bg-secondary flex items-center justify-center text-xs text-muted-foreground">
-                          {d.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <span className="font-medium text-card-foreground">{d.name}</span>
+      {loading ? (
+        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">Loading…</div>
+      ) : dealerships.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">No dealerships yet.</div>
+      ) : (
+        <>
+          {/* Mobile: card stack */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {dealerships.map((d) => (
+              <div key={d.id} className="rounded-xl border border-border bg-card p-4">
+                <div className="flex items-center gap-3">
+                  {d.logo_url ? (
+                    <img src={d.logo_url} alt="" className="h-10 w-10 rounded object-cover bg-secondary" />
+                  ) : (
+                    <div className="h-10 w-10 rounded bg-secondary flex items-center justify-center text-sm text-muted-foreground">
+                      {d.name.charAt(0).toUpperCase()}
                     </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{d.address || "—"}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{d.phone || "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-xs">
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-card-foreground truncate">{d.name}</p>
+                    <span className="inline-flex mt-0.5 items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide text-secondary-foreground">
                       {d.subscription_status}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => { setEditing(d); setShowForm(true); }}
-                      className="text-xs text-muted-foreground hover:text-foreground mr-3"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => void handleDelete(d.id)}
-                      className="text-xs text-destructive hover:text-destructive/80"
-                    >
-                      Delete
-                    </button>
-                  </td>
+                  </div>
+                </div>
+                <dl className="mt-3 space-y-1.5 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Address</dt>
+                    <dd className="text-card-foreground text-right truncate">{d.address || "—"}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Phone</dt>
+                    <dd className="text-card-foreground text-right">{d.phone || "—"}</dd>
+                  </div>
+                </dl>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => { setEditing(d); setShowForm(true); }}
+                    className="flex-1 rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground hover:bg-secondary/80"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => void handleDelete(d.id)}
+                    className="flex-1 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 min-h-[44px] text-xs font-medium text-destructive hover:bg-destructive/20"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop: table */}
+          <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/50 text-left text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Name</th>
+                  <th className="px-4 py-3 font-medium">Address</th>
+                  <th className="px-4 py-3 font-medium">Phone</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium w-32 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {dealerships.map((d) => (
+                  <tr key={d.id} className="border-t border-border">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        {d.logo_url ? (
+                          <img src={d.logo_url} alt="" className="h-8 w-8 rounded object-cover bg-secondary" />
+                        ) : (
+                          <div className="h-8 w-8 rounded bg-secondary flex items-center justify-center text-xs text-muted-foreground">
+                            {d.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <span className="font-medium text-card-foreground">{d.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{d.address || "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{d.phone || "—"}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-xs">
+                        {d.subscription_status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => { setEditing(d); setShowForm(true); }}
+                        className="text-xs text-muted-foreground hover:text-foreground mr-3"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => void handleDelete(d.id)}
+                        className="text-xs text-destructive hover:text-destructive/80"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {showForm && (
         <DealershipForm

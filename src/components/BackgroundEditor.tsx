@@ -25,7 +25,7 @@ type Photo = {
   is_main: boolean;
 };
 
-type TabKey = "background" | "adjust" | "compositing" | "overlay";
+type TabKey = "background" | "adjust" | "shadow" | "reflection" | "overlay";
 
 type AspectKey = "free" | "1:1" | "4:3" | "16:9" | "3:2";
 type FitMode = "none" | "fit" | "fill" | "expand";
@@ -610,10 +610,35 @@ export function BackgroundEditor({
     setPendingCrop(null);
   };
 
+  const resetShadow = () => {
+    recordHistory();
+    setShadowIntensity(DEFAULTS.shadowIntensity);
+    setShadowSoftness(DEFAULTS.shadowSoftness);
+    setShadowX(DEFAULTS.shadowX);
+    setShadowY(DEFAULTS.shadowY);
+    setShadowAngle(DEFAULTS.shadowAngle);
+    setShadowScaleX(DEFAULTS.shadowScaleX);
+    setShadowScaleY(DEFAULTS.shadowScaleY);
+    setShadowSkew(DEFAULTS.shadowSkew);
+    setTireContacts(DEFAULTS.tireContacts);
+    setTireIntensity(DEFAULTS.tireIntensity);
+  };
+  const resetReflection = () => {
+    recordHistory();
+    setReflectionIntensity(DEFAULTS.reflectionIntensity);
+    setReflectionX(DEFAULTS.reflectionX);
+    setReflectionY(DEFAULTS.reflectionY);
+    setReflectionAngle(DEFAULTS.reflectionAngle);
+    setReflectionSkew(DEFAULTS.reflectionSkew);
+    setReflectionScaleX(DEFAULTS.reflectionScaleX);
+    setReflectionScaleY(DEFAULTS.reflectionScaleY);
+  };
+
   const resetCurrentTab = () => {
     if (activeTab === "background") { recordHistory(); setBackdropId(defaultBackdropId); }
     else if (activeTab === "adjust") resetAdjust();
-    else if (activeTab === "compositing") resetCompositing();
+    else if (activeTab === "shadow") resetShadow();
+    else if (activeTab === "reflection") resetReflection();
     else if (activeTab === "overlay") { recordHistory(); setOverlayId(""); setOverlayPos("bottom"); }
   };
 
@@ -870,7 +895,8 @@ export function BackgroundEditor({
   const TABS: { key: TabKey; label: string }[] = [
     { key: "background", label: "Background" },
     { key: "adjust", label: "Adjust" },
-    { key: "compositing", label: "Compositing" },
+    { key: "shadow", label: "Shadow" },
+    { key: "reflection", label: "Reflection" },
     { key: "overlay", label: "Overlay" },
   ];
 
@@ -884,8 +910,9 @@ export function BackgroundEditor({
   const overlayCrop = pendingCrop ?? adjustCrop;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-auto">
-      <div className="w-full max-w-3xl rounded-xl border border-border bg-card p-6 shadow-2xl my-8">
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-background/80 backdrop-blur-sm p-0 sm:p-4 overflow-auto">
+      <div className="w-full sm:max-w-3xl sm:rounded-xl border-0 sm:border border-border bg-card p-4 sm:p-6 shadow-2xl sm:my-8 min-h-screen sm:min-h-0">
+
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold text-card-foreground">Change Background</h2>
@@ -1142,9 +1169,9 @@ export function BackgroundEditor({
                 </div>
               )}
 
-              {activeTab === "compositing" && (
+              {activeTab === "shadow" && (
                 <div className="rounded-lg border border-border bg-secondary/30 p-4">
-                  <div className="rounded-md border border-border/60 bg-background/30 p-3 mb-3">
+                  <div className="rounded-md border border-border/60 bg-background/30 p-3">
                     <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Shadow</h4>
                     <div className="space-y-3">
                       <SliderRow label="Intensity" value={shadowIntensity} min={0} max={100} suffix="%" onChange={track(setShadowIntensity)} />
@@ -1156,7 +1183,7 @@ export function BackgroundEditor({
                       <SliderRow label="Scale X" value={shadowScaleX} min={50} max={200} suffix="%" onChange={track(setShadowScaleX)} />
                       <SliderRow label="Scale Y" value={shadowScaleY} min={50} max={200} suffix="%" onChange={track(setShadowScaleY)} />
 
-                      <label className="flex items-center gap-2 pt-1 cursor-pointer">
+                      <label className="flex items-center gap-2 pt-1 cursor-pointer min-h-[44px]">
                         <input
                           type="checkbox"
                           checked={tireContacts}
@@ -1177,7 +1204,11 @@ export function BackgroundEditor({
                       )}
                     </div>
                   </div>
+                </div>
+              )}
 
+              {activeTab === "reflection" && (
+                <div className="rounded-lg border border-border bg-secondary/30 p-4">
                   <div className="rounded-md border border-border/60 bg-background/30 p-3">
                     <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Reflection</h4>
                     <div className="space-y-3">
