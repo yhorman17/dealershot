@@ -15,7 +15,7 @@ export const SHOT_TYPES = [
   { name: "Odometer", tip: "Turn ignition to ACC, get close to the cluster, mileage clearly readable." },
 ] as const;
 
-const STANDARD_SHOT_NAMES = new Set(SHOT_TYPES.map((s) => s.name));
+const STANDARD_SHOT_NAMES: Set<string> = new Set(SHOT_TYPES.map((s) => s.name));
 
 type Photo = {
   id: string;
