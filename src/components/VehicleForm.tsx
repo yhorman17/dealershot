@@ -133,7 +133,7 @@ export function VehicleForm({
       <Section title="Vehicle identification">
         <div className="sm:col-span-2">
           <label className="block text-xs font-medium text-card-foreground mb-1.5">VIN</label>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               value={values.vin}
               onChange={(e) => set("vin", e.target.value.toUpperCase())}
@@ -144,7 +144,7 @@ export function VehicleForm({
               type="button"
               onClick={() => void decodeVin()}
               disabled={decoding || !values.vin.trim()}
-              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm text-secondary-foreground hover:bg-secondary/80 disabled:opacity-60 whitespace-nowrap"
+              className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-sm text-secondary-foreground hover:bg-secondary/80 disabled:opacity-60 whitespace-nowrap"
             >
               {decoding ? "Decoding…" : "Decode VIN"}
             </button>
