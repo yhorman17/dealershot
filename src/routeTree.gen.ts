@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedOverlaysRouteImport } from './routes/_authenticated/overlays'
 import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
 import { Route as AuthenticatedDealershipsRouteImport } from './routes/_authenticated/dealerships'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -32,6 +33,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedOverlaysRoute = AuthenticatedOverlaysRouteImport.update({
+  id: '/overlays',
+  path: '/overlays',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedInventoryRoute = AuthenticatedInventoryRouteImport.update({
   id: '/inventory',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dealerships': typeof AuthenticatedDealershipsRoute
   '/inventory': typeof AuthenticatedInventoryRoute
+  '/overlays': typeof AuthenticatedOverlaysRoute
   '/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dealerships': typeof AuthenticatedDealershipsRoute
   '/inventory': typeof AuthenticatedInventoryRoute
+  '/overlays': typeof AuthenticatedOverlaysRoute
   '/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/dealerships': typeof AuthenticatedDealershipsRoute
   '/_authenticated/inventory': typeof AuthenticatedInventoryRoute
+  '/_authenticated/overlays': typeof AuthenticatedOverlaysRoute
   '/_authenticated/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/_authenticated/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/_authenticated/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dealerships'
     | '/inventory'
+    | '/overlays'
     | '/vehicles/$id'
     | '/vehicles/new'
     | '/vehicles/$id/edit'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dealerships'
     | '/inventory'
+    | '/overlays'
     | '/vehicles/$id'
     | '/vehicles/new'
     | '/vehicles/$id/edit'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/dealerships'
     | '/_authenticated/inventory'
+    | '/_authenticated/overlays'
     | '/_authenticated/vehicles/$id'
     | '/_authenticated/vehicles/new'
     | '/_authenticated/vehicles/$id/edit'
@@ -161,6 +173,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/overlays': {
+      id: '/_authenticated/overlays'
+      path: '/overlays'
+      fullPath: '/overlays'
+      preLoaderRoute: typeof AuthenticatedOverlaysRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/inventory': {
       id: '/_authenticated/inventory'
@@ -225,6 +244,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDealershipsRoute: typeof AuthenticatedDealershipsRoute
   AuthenticatedInventoryRoute: typeof AuthenticatedInventoryRoute
+  AuthenticatedOverlaysRoute: typeof AuthenticatedOverlaysRoute
   AuthenticatedVehiclesIdRoute: typeof AuthenticatedVehiclesIdRouteWithChildren
   AuthenticatedVehiclesNewRoute: typeof AuthenticatedVehiclesNewRoute
 }
@@ -233,6 +253,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDealershipsRoute: AuthenticatedDealershipsRoute,
   AuthenticatedInventoryRoute: AuthenticatedInventoryRoute,
+  AuthenticatedOverlaysRoute: AuthenticatedOverlaysRoute,
   AuthenticatedVehiclesIdRoute: AuthenticatedVehiclesIdRouteWithChildren,
   AuthenticatedVehiclesNewRoute: AuthenticatedVehiclesNewRoute,
 }
