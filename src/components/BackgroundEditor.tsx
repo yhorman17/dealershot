@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { removeBackground } from "@imgly/background-removal";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -25,7 +25,19 @@ type Photo = {
   is_main: boolean;
 };
 
-type TabKey = "background" | "compositing" | "overlay";
+type TabKey = "background" | "adjust" | "compositing" | "overlay";
+
+type AspectKey = "free" | "1:1" | "4:3" | "16:9" | "3:2";
+type FitMode = "none" | "fit" | "fill" | "expand";
+type CropRect = { x: number; y: number; w: number; h: number }; // normalized 0..1 of straightened source
+
+const ASPECT_VALUE: Record<AspectKey, number | null> = {
+  free: null,
+  "1:1": 1,
+  "4:3": 4 / 3,
+  "16:9": 16 / 9,
+  "3:2": 3 / 2,
+};
 
 // Defaults
 const DEFAULTS = {
@@ -34,12 +46,22 @@ const DEFAULTS = {
   shadowX: 0,
   shadowY: 0,
   shadowAngle: 0,
-  shadowScale: 100,
+  shadowScaleX: 100,
+  shadowScaleY: 100,
+  shadowSkew: 0,
   reflectionIntensity: 35,
   reflectionX: 0,
   reflectionY: 0,
+  reflectionAngle: 0,
+  reflectionSkew: 0,
+  reflectionScaleX: 100,
+  reflectionScaleY: 100,
   tireContacts: false,
   tireIntensity: 50,
+  adjustStraighten: 0,
+  adjustAspect: "free" as AspectKey,
+  adjustCrop: null as CropRect | null,
+  adjustFit: "none" as FitMode,
 };
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -73,7 +95,6 @@ function carRect(cutout: HTMLImageElement, targetW: number, targetH: number) {
   return { x: (targetW - w) / 2, y: (targetH - h) / 2, w, h };
 }
 
-// Find the true bottom edge of the silhouette in cutout image space
 function findSilhouetteBounds(img: HTMLImageElement): { top: number; bottom: number; left: number; right: number } {
   const c = document.createElement("canvas");
   c.width = img.naturalWidth;
@@ -107,25 +128,26 @@ function buildShadowCanvas(
   offsetX: number,
   offsetY: number,
   angleDeg: number,
-  scalePct: number,
+  scaleXPct: number,
+  scaleYPct: number,
+  skewDeg: number,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = targetW;
   c.height = targetH;
   const ctx = c.getContext("2d")!;
   const r = carRect(cutout, targetW, targetH);
-  // Convert silhouette bounds from cutout-space to target-space
   const sx = r.w / cutout.naturalWidth;
   const sy = r.h / cutout.naturalHeight;
   const carWidth = (bounds.right - bounds.left) * sx;
   const carBottomY = r.y + bounds.bottom * sy;
   const carCenterX = r.x + ((bounds.left + bounds.right) / 2) * sx;
 
-  const s = scalePct / 100;
-  // Shadow size based on actual car silhouette, not full cutout bbox
-  const baseShadowH = carWidth * 0.22; // proportional to car width for a believable ellipse
-  const shadowW = carWidth * 1.1 * s;
-  const shadowH = baseShadowH * s;
+  const sX = scaleXPct / 100;
+  const sY = scaleYPct / 100;
+  const baseShadowH = carWidth * 0.22;
+  const shadowW = carWidth * 1.1 * sX;
+  const shadowH = baseShadowH * sY;
   const cx = carCenterX + offsetX;
   const cy = carBottomY + offsetY;
 
@@ -133,7 +155,7 @@ function buildShadowCanvas(
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate((angleDeg * Math.PI) / 180);
-  // Draw vertically-squashed silhouette so the shadow has car-like shape
+  ctx.transform(1, 0, Math.tan((skewDeg * Math.PI) / 180), 1, 0, 0);
   const scaleSilY = shadowH / r.h;
   const scaleSilX = shadowW / r.w;
   ctx.scale(scaleSilX, scaleSilY);
@@ -182,6 +204,10 @@ function buildReflectionCanvas(
   intensity: number,
   offsetX: number,
   offsetY: number,
+  angleDeg: number,
+  skewDeg: number,
+  scaleXPct: number,
+  scaleYPct: number,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = targetW;
@@ -191,20 +217,25 @@ function buildReflectionCanvas(
   const sy = r.h / cutout.naturalHeight;
   const carBottomY = r.y + bounds.bottom * sy;
   const groundY = carBottomY + offsetY;
+  const sX = scaleXPct / 100;
+  const sY = scaleYPct / 100;
+  const centerX = r.x + r.w / 2 + offsetX;
   ctx.save();
-  ctx.translate(r.x + offsetX, groundY + r.h);
-  ctx.scale(1, -1);
-  ctx.drawImage(cutout, 0, 0, r.w, r.h);
+  ctx.translate(centerX, groundY);
+  ctx.rotate((angleDeg * Math.PI) / 180);
+  ctx.transform(1, 0, Math.tan((skewDeg * Math.PI) / 180), 1, 0, 0);
+  ctx.scale(sX, -sY);
+  ctx.drawImage(cutout, -r.w / 2, -r.h, r.w, r.h);
   ctx.restore();
+  // Mask: gradient from full intensity at groundY fading downward.
+  // Cover full canvas so transformed reflections aren't clipped above groundY.
   ctx.globalCompositeOperation = "destination-in";
-  const grad = ctx.createLinearGradient(0, groundY, 0, groundY + r.h * 0.5);
+  const fadeEnd = groundY + Math.max(20, r.h * 0.5 * Math.abs(sY));
+  const grad = ctx.createLinearGradient(0, groundY, 0, fadeEnd);
   grad.addColorStop(0, `rgba(0,0,0,${intensity})`);
   grad.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = grad;
-  ctx.fillRect(0, groundY, targetW, r.h);
-  ctx.globalCompositeOperation = "destination-out";
-  ctx.fillStyle = "black";
-  ctx.fillRect(0, 0, targetW, groundY);
+  ctx.fillRect(0, 0, targetW, targetH);
   return c;
 }
 
@@ -221,10 +252,16 @@ type ComposeOpts = {
   shadowX: number;
   shadowY: number;
   shadowAngle: number;
-  shadowScale: number;
+  shadowScaleX: number;
+  shadowScaleY: number;
+  shadowSkew: number;
   reflectionIntensity: number;
   reflectionX: number;
   reflectionY: number;
+  reflectionAngle: number;
+  reflectionSkew: number;
+  reflectionScaleX: number;
+  reflectionScaleY: number;
   tireContacts: boolean;
   tireIntensity: number;
 };
@@ -239,7 +276,12 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
   ctx.drawImage(o.backdrop, (targetW - bw) / 2, (targetH - bh) / 2, bw, bh);
 
   if (o.reflectionIntensity > 0) {
-    const ref = buildReflectionCanvas(o.cutout, o.bounds, targetW, targetH, o.reflectionIntensity, o.reflectionX, o.reflectionY);
+    const ref = buildReflectionCanvas(
+      o.cutout, o.bounds, targetW, targetH,
+      o.reflectionIntensity, o.reflectionX, o.reflectionY,
+      o.reflectionAngle, o.reflectionSkew,
+      o.reflectionScaleX, o.reflectionScaleY,
+    );
     ctx.drawImage(ref, 0, 0);
   }
 
@@ -247,7 +289,8 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
     const sh = buildShadowCanvas(
       o.cutout, o.bounds, targetW, targetH,
       o.shadowOpacity, o.shadowBlur,
-      o.shadowX, o.shadowY, o.shadowAngle, o.shadowScale,
+      o.shadowX, o.shadowY, o.shadowAngle,
+      o.shadowScaleX, o.shadowScaleY, o.shadowSkew,
     );
     ctx.drawImage(sh, 0, 0);
   }
@@ -265,6 +308,138 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
     ctx.drawImage(o.overlay, dr.x, dr.y, dr.w, dr.h);
   }
 }
+
+/**
+ * Produce a baked source image as a data URL by applying straighten,
+ * crop, fit, and target aspect to the original. Returns null if no
+ * transformation is needed (caller should use the original src).
+ */
+function buildProcessedDataURL(
+  original: HTMLImageElement,
+  straighten: number,
+  crop: CropRect | null,
+  aspect: AspectKey,
+  fit: FitMode,
+): string | null {
+  const noop =
+    straighten === 0 && crop === null && fit === "none" && aspect === "free";
+  if (noop) return null;
+
+  const ow = original.naturalWidth;
+  const oh = original.naturalHeight;
+
+  // Step 1: straighten (rotate around center, keep same canvas size; transparent corners)
+  const sCanvas = document.createElement("canvas");
+  sCanvas.width = ow;
+  sCanvas.height = oh;
+  const sCtx = sCanvas.getContext("2d")!;
+  if (straighten !== 0) {
+    sCtx.translate(ow / 2, oh / 2);
+    sCtx.rotate((straighten * Math.PI) / 180);
+    sCtx.drawImage(original, -ow / 2, -oh / 2);
+    sCtx.setTransform(1, 0, 0, 1, 0, 0);
+  } else {
+    sCtx.drawImage(original, 0, 0);
+  }
+
+  // Step 2: crop (normalized to straightened canvas)
+  let cropped: HTMLCanvasElement = sCanvas;
+  if (crop && crop.w > 0 && crop.h > 0) {
+    const cx = Math.max(0, Math.round(crop.x * ow));
+    const cy = Math.max(0, Math.round(crop.y * oh));
+    const cw = Math.min(ow - cx, Math.round(crop.w * ow));
+    const ch = Math.min(oh - cy, Math.round(crop.h * oh));
+    const cCanvas = document.createElement("canvas");
+    cCanvas.width = cw;
+    cCanvas.height = ch;
+    cCanvas.getContext("2d")!.drawImage(sCanvas, cx, cy, cw, ch, 0, 0, cw, ch);
+    cropped = cCanvas;
+  }
+
+  // Step 3: fit/aspect
+  const targetAspect = ASPECT_VALUE[aspect];
+  if (fit === "none" || targetAspect === null) {
+    return cropped.toDataURL("image/png");
+  }
+
+  const srcW = cropped.width;
+  const srcH = cropped.height;
+  const srcAspect = srcW / srcH;
+  let outW: number;
+  let outH: number;
+  const fitMode = fit;
+
+  if (fitMode === "fill") {
+    // crop to fill target aspect
+    if (srcAspect > targetAspect) {
+      outH = srcH;
+      outW = srcH * targetAspect;
+    } else {
+      outW = srcW;
+      outH = srcW / targetAspect;
+    }
+    const out = document.createElement("canvas");
+    out.width = Math.round(outW);
+    out.height = Math.round(outH);
+    const dx = (outW - srcW) / 2;
+    const dy = (outH - srcH) / 2;
+    out.getContext("2d")!.drawImage(cropped, dx, dy);
+    return out.toDataURL("image/png");
+  }
+
+  // fit (letterbox) or expand: pad to reach target aspect; expand uses larger dim
+  if (fitMode === "expand") {
+    if (srcAspect > targetAspect) {
+      outW = srcW;
+      outH = srcW / targetAspect;
+    } else {
+      outH = srcH;
+      outW = srcH * targetAspect;
+    }
+  } else {
+    // fit
+    if (srcAspect > targetAspect) {
+      outW = srcW;
+      outH = srcW / targetAspect;
+    } else {
+      outH = srcH;
+      outW = srcH * targetAspect;
+    }
+  }
+  const out = document.createElement("canvas");
+  out.width = Math.round(outW);
+  out.height = Math.round(outH);
+  const octx = out.getContext("2d")!;
+  octx.drawImage(cropped, (outW - srcW) / 2, (outH - srcH) / 2);
+  return out.toDataURL("image/png");
+}
+
+type Snapshot = {
+  backdropId: string;
+  overlayId: string;
+  overlayPos: Position;
+  shadowIntensity: number;
+  shadowSoftness: number;
+  shadowX: number;
+  shadowY: number;
+  shadowAngle: number;
+  shadowScaleX: number;
+  shadowScaleY: number;
+  shadowSkew: number;
+  reflectionIntensity: number;
+  reflectionX: number;
+  reflectionY: number;
+  reflectionAngle: number;
+  reflectionSkew: number;
+  reflectionScaleX: number;
+  reflectionScaleY: number;
+  tireContacts: boolean;
+  tireIntensity: number;
+  adjustStraighten: number;
+  adjustAspect: AspectKey;
+  adjustCrop: CropRect | null;
+  adjustFit: FitMode;
+};
 
 export function BackgroundEditor({
   photo,
@@ -284,6 +459,7 @@ export function BackgroundEditor({
   const [overlayId, setOverlayId] = useState<string>("");
   const [overlayPos, setOverlayPos] = useState<Position>("bottom");
   const [originalImg, setOriginalImg] = useState<HTMLImageElement | null>(null);
+  const [processedSrc, setProcessedSrc] = useState<string>(photo.image_url);
   const [cutoutImg, setCutoutImg] = useState<HTMLImageElement | null>(null);
   const [backdropImg, setBackdropImg] = useState<HTMLImageElement | null>(null);
   const [overlayImg, setOverlayImg] = useState<HTMLImageElement | null>(null);
@@ -295,42 +471,150 @@ export function BackgroundEditor({
   const [comparing, setComparing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("background");
 
+  // Compositing state
   const [shadowIntensity, setShadowIntensity] = useState(DEFAULTS.shadowIntensity);
   const [shadowSoftness, setShadowSoftness] = useState(DEFAULTS.shadowSoftness);
   const [shadowX, setShadowX] = useState(DEFAULTS.shadowX);
   const [shadowY, setShadowY] = useState(DEFAULTS.shadowY);
   const [shadowAngle, setShadowAngle] = useState(DEFAULTS.shadowAngle);
-  const [shadowScale, setShadowScale] = useState(DEFAULTS.shadowScale);
+  const [shadowScaleX, setShadowScaleX] = useState(DEFAULTS.shadowScaleX);
+  const [shadowScaleY, setShadowScaleY] = useState(DEFAULTS.shadowScaleY);
+  const [shadowSkew, setShadowSkew] = useState(DEFAULTS.shadowSkew);
   const [reflectionIntensity, setReflectionIntensity] = useState(DEFAULTS.reflectionIntensity);
   const [reflectionX, setReflectionX] = useState(DEFAULTS.reflectionX);
   const [reflectionY, setReflectionY] = useState(DEFAULTS.reflectionY);
+  const [reflectionAngle, setReflectionAngle] = useState(DEFAULTS.reflectionAngle);
+  const [reflectionSkew, setReflectionSkew] = useState(DEFAULTS.reflectionSkew);
+  const [reflectionScaleX, setReflectionScaleX] = useState(DEFAULTS.reflectionScaleX);
+  const [reflectionScaleY, setReflectionScaleY] = useState(DEFAULTS.reflectionScaleY);
   const [tireContacts, setTireContacts] = useState(DEFAULTS.tireContacts);
   const [tireIntensity, setTireIntensity] = useState(DEFAULTS.tireIntensity);
 
+  // Adjust tab state
+  const [adjustStraighten, setAdjustStraighten] = useState(DEFAULTS.adjustStraighten);
+  const [adjustAspect, setAdjustAspect] = useState<AspectKey>(DEFAULTS.adjustAspect);
+  const [adjustCrop, setAdjustCrop] = useState<CropRect | null>(DEFAULTS.adjustCrop);
+  const [adjustFit, setAdjustFit] = useState<FitMode>(DEFAULTS.adjustFit);
+  // pending crop selection (drag) in normalized coords relative to the displayed preview
+  const [pendingCrop, setPendingCrop] = useState<CropRect | null>(null);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const adjustPreviewRef = useRef<HTMLCanvasElement>(null);
+  const previewWrapRef = useRef<HTMLDivElement>(null);
   const cutoutUrlRef = useRef<string | null>(null);
 
-  // Compute silhouette bounds once per cutout
+  // Undo history
+  const historyRef = useRef<Snapshot[]>([]);
+  const suppressHistoryRef = useRef(false);
+  const [historyLen, setHistoryLen] = useState(0);
+
   const bounds = useMemo(() => (cutoutImg ? findSilhouetteBounds(cutoutImg) : null), [cutoutImg]);
 
+  const snapshot = useCallback((): Snapshot => ({
+    backdropId, overlayId, overlayPos,
+    shadowIntensity, shadowSoftness, shadowX, shadowY, shadowAngle,
+    shadowScaleX, shadowScaleY, shadowSkew,
+    reflectionIntensity, reflectionX, reflectionY,
+    reflectionAngle, reflectionSkew, reflectionScaleX, reflectionScaleY,
+    tireContacts, tireIntensity,
+    adjustStraighten, adjustAspect, adjustCrop, adjustFit,
+  }), [
+    backdropId, overlayId, overlayPos,
+    shadowIntensity, shadowSoftness, shadowX, shadowY, shadowAngle,
+    shadowScaleX, shadowScaleY, shadowSkew,
+    reflectionIntensity, reflectionX, reflectionY,
+    reflectionAngle, reflectionSkew, reflectionScaleX, reflectionScaleY,
+    tireContacts, tireIntensity,
+    adjustStraighten, adjustAspect, adjustCrop, adjustFit,
+  ]);
+
+  const applySnapshot = (s: Snapshot) => {
+    suppressHistoryRef.current = true;
+    setBackdropId(s.backdropId);
+    setOverlayId(s.overlayId);
+    setOverlayPos(s.overlayPos);
+    setShadowIntensity(s.shadowIntensity);
+    setShadowSoftness(s.shadowSoftness);
+    setShadowX(s.shadowX);
+    setShadowY(s.shadowY);
+    setShadowAngle(s.shadowAngle);
+    setShadowScaleX(s.shadowScaleX);
+    setShadowScaleY(s.shadowScaleY);
+    setShadowSkew(s.shadowSkew);
+    setReflectionIntensity(s.reflectionIntensity);
+    setReflectionX(s.reflectionX);
+    setReflectionY(s.reflectionY);
+    setReflectionAngle(s.reflectionAngle);
+    setReflectionSkew(s.reflectionSkew);
+    setReflectionScaleX(s.reflectionScaleX);
+    setReflectionScaleY(s.reflectionScaleY);
+    setTireContacts(s.tireContacts);
+    setTireIntensity(s.tireIntensity);
+    setAdjustStraighten(s.adjustStraighten);
+    setAdjustAspect(s.adjustAspect);
+    setAdjustCrop(s.adjustCrop);
+    setAdjustFit(s.adjustFit);
+    // release suppression after this render batch
+    setTimeout(() => { suppressHistoryRef.current = false; }, 0);
+  };
+
+  const recordHistory = () => {
+    if (suppressHistoryRef.current) return;
+    historyRef.current.push(snapshot());
+    if (historyRef.current.length > 20) historyRef.current.shift();
+    setHistoryLen(historyRef.current.length);
+  };
+
+  // Tracked setter wrapper: pushes current state onto history before applying change.
+  function track<T>(setter: (v: T) => void): (v: T) => void {
+    return (v: T) => {
+      recordHistory();
+      setter(v);
+    };
+  }
+
+  const undo = () => {
+    const prev = historyRef.current.pop();
+    if (!prev) return;
+    setHistoryLen(historyRef.current.length);
+    applySnapshot(prev);
+  };
+
   const resetCompositing = () => {
+    recordHistory();
     setShadowIntensity(DEFAULTS.shadowIntensity);
     setShadowSoftness(DEFAULTS.shadowSoftness);
     setShadowX(DEFAULTS.shadowX);
     setShadowY(DEFAULTS.shadowY);
     setShadowAngle(DEFAULTS.shadowAngle);
-    setShadowScale(DEFAULTS.shadowScale);
+    setShadowScaleX(DEFAULTS.shadowScaleX);
+    setShadowScaleY(DEFAULTS.shadowScaleY);
+    setShadowSkew(DEFAULTS.shadowSkew);
     setReflectionIntensity(DEFAULTS.reflectionIntensity);
     setReflectionX(DEFAULTS.reflectionX);
     setReflectionY(DEFAULTS.reflectionY);
+    setReflectionAngle(DEFAULTS.reflectionAngle);
+    setReflectionSkew(DEFAULTS.reflectionSkew);
+    setReflectionScaleX(DEFAULTS.reflectionScaleX);
+    setReflectionScaleY(DEFAULTS.reflectionScaleY);
     setTireContacts(DEFAULTS.tireContacts);
     setTireIntensity(DEFAULTS.tireIntensity);
   };
 
+  const resetAdjust = () => {
+    recordHistory();
+    setAdjustStraighten(DEFAULTS.adjustStraighten);
+    setAdjustAspect(DEFAULTS.adjustAspect);
+    setAdjustCrop(DEFAULTS.adjustCrop);
+    setAdjustFit(DEFAULTS.adjustFit);
+    setPendingCrop(null);
+  };
+
   const resetCurrentTab = () => {
-    if (activeTab === "background") setBackdropId(defaultBackdropId);
+    if (activeTab === "background") { recordHistory(); setBackdropId(defaultBackdropId); }
+    else if (activeTab === "adjust") resetAdjust();
     else if (activeTab === "compositing") resetCompositing();
-    else if (activeTab === "overlay") { setOverlayId(""); setOverlayPos("bottom"); }
+    else if (activeTab === "overlay") { recordHistory(); setOverlayId(""); setOverlayPos("bottom"); }
   };
 
   useEffect(() => {
@@ -344,25 +628,33 @@ export function BackgroundEditor({
       setBackdrops(bList);
       setOverlays(oList);
       if (bList.length > 0) {
+        suppressHistoryRef.current = true;
         setBackdropId(bList[0].id);
         setDefaultBackdropId(bList[0].id);
+        setTimeout(() => { suppressHistoryRef.current = false; }, 0);
       }
     })();
   }, [dealershipId]);
 
+  // Load the actual original once (for compare)
+  useEffect(() => {
+    void loadImage(photo.image_url).then(setOriginalImg);
+  }, [photo.image_url]);
+
+  // Whenever processedSrc changes, re-run bg removal and update base size.
   useEffect(() => {
     let cancelled = false;
     setRemoving(true);
     setRemoveErr(null);
     void (async () => {
       try {
-        const base = await loadImage(photo.image_url);
+        const base = await loadImage(processedSrc);
         if (cancelled) return;
-        setOriginalImg(base);
         setBaseSize({ w: base.naturalWidth, h: base.naturalHeight });
-        const blob = await removeBackground(photo.image_url);
+        const blob = await removeBackground(processedSrc);
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
+        if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
         cutoutUrlRef.current = url;
         const img = await loadImage(url);
         if (cancelled) return;
@@ -373,11 +665,22 @@ export function BackgroundEditor({
         if (!cancelled) setRemoving(false);
       }
     })();
-    return () => {
-      cancelled = true;
-      if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
-    };
-  }, [photo.image_url]);
+    return () => { cancelled = true; };
+  }, [processedSrc]);
+
+  useEffect(() => {
+    return () => { if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current); };
+  }, []);
+
+  // Debounced adjust → processedSrc bake
+  useEffect(() => {
+    if (!originalImg) return;
+    const t = setTimeout(() => {
+      const url = buildProcessedDataURL(originalImg, adjustStraighten, adjustCrop, adjustAspect, adjustFit);
+      setProcessedSrc(url ?? photo.image_url);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [originalImg, adjustStraighten, adjustCrop, adjustAspect, adjustFit, photo.image_url]);
 
   useEffect(() => {
     const sel = backdrops.find((b) => b.id === backdropId);
@@ -395,6 +698,7 @@ export function BackgroundEditor({
     return () => { cancelled = true; };
   }, [overlayId, overlays]);
 
+  // Composite canvas render
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !cutoutImg || !backdropImg || !baseSize || !bounds) return;
@@ -403,31 +707,115 @@ export function BackgroundEditor({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     compose(ctx, {
-      cutout: cutoutImg,
-      bounds,
-      backdrop: backdropImg,
-      overlay: overlayImg,
-      overlayPos,
-      targetW: baseSize.w,
-      targetH: baseSize.h,
+      cutout: cutoutImg, bounds, backdrop: backdropImg, overlay: overlayImg, overlayPos,
+      targetW: baseSize.w, targetH: baseSize.h,
       shadowOpacity: shadowIntensity / 100,
       shadowBlur: shadowSoftness,
-      shadowX,
-      shadowY,
-      shadowAngle,
-      shadowScale,
+      shadowX, shadowY, shadowAngle,
+      shadowScaleX, shadowScaleY, shadowSkew,
       reflectionIntensity: reflectionIntensity / 100,
-      reflectionX,
-      reflectionY,
-      tireContacts,
-      tireIntensity: tireIntensity / 100,
+      reflectionX, reflectionY, reflectionAngle, reflectionSkew,
+      reflectionScaleX, reflectionScaleY,
+      tireContacts, tireIntensity: tireIntensity / 100,
     });
   }, [
     cutoutImg, bounds, backdropImg, overlayImg, overlayPos, baseSize,
-    shadowIntensity, shadowSoftness, shadowX, shadowY, shadowAngle, shadowScale,
-    reflectionIntensity, reflectionX, reflectionY,
+    shadowIntensity, shadowSoftness, shadowX, shadowY, shadowAngle,
+    shadowScaleX, shadowScaleY, shadowSkew,
+    reflectionIntensity, reflectionX, reflectionY, reflectionAngle, reflectionSkew,
+    reflectionScaleX, reflectionScaleY,
     tireContacts, tireIntensity,
   ]);
+
+  // Adjust-tab live preview render
+  useEffect(() => {
+    if (activeTab !== "adjust") return;
+    const cv = adjustPreviewRef.current;
+    if (!cv || !originalImg) return;
+    const ow = originalImg.naturalWidth;
+    const oh = originalImg.naturalHeight;
+    cv.width = ow;
+    cv.height = oh;
+    const ctx = cv.getContext("2d")!;
+    ctx.clearRect(0, 0, ow, oh);
+    if (adjustStraighten !== 0) {
+      ctx.save();
+      ctx.translate(ow / 2, oh / 2);
+      ctx.rotate((adjustStraighten * Math.PI) / 180);
+      ctx.drawImage(originalImg, -ow / 2, -oh / 2);
+      ctx.restore();
+    } else {
+      ctx.drawImage(originalImg, 0, 0);
+    }
+    // Show committed crop as a dimmed mask outside the crop rect
+    if (adjustCrop) {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      const cx = adjustCrop.x * ow;
+      const cy = adjustCrop.y * oh;
+      const cw = adjustCrop.w * ow;
+      const ch = adjustCrop.h * oh;
+      ctx.fillRect(0, 0, ow, cy);
+      ctx.fillRect(0, cy + ch, ow, oh - (cy + ch));
+      ctx.fillRect(0, cy, cx, ch);
+      ctx.fillRect(cx + cw, cy, ow - (cx + cw), ch);
+      ctx.restore();
+    }
+  }, [activeTab, originalImg, adjustStraighten, adjustCrop]);
+
+  // Crop drag interaction
+  const cropDragRef = useRef<{ startX: number; startY: number; aspect: number | null } | null>(null);
+
+  const onCropPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activeTab !== "adjust") return;
+    const wrap = previewWrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    cropDragRef.current = { startX: x, startY: y, aspect: ASPECT_VALUE[adjustAspect] };
+    setPendingCrop({ x, y, w: 0, h: 0 });
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onCropPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = cropDragRef.current;
+    if (!drag) return;
+    const wrap = previewWrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    let x = (e.clientX - rect.left) / rect.width;
+    let y = (e.clientY - rect.top) / rect.height;
+    x = Math.max(0, Math.min(1, x));
+    y = Math.max(0, Math.min(1, y));
+    let nx = Math.min(drag.startX, x);
+    let ny = Math.min(drag.startY, y);
+    let nw = Math.abs(x - drag.startX);
+    let nh = Math.abs(y - drag.startY);
+    if (drag.aspect !== null && nw > 0 && nh > 0) {
+      // image-space aspect ratio: container is square-relative; convert via image size
+      const imgAspect = originalImg ? originalImg.naturalWidth / originalImg.naturalHeight : 1;
+      // normalized container coords: 1.0 wide × 1.0 tall, but image is imgAspect-shaped.
+      // Constraint nw/nh (in image coords) = (nw * imgW) / (nh * imgH) = targetAspect
+      // => nh = nw * imgAspect / targetAspect
+      nh = (nw * imgAspect) / drag.aspect;
+      if (ny + nh > 1) {
+        nh = 1 - ny;
+        nw = (nh * drag.aspect) / imgAspect;
+      }
+    }
+    setPendingCrop({ x: nx, y: ny, w: nw, h: nh });
+  };
+  const onCropPointerUp = () => {
+    cropDragRef.current = null;
+  };
+
+  const applyCrop = () => {
+    if (!pendingCrop || pendingCrop.w < 0.02 || pendingCrop.h < 0.02) return;
+    recordHistory();
+    setAdjustCrop(pendingCrop);
+    setPendingCrop(null);
+  };
+  const clearPending = () => setPendingCrop(null);
 
   const save = async (mode: "new" | "overwrite") => {
     const canvas = canvasRef.current;
@@ -477,12 +865,23 @@ export function BackgroundEditor({
   };
 
   const ready = !!cutoutImg && !!backdropImg && !!baseSize && !removing;
+  const adjusting = activeTab === "adjust";
 
   const TABS: { key: TabKey; label: string }[] = [
     { key: "background", label: "Background" },
+    { key: "adjust", label: "Adjust" },
     { key: "compositing", label: "Compositing" },
     { key: "overlay", label: "Overlay" },
   ];
+
+  const previewAspect = baseSize
+    ? `${baseSize.w} / ${baseSize.h}`
+    : originalImg
+      ? `${originalImg.naturalWidth} / ${originalImg.naturalHeight}`
+      : "16 / 9";
+
+  // Display rect of crop overlay (pending or committed) in container %
+  const overlayCrop = pendingCrop ?? adjustCrop;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-auto">
@@ -503,10 +902,9 @@ export function BackgroundEditor({
           </div>
         ) : (
           <>
-            {/* Always-visible workspace: backdrop dropdown + preview */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-card-foreground mb-1.5">Backdrop</label>
-              <select value={backdropId} onChange={(e) => setBackdropId(e.target.value)} className="form-input">
+              <select value={backdropId} onChange={(e) => track(setBackdropId)(e.target.value)} className="form-input">
                 {backdrops.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
@@ -514,14 +912,61 @@ export function BackgroundEditor({
             </div>
 
             <div
-              className="relative w-full rounded-lg overflow-hidden bg-secondary border border-border"
-              style={{ aspectRatio: baseSize ? `${baseSize.w} / ${baseSize.h}` : "16 / 9" }}
+              ref={previewWrapRef}
+              className="relative w-full rounded-lg overflow-hidden bg-secondary border border-border select-none"
+              style={{ aspectRatio: previewAspect }}
             >
+              {/* Composite canvas — visible on every tab except Adjust */}
               <canvas
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full"
-                style={{ visibility: comparing ? "hidden" : "visible" }}
+                style={{ visibility: comparing || adjusting ? "hidden" : "visible" }}
               />
+
+              {/* Adjust live preview canvas */}
+              <canvas
+                ref={adjustPreviewRef}
+                className="absolute inset-0 w-full h-full object-contain"
+                style={{ display: adjusting && !comparing ? "block" : "none" }}
+              />
+
+              {/* Straighten grid overlay */}
+              {adjusting && adjustStraighten !== 0 && (
+                <div
+                  aria-hidden
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(to right, rgba(255,255,255,0.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.18) 1px, transparent 1px)",
+                    backgroundSize: "10% 10%",
+                  }}
+                />
+              )}
+
+              {/* Crop drag layer */}
+              {adjusting && (
+                <div
+                  className="absolute inset-0 cursor-crosshair"
+                  onPointerDown={onCropPointerDown}
+                  onPointerMove={onCropPointerMove}
+                  onPointerUp={onCropPointerUp}
+                  onPointerCancel={onCropPointerUp}
+                >
+                  {overlayCrop && (
+                    <div
+                      className="absolute border-2 border-primary"
+                      style={{
+                        left: `${overlayCrop.x * 100}%`,
+                        top: `${overlayCrop.y * 100}%`,
+                        width: `${overlayCrop.w * 100}%`,
+                        height: `${overlayCrop.h * 100}%`,
+                        boxShadow: "0 0 0 9999px rgba(0,0,0,0.4)",
+                      }}
+                    />
+                  )}
+                </div>
+              )}
+
               {comparing && originalImg && (
                 <img
                   src={originalImg.src}
@@ -588,7 +1033,15 @@ export function BackgroundEditor({
 
             {/* Tab content */}
             <div className="mt-4">
-              <div className="flex items-center justify-end mb-2">
+              <div className="flex items-center justify-end gap-3 mb-2">
+                <button
+                  type="button"
+                  onClick={undo}
+                  disabled={historyLen === 0}
+                  className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline disabled:opacity-40 disabled:hover:no-underline disabled:cursor-not-allowed"
+                >
+                  Undo{historyLen > 0 ? ` (${historyLen})` : ""}
+                </button>
                 <button
                   type="button"
                   onClick={resetCurrentTab}
@@ -600,8 +1053,92 @@ export function BackgroundEditor({
 
               {activeTab === "background" && (
                 <div className="rounded-lg border border-border bg-secondary/30 p-4 text-xs text-muted-foreground">
-                  Choose a backdrop above. The preview updates instantly. Use the Compositing tab to refine
-                  shadows and reflections, and the Overlay tab to add a banner.
+                  Choose a backdrop above. The preview updates instantly. Use the Adjust tab to crop or
+                  straighten the source, Compositing to refine shadows and reflections, and Overlay to add a banner.
+                </div>
+              )}
+
+              {activeTab === "adjust" && (
+                <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Crop</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={applyCrop}
+                          disabled={!pendingCrop || pendingCrop.w < 0.02}
+                          className="text-[11px] rounded-md bg-primary px-2.5 py-1 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                        >
+                          Apply Crop
+                        </button>
+                        <button
+                          type="button"
+                          onClick={clearPending}
+                          disabled={!pendingCrop}
+                          className="text-[11px] rounded-md border border-border bg-background px-2.5 py-1 text-foreground hover:bg-secondary disabled:opacity-50"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mb-2">
+                      Drag on the preview to draw a selection.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(Object.keys(ASPECT_VALUE) as AspectKey[]).map((a) => (
+                        <button
+                          key={a}
+                          type="button"
+                          onClick={() => track(setAdjustAspect)(a)}
+                          className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+                            adjustAspect === a
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border bg-background text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {a === "free" ? "Free" : a}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-border/60 bg-background/30 p-3">
+                    <SliderRow
+                      label="Straighten"
+                      value={adjustStraighten}
+                      min={-15}
+                      max={15}
+                      suffix="°"
+                      onChange={track(setAdjustStraighten)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Fit / Expand</label>
+                    {[
+                      { key: "none" as FitMode, label: "None" },
+                      { key: "fit" as FitMode, label: "Fit (letterbox)" },
+                      { key: "fill" as FitMode, label: "Fill (crop)" },
+                      { key: "expand" as FitMode, label: "Expand canvas" },
+                    ].map(({ key, label }) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => track(setAdjustFit)(key)}
+                        className={`mr-1.5 mb-1.5 text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+                          adjustFit === key
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border bg-background text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    <p className="text-[11px] text-muted-foreground mt-1.5">
+                      Fit/Fill/Expand use the selected aspect ratio above.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -610,18 +1147,20 @@ export function BackgroundEditor({
                   <div className="rounded-md border border-border/60 bg-background/30 p-3 mb-3">
                     <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Shadow</h4>
                     <div className="space-y-3">
-                      <SliderRow label="Intensity" value={shadowIntensity} min={0} max={100} suffix="%" onChange={setShadowIntensity} />
-                      <SliderRow label="Softness" value={shadowSoftness} min={0} max={50} suffix="px" onChange={setShadowSoftness} />
-                      <SliderRow label="Position X" value={shadowX} min={-200} max={200} suffix="px" onChange={setShadowX} />
-                      <SliderRow label="Position Y" value={shadowY} min={-100} max={100} suffix="px" onChange={setShadowY} />
-                      <SliderRow label="Angle" value={shadowAngle} min={-45} max={45} suffix="°" onChange={setShadowAngle} />
-                      <SliderRow label="Scale" value={shadowScale} min={50} max={150} suffix="%" onChange={setShadowScale} />
+                      <SliderRow label="Intensity" value={shadowIntensity} min={0} max={100} suffix="%" onChange={track(setShadowIntensity)} />
+                      <SliderRow label="Softness" value={shadowSoftness} min={0} max={50} suffix="px" onChange={track(setShadowSoftness)} />
+                      <SliderRow label="Position X" value={shadowX} min={-200} max={200} suffix="px" onChange={track(setShadowX)} />
+                      <SliderRow label="Position Y" value={shadowY} min={-100} max={100} suffix="px" onChange={track(setShadowY)} />
+                      <SliderRow label="Angle" value={shadowAngle} min={-45} max={45} suffix="°" onChange={track(setShadowAngle)} />
+                      <SliderRow label="Skew" value={shadowSkew} min={-45} max={45} suffix="°" onChange={track(setShadowSkew)} />
+                      <SliderRow label="Scale X" value={shadowScaleX} min={50} max={200} suffix="%" onChange={track(setShadowScaleX)} />
+                      <SliderRow label="Scale Y" value={shadowScaleY} min={50} max={200} suffix="%" onChange={track(setShadowScaleY)} />
 
                       <label className="flex items-center gap-2 pt-1 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={tireContacts}
-                          onChange={(e) => setTireContacts(e.target.checked)}
+                          onChange={(e) => track(setTireContacts)(e.target.checked)}
                           className="h-4 w-4 accent-primary"
                         />
                         <span className="text-xs font-medium text-card-foreground">Add tire contact shadows</span>
@@ -633,7 +1172,7 @@ export function BackgroundEditor({
                           min={0}
                           max={100}
                           suffix="%"
-                          onChange={setTireIntensity}
+                          onChange={track(setTireIntensity)}
                         />
                       )}
                     </div>
@@ -648,11 +1187,15 @@ export function BackgroundEditor({
                         min={0}
                         max={100}
                         suffix="%"
-                        onChange={setReflectionIntensity}
+                        onChange={track(setReflectionIntensity)}
                         hint={reflectionIntensity === 0 ? "Disabled" : undefined}
                       />
-                      <SliderRow label="Position X" value={reflectionX} min={-200} max={200} suffix="px" onChange={setReflectionX} />
-                      <SliderRow label="Position Y" value={reflectionY} min={-50} max={100} suffix="px" onChange={setReflectionY} />
+                      <SliderRow label="Position X" value={reflectionX} min={-200} max={200} suffix="px" onChange={track(setReflectionX)} />
+                      <SliderRow label="Position Y" value={reflectionY} min={-100} max={100} suffix="px" onChange={track(setReflectionY)} />
+                      <SliderRow label="Angle" value={reflectionAngle} min={-45} max={45} suffix="°" onChange={track(setReflectionAngle)} />
+                      <SliderRow label="Skew" value={reflectionSkew} min={-45} max={45} suffix="°" onChange={track(setReflectionSkew)} />
+                      <SliderRow label="Scale X" value={reflectionScaleX} min={50} max={200} suffix="%" onChange={track(setReflectionScaleX)} />
+                      <SliderRow label="Scale Y" value={reflectionScaleY} min={50} max={200} suffix="%" onChange={track(setReflectionScaleY)} />
                     </div>
                   </div>
                 </div>
@@ -662,7 +1205,7 @@ export function BackgroundEditor({
                 <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
                   <div>
                     <label className="block text-xs font-medium text-card-foreground mb-1.5">Overlay</label>
-                    <select value={overlayId} onChange={(e) => setOverlayId(e.target.value)} className="form-input">
+                    <select value={overlayId} onChange={(e) => track(setOverlayId)(e.target.value)} className="form-input">
                       <option value="">None</option>
                       {overlays.map((o) => (
                         <option key={o.id} value={o.id}>
@@ -675,7 +1218,7 @@ export function BackgroundEditor({
                     <label className="block text-xs font-medium text-card-foreground mb-1.5">Overlay position</label>
                     <select
                       value={overlayPos}
-                      onChange={(e) => setOverlayPos(e.target.value as Position)}
+                      onChange={(e) => track(setOverlayPos)(e.target.value as Position)}
                       disabled={!overlayId}
                       className="form-input disabled:opacity-50"
                     >
