@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { OverlayEditor } from "@/components/OverlayEditor";
 
 export const SHOT_TYPES = [
   { name: "Front", tip: "Stand 10-15 feet away, camera at headlight height, entire front bumper in frame." },
