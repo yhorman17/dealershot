@@ -1168,9 +1168,9 @@ export function BackgroundEditor({
                 </div>
               )}
 
-              {activeTab === "compositing" && (
+              {activeTab === "shadow" && (
                 <div className="rounded-lg border border-border bg-secondary/30 p-4">
-                  <div className="rounded-md border border-border/60 bg-background/30 p-3 mb-3">
+                  <div className="rounded-md border border-border/60 bg-background/30 p-3">
                     <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Shadow</h4>
                     <div className="space-y-3">
                       <SliderRow label="Intensity" value={shadowIntensity} min={0} max={100} suffix="%" onChange={track(setShadowIntensity)} />
@@ -1182,7 +1182,7 @@ export function BackgroundEditor({
                       <SliderRow label="Scale X" value={shadowScaleX} min={50} max={200} suffix="%" onChange={track(setShadowScaleX)} />
                       <SliderRow label="Scale Y" value={shadowScaleY} min={50} max={200} suffix="%" onChange={track(setShadowScaleY)} />
 
-                      <label className="flex items-center gap-2 pt-1 cursor-pointer">
+                      <label className="flex items-center gap-2 pt-1 cursor-pointer min-h-[44px]">
                         <input
                           type="checkbox"
                           checked={tireContacts}
@@ -1203,7 +1203,11 @@ export function BackgroundEditor({
                       )}
                     </div>
                   </div>
+                </div>
+              )}
 
+              {activeTab === "reflection" && (
+                <div className="rounded-lg border border-border bg-secondary/30 p-4">
                   <div className="rounded-md border border-border/60 bg-background/30 p-3">
                     <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Reflection</h4>
                     <div className="space-y-3">
