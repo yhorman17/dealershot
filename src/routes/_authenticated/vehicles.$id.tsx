@@ -88,30 +88,30 @@ function VehicleDetailPage() {
   ];
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
+    <main className="mx-auto max-w-5xl px-4 sm:px-6 py-6 sm:py-10">
       <Link to="/inventory" className="text-xs text-muted-foreground hover:text-foreground">
         ← Back to inventory
       </Link>
 
-      <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+      <div className="mt-4 flex flex-wrap items-start justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground break-words">
             {vehicle.year} {vehicle.make} {vehicle.model}
           </h1>
           {vehicle.trim && <p className="text-sm text-muted-foreground mt-1">{vehicle.trim}</p>}
-          <p className="text-2xl font-semibold text-primary mt-3">{formatPrice(Number(vehicle.price))}</p>
+          <p className="text-xl sm:text-2xl font-semibold text-primary mt-3">{formatPrice(Number(vehicle.price))}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Link
             to="/vehicles/$id/edit"
             params={{ id }}
-            className="rounded-md border border-border bg-secondary px-4 py-2 text-sm text-secondary-foreground hover:bg-secondary/80"
+            className="rounded-md border border-border bg-secondary px-4 py-2 min-h-[44px] inline-flex items-center text-sm text-secondary-foreground hover:bg-secondary/80"
           >
             Edit
           </Link>
           <button
             onClick={() => void handleDelete()}
-            className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive hover:bg-destructive/20"
+            className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 min-h-[44px] text-sm text-destructive hover:bg-destructive/20"
           >
             Delete
           </button>
