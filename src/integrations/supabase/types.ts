@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      backdrops: {
+        Row: {
+          created_at: string
+          dealership_id: string
+          id: string
+          image_url: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          dealership_id: string
+          id?: string
+          image_url: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          dealership_id?: string
+          id?: string
+          image_url?: string
+          name?: string
+        }
+        Relationships: []
+      }
       dealerships: {
         Row: {
           address: string | null
