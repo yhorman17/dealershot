@@ -610,10 +610,35 @@ export function BackgroundEditor({
     setPendingCrop(null);
   };
 
+  const resetShadow = () => {
+    recordHistory();
+    setShadowIntensity(DEFAULTS.shadowIntensity);
+    setShadowSoftness(DEFAULTS.shadowSoftness);
+    setShadowX(DEFAULTS.shadowX);
+    setShadowY(DEFAULTS.shadowY);
+    setShadowAngle(DEFAULTS.shadowAngle);
+    setShadowScaleX(DEFAULTS.shadowScaleX);
+    setShadowScaleY(DEFAULTS.shadowScaleY);
+    setShadowSkew(DEFAULTS.shadowSkew);
+    setTireContacts(DEFAULTS.tireContacts);
+    setTireIntensity(DEFAULTS.tireIntensity);
+  };
+  const resetReflection = () => {
+    recordHistory();
+    setReflectionIntensity(DEFAULTS.reflectionIntensity);
+    setReflectionX(DEFAULTS.reflectionX);
+    setReflectionY(DEFAULTS.reflectionY);
+    setReflectionAngle(DEFAULTS.reflectionAngle);
+    setReflectionSkew(DEFAULTS.reflectionSkew);
+    setReflectionScaleX(DEFAULTS.reflectionScaleX);
+    setReflectionScaleY(DEFAULTS.reflectionScaleY);
+  };
+
   const resetCurrentTab = () => {
     if (activeTab === "background") { recordHistory(); setBackdropId(defaultBackdropId); }
     else if (activeTab === "adjust") resetAdjust();
-    else if (activeTab === "compositing") resetCompositing();
+    else if (activeTab === "shadow") resetShadow();
+    else if (activeTab === "reflection") resetReflection();
     else if (activeTab === "overlay") { recordHistory(); setOverlayId(""); setOverlayPos("bottom"); }
   };
 
