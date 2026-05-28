@@ -192,6 +192,7 @@ export type Database = {
           created_at: string
           document_id: string
           id: string
+          is_main: boolean
           sort_order: number
           vehicle_id: string
         }
@@ -199,6 +200,7 @@ export type Database = {
           created_at?: string
           document_id: string
           id?: string
+          is_main?: boolean
           sort_order?: number
           vehicle_id: string
         }
@@ -206,6 +208,7 @@ export type Database = {
           created_at?: string
           document_id?: string
           id?: string
+          is_main?: boolean
           sort_order?: number
           vehicle_id?: string
         }
