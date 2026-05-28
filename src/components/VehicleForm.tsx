@@ -192,14 +192,14 @@ export function VehicleForm({
         </div>
       )}
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
-        <button type="button" onClick={onCancel} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 border-t border-border pt-4">
+        <button type="button" onClick={onCancel} className="w-full sm:w-auto px-4 py-2 min-h-[44px] text-sm text-muted-foreground hover:text-foreground rounded-md hover:bg-secondary">
           Cancel
         </button>
         <button
           type="submit"
           disabled={saving}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          className="w-full sm:w-auto rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
         >
           {saving ? "Saving…" : vehicleId ? "Save changes" : "Create vehicle"}
         </button>
@@ -212,7 +212,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div>
       <h3 className="text-xs uppercase tracking-wide text-muted-foreground mb-3">{title}</h3>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>
     </div>
   );
 }
