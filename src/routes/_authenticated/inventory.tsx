@@ -22,6 +22,7 @@ type Vehicle = {
   status: string | null;
   exterior_color: string | null;
   stock_number: string | null;
+  thumbnail_url?: string | null;
 };
 
 type Dealership = { id: string; name: string };
@@ -64,7 +65,26 @@ function InventoryPage() {
         .select("id, dealership_id, year, make, model, trim, price, odometer, condition, status, exterior_color, stock_number")
         .eq("dealership_id", selectedDealershipId)
         .order("created_at", { ascending: false });
-      setVehicles((data as Vehicle[]) || []);
+      const list = (data as Vehicle[]) || [];
+      const ids = list.map((v) => v.id);
+      if (ids.length > 0) {
+        const { data: photoRows } = await supabase
+          .from("photos")
+          .select("vehicle_id, image_url, shot_type, created_at")
+          .in("vehicle_id", ids);
+        const byVehicle = new Map<string, { url: string; isFront: boolean; created: string }>();
+        for (const row of (photoRows as { vehicle_id: string; image_url: string; shot_type: string | null; created_at: string }[]) || []) {
+          const cur = byVehicle.get(row.vehicle_id);
+          const isFront = row.shot_type === "Front";
+          if (!cur || (isFront && !cur.isFront) || (isFront === cur.isFront && row.created_at < cur.created)) {
+            byVehicle.set(row.vehicle_id, { url: row.image_url, isFront, created: row.created_at });
+          }
+        }
+        for (const v of list) {
+          v.thumbnail_url = byVehicle.get(v.id)?.url ?? null;
+        }
+      }
+      setVehicles(list);
       setLoading(false);
     })();
   }, [selectedDealershipId]);
@@ -151,8 +171,12 @@ function InventoryPage() {
               params={{ id: v.id }}
               className="group rounded-xl border border-border bg-card overflow-hidden hover:border-primary/60 transition-colors"
             >
-              <div className="aspect-[4/3] bg-secondary flex items-center justify-center text-muted-foreground text-xs">
-                No photo
+              <div className="aspect-[4/3] bg-secondary flex items-center justify-center text-muted-foreground text-xs overflow-hidden">
+                {v.thumbnail_url ? (
+                  <img src={v.thumbnail_url} alt={`${v.year} ${v.make} ${v.model}`} className="w-full h-full object-cover" />
+                ) : (
+                  "No photo"
+                )}
               </div>
               <div className="p-4">
                 <div className="flex items-start justify-between gap-2">

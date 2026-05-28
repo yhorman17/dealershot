@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatMiles, formatPrice } from "@/lib/vehicle-options";
+import { VehiclePhotos } from "@/components/VehiclePhotos";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id")({
   head: () => ({ meta: [{ title: "Vehicle — DealerShot" }] }),
@@ -95,10 +96,8 @@ function VehicleDetailPage() {
         </div>
       </div>
 
-      <div className="mt-6 rounded-xl border border-border bg-card overflow-hidden">
-        <div className="aspect-[16/7] bg-secondary flex items-center justify-center text-sm text-muted-foreground">
-          Photo gallery — coming soon
-        </div>
+      <div className="mt-6">
+        <VehiclePhotos vehicleId={id} />
       </div>
 
       <div className="mt-6 rounded-xl border border-border bg-card p-6">
