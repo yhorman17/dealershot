@@ -288,24 +288,26 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
             {SHOT_TYPES.map((shot) => {
               const taken = photos.find((p) => p.shot_type === shot.name);
               return (
-                <li key={shot.name} className="flex items-start gap-4 p-3 rounded-lg border border-border bg-background">
-                  <div className="flex-shrink-0 w-20 h-20 rounded-md overflow-hidden bg-secondary flex items-center justify-center">
-                    {taken ? (
-                      <img src={taken.image_url} alt={shot.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      {taken && (
-                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500/20 text-green-400 text-[10px]">✓</span>
+                <li key={shot.name} className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 p-3 rounded-lg border border-border bg-background">
+                  <div className="flex items-start gap-3 sm:contents w-full">
+                    <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-secondary flex items-center justify-center">
+                      {taken ? (
+                        <img src={taken.image_url} alt={shot.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
-                      <h4 className="text-sm font-medium text-card-foreground">{shot.name}</h4>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">{shot.tip}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        {taken && (
+                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500/20 text-green-400 text-[10px]">✓</span>
+                        )}
+                        <h4 className="text-sm font-medium text-card-foreground">{shot.name}</h4>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{shot.tip}</p>
+                    </div>
                   </div>
-                  <label className="flex-shrink-0 cursor-pointer rounded-md border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground hover:bg-secondary/80">
+                  <label className="w-full sm:w-auto sm:flex-shrink-0 cursor-pointer rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] flex items-center justify-center text-xs font-medium text-secondary-foreground hover:bg-secondary/80">
                     {uploading === shot.name ? "..." : taken ? "Replace" : "Capture"}
                     <input
                       type="file"
