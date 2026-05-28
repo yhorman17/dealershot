@@ -16,6 +16,7 @@ export function AppNav() {
             <NavLink to="/dashboard">Dashboard</NavLink>
             <NavLink to="/inventory">Inventory</NavLink>
             <NavLink to="/overlays">Overlays</NavLink>
+            <NavLink to="/documents">Documents</NavLink>
             {isOwner && <NavLink to="/dealerships">Dealerships</NavLink>}
           </nav>
         </div>
