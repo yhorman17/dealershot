@@ -25,7 +25,7 @@ type Photo = {
   is_main: boolean;
 };
 
-type TabKey = "background" | "adjust" | "compositing" | "overlay";
+type TabKey = "background" | "adjust" | "shadow" | "reflection" | "overlay";
 
 type AspectKey = "free" | "1:1" | "4:3" | "16:9" | "3:2";
 type FitMode = "none" | "fit" | "fill" | "expand";
