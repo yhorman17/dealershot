@@ -12,7 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
+import { Route as AuthenticatedDealershipsRouteImport } from './routes/_authenticated/dealerships'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedVehiclesNewRouteImport } from './routes/_authenticated/vehicles.new'
+import { Route as AuthenticatedVehiclesIdRouteImport } from './routes/_authenticated/vehicles.$id'
+import { Route as AuthenticatedVehiclesIdEditRouteImport } from './routes/_authenticated/vehicles.$id.edit'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -28,21 +33,59 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedInventoryRoute = AuthenticatedInventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedDealershipsRoute =
+  AuthenticatedDealershipsRouteImport.update({
+    id: '/dealerships',
+    path: '/dealerships',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedVehiclesNewRoute =
+  AuthenticatedVehiclesNewRouteImport.update({
+    id: '/vehicles/new',
+    path: '/vehicles/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedVehiclesIdRoute = AuthenticatedVehiclesIdRouteImport.update({
+  id: '/vehicles/$id',
+  path: '/vehicles/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedVehiclesIdEditRoute =
+  AuthenticatedVehiclesIdEditRouteImport.update({
+    id: '/edit',
+    path: '/edit',
+    getParentRoute: () => AuthenticatedVehiclesIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/dealerships': typeof AuthenticatedDealershipsRoute
+  '/inventory': typeof AuthenticatedInventoryRoute
+  '/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
+  '/vehicles/new': typeof AuthenticatedVehiclesNewRoute
+  '/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/dealerships': typeof AuthenticatedDealershipsRoute
+  '/inventory': typeof AuthenticatedInventoryRoute
+  '/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
+  '/vehicles/new': typeof AuthenticatedVehiclesNewRoute
+  '/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -50,18 +93,44 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/dealerships': typeof AuthenticatedDealershipsRoute
+  '/_authenticated/inventory': typeof AuthenticatedInventoryRoute
+  '/_authenticated/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
+  '/_authenticated/vehicles/new': typeof AuthenticatedVehiclesNewRoute
+  '/_authenticated/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/dashboard'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/dashboard'
+    | '/dealerships'
+    | '/inventory'
+    | '/vehicles/$id'
+    | '/vehicles/new'
+    | '/vehicles/$id/edit'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/dashboard'
+  to:
+    | '/'
+    | '/login'
+    | '/dashboard'
+    | '/dealerships'
+    | '/inventory'
+    | '/vehicles/$id'
+    | '/vehicles/new'
+    | '/vehicles/$id/edit'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/login'
     | '/_authenticated/dashboard'
+    | '/_authenticated/dealerships'
+    | '/_authenticated/inventory'
+    | '/_authenticated/vehicles/$id'
+    | '/_authenticated/vehicles/new'
+    | '/_authenticated/vehicles/$id/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -93,6 +162,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/inventory': {
+      id: '/_authenticated/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof AuthenticatedInventoryRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/dealerships': {
+      id: '/_authenticated/dealerships'
+      path: '/dealerships'
+      fullPath: '/dealerships'
+      preLoaderRoute: typeof AuthenticatedDealershipsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
@@ -100,15 +183,58 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/vehicles/new': {
+      id: '/_authenticated/vehicles/new'
+      path: '/vehicles/new'
+      fullPath: '/vehicles/new'
+      preLoaderRoute: typeof AuthenticatedVehiclesNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/vehicles/$id': {
+      id: '/_authenticated/vehicles/$id'
+      path: '/vehicles/$id'
+      fullPath: '/vehicles/$id'
+      preLoaderRoute: typeof AuthenticatedVehiclesIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/vehicles/$id/edit': {
+      id: '/_authenticated/vehicles/$id/edit'
+      path: '/edit'
+      fullPath: '/vehicles/$id/edit'
+      preLoaderRoute: typeof AuthenticatedVehiclesIdEditRouteImport
+      parentRoute: typeof AuthenticatedVehiclesIdRoute
+    }
   }
 }
 
+interface AuthenticatedVehiclesIdRouteChildren {
+  AuthenticatedVehiclesIdEditRoute: typeof AuthenticatedVehiclesIdEditRoute
+}
+
+const AuthenticatedVehiclesIdRouteChildren: AuthenticatedVehiclesIdRouteChildren =
+  {
+    AuthenticatedVehiclesIdEditRoute: AuthenticatedVehiclesIdEditRoute,
+  }
+
+const AuthenticatedVehiclesIdRouteWithChildren =
+  AuthenticatedVehiclesIdRoute._addFileChildren(
+    AuthenticatedVehiclesIdRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedDealershipsRoute: typeof AuthenticatedDealershipsRoute
+  AuthenticatedInventoryRoute: typeof AuthenticatedInventoryRoute
+  AuthenticatedVehiclesIdRoute: typeof AuthenticatedVehiclesIdRouteWithChildren
+  AuthenticatedVehiclesNewRoute: typeof AuthenticatedVehiclesNewRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedDealershipsRoute: AuthenticatedDealershipsRoute,
+  AuthenticatedInventoryRoute: AuthenticatedInventoryRoute,
+  AuthenticatedVehiclesIdRoute: AuthenticatedVehiclesIdRouteWithChildren,
+  AuthenticatedVehiclesNewRoute: AuthenticatedVehiclesNewRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
@@ -123,3 +249,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
