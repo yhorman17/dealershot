@@ -49,52 +49,121 @@ function destRect(baseW: number, baseH: number, ovW: number, ovH: number, pos: P
   return { x, y, w, h };
 }
 
-async function compose({
-  cutoutUrl,
-  backdropUrl,
-  overlayUrl,
-  overlayPos,
-  targetW,
-  targetH,
-}: {
-  cutoutUrl: string;
-  backdropUrl: string;
-  overlayUrl: string | null;
-  overlayPos: Position;
-  targetW: number;
-  targetH: number;
-}): Promise<Blob> {
-  const [cutout, backdrop, overlay] = await Promise.all([
-    loadImage(cutoutUrl),
-    loadImage(backdropUrl),
-    overlayUrl ? loadImage(overlayUrl) : Promise.resolve(null),
-  ]);
-  const canvas = document.createElement("canvas");
-  canvas.width = targetW;
-  canvas.height = targetH;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas not supported");
+function carRect(cutout: HTMLImageElement, targetW: number, targetH: number) {
+  const scale = Math.min(targetW / cutout.naturalWidth, targetH / cutout.naturalHeight);
+  const w = cutout.naturalWidth * scale;
+  const h = cutout.naturalHeight * scale;
+  return { x: (targetW - w) / 2, y: (targetH - h) / 2, w, h };
+}
 
-  // Backdrop: cover
+function buildShadowCanvas(
+  cutout: HTMLImageElement,
+  targetW: number,
+  targetH: number,
+  opacity: number,
+  blur: number,
+): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = targetW;
+  c.height = targetH;
+  const ctx = c.getContext("2d")!;
+  const r = carRect(cutout, targetW, targetH);
+  const shadowH = r.h * 0.18;
+  // Draw squashed silhouette just below the car's bottom, with heavy blur
+  ctx.filter = `blur(${blur}px)`;
+  ctx.drawImage(cutout, r.x, r.y + r.h - shadowH / 2, r.w, shadowH);
+  ctx.filter = "none";
+  // Tint silhouette to solid dark while preserving its alpha
+  ctx.globalCompositeOperation = "source-in";
+  ctx.fillStyle = `rgba(0,0,0,${opacity})`;
+  ctx.fillRect(0, 0, targetW, targetH);
+  return c;
+}
+
+function buildReflectionCanvas(
+  cutout: HTMLImageElement,
+  targetW: number,
+  targetH: number,
+  intensity: number,
+): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = targetW;
+  c.height = targetH;
+  const ctx = c.getContext("2d")!;
+  const r = carRect(cutout, targetW, targetH);
+  // Flipped copy directly below the car
+  ctx.save();
+  ctx.translate(r.x, r.y + r.h * 2);
+  ctx.scale(1, -1);
+  ctx.drawImage(cutout, 0, 0, r.w, r.h);
+  ctx.restore();
+  // Fade from `intensity` at top of reflection down to 0 over half the car's height
+  ctx.globalCompositeOperation = "destination-in";
+  const grad = ctx.createLinearGradient(0, r.y + r.h, 0, r.y + r.h + r.h * 0.5);
+  grad.addColorStop(0, `rgba(0,0,0,${intensity})`);
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, r.y + r.h, targetW, r.h);
+  // Make sure nothing leaks above the ground line
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, targetW, r.y + r.h);
+  return c;
+}
+
+function compose(
+  ctx: CanvasRenderingContext2D,
+  {
+    cutout,
+    backdrop,
+    overlay,
+    overlayPos,
+    targetW,
+    targetH,
+    shadowOpacity,
+    shadowBlur,
+    reflectionIntensity,
+  }: {
+    cutout: HTMLImageElement;
+    backdrop: HTMLImageElement;
+    overlay: HTMLImageElement | null;
+    overlayPos: Position;
+    targetW: number;
+    targetH: number;
+    shadowOpacity: number;
+    shadowBlur: number;
+    reflectionIntensity: number;
+  },
+) {
+  ctx.clearRect(0, 0, targetW, targetH);
+
+  // 1. Backdrop (cover)
   const bScale = Math.max(targetW / backdrop.naturalWidth, targetH / backdrop.naturalHeight);
   const bw = backdrop.naturalWidth * bScale;
   const bh = backdrop.naturalHeight * bScale;
   ctx.drawImage(backdrop, (targetW - bw) / 2, (targetH - bh) / 2, bw, bh);
 
-  // Cutout: contain
-  const cScale = Math.min(targetW / cutout.naturalWidth, targetH / cutout.naturalHeight);
-  const cw = cutout.naturalWidth * cScale;
-  const ch = cutout.naturalHeight * cScale;
-  ctx.drawImage(cutout, (targetW - cw) / 2, (targetH - ch) / 2, cw, ch);
-
-  if (overlay) {
-    const r = destRect(targetW, targetH, overlay.naturalWidth, overlay.naturalHeight, overlayPos);
-    ctx.drawImage(overlay, r.x, r.y, r.w, r.h);
+  // 2. Floor reflection
+  if (reflectionIntensity > 0) {
+    const ref = buildReflectionCanvas(cutout, targetW, targetH, reflectionIntensity);
+    ctx.drawImage(ref, 0, 0);
   }
 
-  return await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Failed to render"))), "image/jpeg", 0.92);
-  });
+  // 3. Ground shadow
+  if (shadowOpacity > 0) {
+    const sh = buildShadowCanvas(cutout, targetW, targetH, shadowOpacity, shadowBlur);
+    ctx.drawImage(sh, 0, 0);
+  }
+
+  // 4. Cut-out car
+  const r = carRect(cutout, targetW, targetH);
+  ctx.drawImage(cutout, r.x, r.y, r.w, r.h);
+
+  // 5. Overlay banner
+  if (overlay) {
+    const o = destRect(targetW, targetH, overlay.naturalWidth, overlay.naturalHeight, overlayPos);
+    ctx.drawImage(overlay, o.x, o.y, o.w, o.h);
+  }
 }
 
 export function BackgroundEditor({
@@ -113,13 +182,22 @@ export function BackgroundEditor({
   const [backdropId, setBackdropId] = useState<string>("");
   const [overlayId, setOverlayId] = useState<string>("");
   const [overlayPos, setOverlayPos] = useState<Position>("bottom");
-  const [cutoutUrl, setCutoutUrl] = useState<string | null>(null);
+  const [cutoutImg, setCutoutImg] = useState<HTMLImageElement | null>(null);
+  const [backdropImg, setBackdropImg] = useState<HTMLImageElement | null>(null);
+  const [overlayImg, setOverlayImg] = useState<HTMLImageElement | null>(null);
   const [baseSize, setBaseSize] = useState<{ w: number; h: number } | null>(null);
   const [removing, setRemoving] = useState(true);
   const [removeErr, setRemoveErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const cutoutRevokeRef = useRef<string | null>(null);
+
+  // Compositing controls
+  const [shadowIntensity, setShadowIntensity] = useState(60); // 0-100
+  const [shadowSoftness, setShadowSoftness] = useState(25); // 0-50
+  const [reflectionIntensity, setReflectionIntensity] = useState(35); // 0-100
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const cutoutUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -135,6 +213,7 @@ export function BackgroundEditor({
     })();
   }, [dealershipId]);
 
+  // Background removal
   useEffect(() => {
     let cancelled = false;
     setRemoving(true);
@@ -147,8 +226,10 @@ export function BackgroundEditor({
         const blob = await removeBackground(photo.image_url);
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
-        cutoutRevokeRef.current = url;
-        setCutoutUrl(url);
+        cutoutUrlRef.current = url;
+        const img = await loadImage(url);
+        if (cancelled) return;
+        setCutoutImg(img);
       } catch (err) {
         if (!cancelled) setRemoveErr(err instanceof Error ? err.message : "Background removal failed");
       } finally {
@@ -157,25 +238,57 @@ export function BackgroundEditor({
     })();
     return () => {
       cancelled = true;
-      if (cutoutRevokeRef.current) URL.revokeObjectURL(cutoutRevokeRef.current);
+      if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
     };
   }, [photo.image_url]);
 
-  const selectedBackdrop = backdrops.find((b) => b.id === backdropId);
-  const selectedOverlay = overlays.find((o) => o.id === overlayId);
+  // Load backdrop image
+  useEffect(() => {
+    const sel = backdrops.find((b) => b.id === backdropId);
+    if (!sel) { setBackdropImg(null); return; }
+    let cancelled = false;
+    void loadImage(sel.image_url).then((img) => { if (!cancelled) setBackdropImg(img); });
+    return () => { cancelled = true; };
+  }, [backdropId, backdrops]);
+
+  // Load overlay image
+  useEffect(() => {
+    const sel = overlays.find((o) => o.id === overlayId);
+    if (!sel) { setOverlayImg(null); return; }
+    let cancelled = false;
+    void loadImage(sel.image_url).then((img) => { if (!cancelled) setOverlayImg(img); });
+    return () => { cancelled = true; };
+  }, [overlayId, overlays]);
+
+  // Live preview render
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !cutoutImg || !backdropImg || !baseSize) return;
+    canvas.width = baseSize.w;
+    canvas.height = baseSize.h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    compose(ctx, {
+      cutout: cutoutImg,
+      backdrop: backdropImg,
+      overlay: overlayImg,
+      overlayPos,
+      targetW: baseSize.w,
+      targetH: baseSize.h,
+      shadowOpacity: shadowIntensity / 100,
+      shadowBlur: shadowSoftness,
+      reflectionIntensity: reflectionIntensity / 100,
+    });
+  }, [cutoutImg, backdropImg, overlayImg, overlayPos, baseSize, shadowIntensity, shadowSoftness, reflectionIntensity]);
 
   const save = async (mode: "new" | "overwrite") => {
-    if (!cutoutUrl || !selectedBackdrop || !baseSize) return;
+    const canvas = canvasRef.current;
+    if (!canvas || !cutoutImg || !backdropImg || !baseSize) return;
     setSaving(true);
     setError(null);
     try {
-      const blob = await compose({
-        cutoutUrl,
-        backdropUrl: selectedBackdrop.image_url,
-        overlayUrl: selectedOverlay ? selectedOverlay.image_url : null,
-        overlayPos,
-        targetW: baseSize.w,
-        targetH: baseSize.h,
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Failed to render"))), "image/jpeg", 0.92);
       });
       const path = `${photo.vehicle_id}/${crypto.randomUUID()}.jpg`;
       const { error: upErr } = await supabase.storage
@@ -215,16 +328,7 @@ export function BackgroundEditor({
     }
   };
 
-  const overlayStyle = (() => {
-    if (overlayPos === "top") return { top: 0, left: 0, width: "100%" } as const;
-    if (overlayPos === "bottom") return { bottom: 0, left: 0, width: "100%" } as const;
-    const base = { width: "25%" } as const;
-    const pad = "2.5%";
-    if (overlayPos === "tl") return { ...base, top: pad, left: pad };
-    if (overlayPos === "tr") return { ...base, top: pad, right: pad };
-    if (overlayPos === "bl") return { ...base, bottom: pad, left: pad };
-    return { ...base, bottom: pad, right: pad };
-  })();
+  const ready = !!cutoutImg && !!backdropImg && !!baseSize && !removing;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-auto">
@@ -284,14 +388,8 @@ export function BackgroundEditor({
               className="relative w-full rounded-lg overflow-hidden bg-secondary border border-border"
               style={{ aspectRatio: baseSize ? `${baseSize.w} / ${baseSize.h}` : "16 / 9" }}
             >
-              {selectedBackdrop && (
-                <img
-                  src={selectedBackdrop.image_url}
-                  alt=""
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-              )}
-              {removing ? (
+              <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+              {removing && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
                   <div className="text-center">
                     <div className="h-8 w-8 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
@@ -301,25 +399,45 @@ export function BackgroundEditor({
                     </p>
                   </div>
                 </div>
-              ) : removeErr ? (
+              )}
+              {removeErr && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/80 p-6">
                   <p className="text-sm text-destructive text-center">{removeErr}</p>
                 </div>
-              ) : cutoutUrl ? (
-                <img
-                  src={cutoutUrl}
-                  alt=""
-                  className="absolute inset-0 w-full h-full object-contain"
-                />
-              ) : null}
-              {selectedOverlay && (
-                <img
-                  src={selectedOverlay.image_url}
-                  alt=""
-                  className="absolute pointer-events-none object-contain"
-                  style={overlayStyle}
-                />
               )}
+            </div>
+
+            <div className="mt-5 rounded-lg border border-border bg-secondary/30 p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-card-foreground mb-3">
+                Compositing
+              </h3>
+              <div className="space-y-4">
+                <SliderRow
+                  label="Shadow Intensity"
+                  value={shadowIntensity}
+                  min={0}
+                  max={100}
+                  suffix="%"
+                  onChange={setShadowIntensity}
+                />
+                <SliderRow
+                  label="Shadow Softness"
+                  value={shadowSoftness}
+                  min={0}
+                  max={50}
+                  suffix="px"
+                  onChange={setShadowSoftness}
+                />
+                <SliderRow
+                  label="Reflection Intensity"
+                  value={reflectionIntensity}
+                  min={0}
+                  max={100}
+                  suffix="%"
+                  onChange={setReflectionIntensity}
+                  hint={reflectionIntensity === 0 ? "Disabled" : undefined}
+                />
+              </div>
             </div>
 
             {error && (
@@ -337,7 +455,7 @@ export function BackgroundEditor({
               </button>
               <button
                 onClick={() => void save("new")}
-                disabled={saving || removing || !cutoutUrl || !selectedBackdrop}
+                disabled={saving || !ready}
                 className="rounded-md border border-border bg-secondary px-4 py-2 text-sm text-secondary-foreground hover:bg-secondary/80 disabled:opacity-60"
               >
                 {saving ? "Saving…" : "Save as new photo"}
@@ -346,7 +464,7 @@ export function BackgroundEditor({
                 onClick={() => {
                   if (confirm("Overwrite the original photo? This cannot be undone.")) void save("overwrite");
                 }}
-                disabled={saving || removing || !cutoutUrl || !selectedBackdrop}
+                disabled={saving || !ready}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
               >
                 {saving ? "Saving…" : "Overwrite original"}
@@ -355,6 +473,43 @@ export function BackgroundEditor({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function SliderRow({
+  label,
+  value,
+  min,
+  max,
+  suffix,
+  hint,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  suffix?: string;
+  hint?: string;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="text-xs font-medium text-card-foreground">{label}</label>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {hint ?? `${value}${suffix ?? ""}`}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-primary"
+      />
     </div>
   );
 }
