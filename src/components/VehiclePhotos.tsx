@@ -71,6 +71,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
   const [addingCustom, setAddingCustom] = useState(false);
   const [dealershipId, setDealershipId] = useState<string | null>(null);
   const [overlayPhoto, setOverlayPhoto] = useState<Photo | null>(null);
+  const [bgPhoto, setBgPhoto] = useState<Photo | null>(null);
   const [showAttachDoc, setShowAttachDoc] = useState(false);
 
   useEffect(() => {
