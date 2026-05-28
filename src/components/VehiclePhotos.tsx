@@ -358,64 +358,68 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
               return (
                 <div
                   key={p.id}
-                  className={`group relative aspect-square rounded-md overflow-hidden bg-secondary ${
+                  className={`group relative rounded-md overflow-hidden bg-secondary ${
                     p.is_main ? "ring-2 ring-primary" : ""
                   }`}
                 >
-                  <img src={p.image_url} alt={p.shot_type || "Photo"} className="w-full h-full object-cover" />
+                  <div className="aspect-square relative">
+                    <img src={p.image_url} alt={p.shot_type || "Photo"} className="w-full h-full object-cover" />
 
-                  {/* Top-left labels */}
-                  <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 items-start">
-                    {p.is_main && (
-                      <span className="inline-flex items-center rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-primary-foreground">
-                        MAIN
+                    {/* Top-left: shot type label */}
+                    {p.shot_type && (
+                      <span className="absolute top-1.5 left-1.5 inline-flex items-center rounded bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-medium text-white">
+                        {p.shot_type}
                       </span>
                     )}
-                    {p.shot_type && (
-                      <span className="inline-flex items-center rounded bg-background/80 backdrop-blur px-1.5 py-0.5 text-[10px] font-medium text-foreground">
-                        {p.shot_type}
+
+                    {/* Top-right: MAIN badge */}
+                    {p.is_main && (
+                      <span className="absolute top-1.5 right-1.5 inline-flex items-center rounded bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">
+                        MAIN
                       </span>
                     )}
                   </div>
 
-                  {/* Reorder arrows (left side, vertical) */}
-                  {!p.is_main && (
-                    <div className="absolute left-1.5 bottom-1.5 flex flex-col gap-1">
+                  {/* Bottom control bar */}
+                  <div className="flex items-center justify-between p-2 bg-background border-t border-border">
+                    <div className="flex items-center gap-1">
+                      {!p.is_main && (
+                        <>
+                          <button
+                            onClick={() => void movePhoto(p, -1)}
+                            disabled={!canMoveUp}
+                            aria-label="Move earlier"
+                            className="h-10 w-10 flex items-center justify-center rounded bg-secondary text-foreground text-lg font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary/80"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            onClick={() => void movePhoto(p, 1)}
+                            disabled={!canMoveDown}
+                            aria-label="Move later"
+                            className="h-10 w-10 flex items-center justify-center rounded bg-secondary text-foreground text-lg font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary/80"
+                          >
+                            ↓
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {!p.is_main && (
+                        <button
+                          onClick={() => void setAsMain(p)}
+                          className="rounded bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
+                        >
+                          Set as main
+                        </button>
+                      )}
                       <button
-                        onClick={() => void movePhoto(p, -1)}
-                        disabled={!canMoveUp}
-                        aria-label="Move earlier"
-                        className="h-9 w-9 sm:h-8 sm:w-8 rounded bg-background/90 backdrop-blur text-foreground text-base font-semibold shadow disabled:opacity-30 disabled:cursor-not-allowed hover:bg-background"
+                        onClick={() => void deletePhoto(p)}
+                        className="rounded bg-destructive px-2 py-1.5 text-[10px] font-medium text-destructive-foreground hover:bg-destructive/90"
                       >
-                        ↑
-                      </button>
-                      <button
-                        onClick={() => void movePhoto(p, 1)}
-                        disabled={!canMoveDown}
-                        aria-label="Move later"
-                        className="h-9 w-9 sm:h-8 sm:w-8 rounded bg-background/90 backdrop-blur text-foreground text-base font-semibold shadow disabled:opacity-30 disabled:cursor-not-allowed hover:bg-background"
-                      >
-                        ↓
+                        Delete
                       </button>
                     </div>
-                  )}
-
-                  {/* Action buttons (top-right) */}
-                  <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 items-end">
-                    {!p.is_main && (
-                      <button
-                        onClick={() => void setAsMain(p)}
-                        className="rounded bg-background/90 backdrop-blur px-2 py-1 text-[10px] font-medium text-foreground hover:bg-background shadow"
-                      >
-                        Set as main
-                      </button>
-                    )}
-                    <button
-                      onClick={() => void deletePhoto(p)}
-                      className="rounded bg-destructive px-2 py-1 text-[10px] font-medium text-destructive-foreground hover:bg-destructive/90 shadow"
-                    >
-                      Delete
-                    </button>
                   </div>
                 </div>
               );
