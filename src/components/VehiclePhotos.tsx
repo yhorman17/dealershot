@@ -449,6 +449,18 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
           </div>
         )}
       </div>
+
+      {overlayPhoto && dealershipId && (
+        <OverlayEditor
+          photo={overlayPhoto}
+          dealershipId={dealershipId}
+          onClose={() => setOverlayPhoto(null)}
+          onSaved={() => {
+            setOverlayPhoto(null);
+            void load();
+          }}
+        />
+      )}
     </div>
   );
 }
