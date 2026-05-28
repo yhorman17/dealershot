@@ -418,7 +418,15 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                         </>
                       )}
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap justify-end">
+                      {dealershipId && (
+                        <button
+                          onClick={() => setOverlayPhoto(p)}
+                          className="rounded bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
+                        >
+                          Add Overlay
+                        </button>
+                      )}
                       {!p.is_main && (
                         <button
                           onClick={() => void setAsMain(p)}
