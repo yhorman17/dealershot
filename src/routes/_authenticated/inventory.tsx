@@ -120,7 +120,7 @@ function InventoryPage() {
             {filtered.length} vehicle{filtered.length === 1 ? "" : "s"}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {isOwner && (
             <select
               value={selectedDealershipId || ""}

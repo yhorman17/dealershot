@@ -88,7 +88,7 @@ function OverlaysPage() {
             Reusable banner images you can stamp on vehicle photos
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {isOwner && (
             <select
               value={selectedDealershipId || ""}
