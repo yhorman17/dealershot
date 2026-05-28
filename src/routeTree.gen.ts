@@ -17,6 +17,7 @@ import { Route as AuthenticatedInventoryRouteImport } from './routes/_authentica
 import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authenticated/documents'
 import { Route as AuthenticatedDealershipsRouteImport } from './routes/_authenticated/dealerships'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedBackdropsRouteImport } from './routes/_authenticated/backdrops'
 import { Route as AuthenticatedVehiclesNewRouteImport } from './routes/_authenticated/vehicles.new'
 import { Route as AuthenticatedVehiclesIdRouteImport } from './routes/_authenticated/vehicles.$id'
 import { Route as AuthenticatedVehiclesIdEditRouteImport } from './routes/_authenticated/vehicles.$id.edit'
@@ -61,6 +62,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedBackdropsRoute = AuthenticatedBackdropsRouteImport.update({
+  id: '/backdrops',
+  path: '/backdrops',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedVehiclesNewRoute =
   AuthenticatedVehiclesNewRouteImport.update({
     id: '/vehicles/new',
@@ -82,6 +88,7 @@ const AuthenticatedVehiclesIdEditRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/backdrops': typeof AuthenticatedBackdropsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dealerships': typeof AuthenticatedDealershipsRoute
   '/documents': typeof AuthenticatedDocumentsRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/backdrops': typeof AuthenticatedBackdropsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dealerships': typeof AuthenticatedDealershipsRoute
   '/documents': typeof AuthenticatedDocumentsRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
+  '/_authenticated/backdrops': typeof AuthenticatedBackdropsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/dealerships': typeof AuthenticatedDealershipsRoute
   '/_authenticated/documents': typeof AuthenticatedDocumentsRoute
@@ -122,6 +131,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/backdrops'
     | '/dashboard'
     | '/dealerships'
     | '/documents'
@@ -134,6 +144,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/backdrops'
     | '/dashboard'
     | '/dealerships'
     | '/documents'
@@ -147,6 +158,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/login'
+    | '/_authenticated/backdrops'
     | '/_authenticated/dashboard'
     | '/_authenticated/dealerships'
     | '/_authenticated/documents'
@@ -221,6 +233,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/backdrops': {
+      id: '/_authenticated/backdrops'
+      path: '/backdrops'
+      fullPath: '/backdrops'
+      preLoaderRoute: typeof AuthenticatedBackdropsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/vehicles/new': {
       id: '/_authenticated/vehicles/new'
       path: '/vehicles/new'
@@ -260,6 +279,7 @@ const AuthenticatedVehiclesIdRouteWithChildren =
   )
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedBackdropsRoute: typeof AuthenticatedBackdropsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDealershipsRoute: typeof AuthenticatedDealershipsRoute
   AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRoute
@@ -270,6 +290,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedBackdropsRoute: AuthenticatedBackdropsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDealershipsRoute: AuthenticatedDealershipsRoute,
   AuthenticatedDocumentsRoute: AuthenticatedDocumentsRoute,

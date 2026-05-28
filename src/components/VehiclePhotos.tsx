@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { OverlayEditor } from "@/components/OverlayEditor";
+import { BackgroundEditor } from "@/components/BackgroundEditor";
 
 export const SHOT_TYPES = [
   { name: "Front", tip: "Stand 10-15 feet away, camera at headlight height, entire front bumper in frame." },
@@ -70,6 +71,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
   const [addingCustom, setAddingCustom] = useState(false);
   const [dealershipId, setDealershipId] = useState<string | null>(null);
   const [overlayPhoto, setOverlayPhoto] = useState<Photo | null>(null);
+  const [bgPhoto, setBgPhoto] = useState<Photo | null>(null);
   const [showAttachDoc, setShowAttachDoc] = useState(false);
 
   useEffect(() => {
@@ -462,12 +464,20 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                     </div>
                     <div className="flex items-center gap-1 flex-wrap justify-end">
                       {!isDoc && dealershipId && it.photo && (
-                        <button
-                          onClick={() => setOverlayPhoto(it.photo!)}
-                          className="rounded bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
-                        >
-                          Add Overlay
-                        </button>
+                        <>
+                          <button
+                            onClick={() => setOverlayPhoto(it.photo!)}
+                            className="rounded bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
+                          >
+                            Add Overlay
+                          </button>
+                          <button
+                            onClick={() => setBgPhoto(it.photo!)}
+                            className="rounded bg-secondary px-2 py-1.5 text-[10px] font-medium text-foreground hover:bg-secondary/80"
+                          >
+                            Change Background
+                          </button>
+                        </>
                       )}
                       {!it.is_main && (
                         <button
@@ -507,6 +517,15 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
           dealershipId={dealershipId}
           onClose={() => setOverlayPhoto(null)}
           onSaved={() => { setOverlayPhoto(null); void load(); }}
+        />
+      )}
+
+      {bgPhoto && dealershipId && (
+        <BackgroundEditor
+          photo={bgPhoto}
+          dealershipId={dealershipId}
+          onClose={() => setBgPhoto(null)}
+          onSaved={() => { setBgPhoto(null); void load(); }}
         />
       )}
 
