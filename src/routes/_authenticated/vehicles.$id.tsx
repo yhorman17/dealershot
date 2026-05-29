@@ -123,12 +123,14 @@ function VehicleDetailPage() {
           >
             Export Photos
           </button>
-          <button
-            onClick={() => void handleDelete()}
-            className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 min-h-[44px] text-sm text-destructive hover:bg-destructive/20"
-          >
-            Delete
-          </button>
+          {canDelete && (
+            <button
+              onClick={() => void handleDelete()}
+              className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 min-h-[44px] text-sm text-destructive hover:bg-destructive/20"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
 
