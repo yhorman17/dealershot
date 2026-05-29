@@ -126,19 +126,15 @@ function findSilhouetteBounds(img: HTMLImageElement): { top: number; bottom: num
   return { top, bottom, left, right };
 }
 
-function buildShadowCanvas(
+function buildOvalShadowCanvas(
   cutout: HTMLImageElement,
   bounds: { top: number; bottom: number; left: number; right: number },
   targetW: number,
   targetH: number,
   opacity: number,
-  blur: number,
+  scalePct: number,
   offsetX: number,
   offsetY: number,
-  angleDeg: number,
-  scaleXPct: number,
-  scaleYPct: number,
-  skewDeg: number,
   carOpts: CarOpts,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
@@ -151,58 +147,21 @@ function buildShadowCanvas(
   const carWidth = (bounds.right - bounds.left) * sx;
   const carBottomY = r.y + bounds.bottom * sy;
   const carCenterX = r.x + ((bounds.left + bounds.right) / 2) * sx;
-
-  const sX = scaleXPct / 100;
-  const sY = scaleYPct / 100;
-  const baseShadowH = carWidth * 0.22;
-  const shadowW = carWidth * 1.1 * sX;
-  const shadowH = baseShadowH * sY;
+  const s = scalePct / 100;
+  const rx = Math.max(4, carWidth * 0.55 * s);
+  const ry = Math.max(4, carWidth * 0.085 * s);
   const cx = carCenterX + offsetX;
-  const cy = carBottomY + offsetY;
-
-  ctx.filter = `blur(${blur}px)`;
+  const cy = carBottomY + offsetY - ry * 0.1;
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.rotate((angleDeg * Math.PI) / 180);
-  ctx.transform(1, 0, Math.tan((skewDeg * Math.PI) / 180), 1, 0, 0);
-  const scaleSilY = shadowH / r.h;
-  const scaleSilX = shadowW / r.w;
-  ctx.scale(scaleSilX, scaleSilY);
-  ctx.drawImage(cutout, -r.x - r.w / 2, -r.y - r.h / 2, r.w, r.h);
+  ctx.scale(rx, ry);
+  const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+  grad.addColorStop(0, `rgba(0,0,0,${opacity})`);
+  grad.addColorStop(0.55, `rgba(0,0,0,${opacity * 0.35})`);
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(-1, -1, 2, 2);
   ctx.restore();
-  ctx.filter = "none";
-  ctx.globalCompositeOperation = "source-in";
-  ctx.fillStyle = `rgba(0,0,0,${opacity})`;
-  ctx.fillRect(0, 0, targetW, targetH);
-  return c;
-}
-
-function buildTireContactCanvas(
-  cutout: HTMLImageElement,
-  bounds: { top: number; bottom: number; left: number; right: number },
-  targetW: number,
-  targetH: number,
-  opacity: number,
-  carOpts: CarOpts,
-): HTMLCanvasElement {
-  const c = document.createElement("canvas");
-  c.width = targetW;
-  c.height = targetH;
-  const ctx = c.getContext("2d")!;
-  const r = carRect(cutout, targetW, targetH, carOpts);
-  const sx = r.w / cutout.naturalWidth;
-  const sy = r.h / cutout.naturalHeight;
-  const carWidth = (bounds.right - bounds.left) * sx;
-  const carBottomY = r.y + bounds.bottom * sy;
-  const carCenterX = r.x + ((bounds.left + bounds.right) / 2) * sx;
-  const bandW = carWidth * 0.95;
-  const bandH = carWidth * 0.04;
-  ctx.filter = `blur(${Math.max(3, carWidth * 0.008)}px)`;
-  ctx.beginPath();
-  ctx.ellipse(carCenterX, carBottomY, bandW / 2, bandH, 0, 0, Math.PI * 2);
-  ctx.fillStyle = `rgba(0,0,0,${opacity})`;
-  ctx.fill();
-  ctx.filter = "none";
   return c;
 }
 
@@ -214,10 +173,7 @@ function buildReflectionCanvas(
   intensity: number,
   offsetX: number,
   offsetY: number,
-  angleDeg: number,
-  skewDeg: number,
-  scaleXPct: number,
-  scaleYPct: number,
+  scalePct: number,
   carOpts: CarOpts,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
@@ -228,20 +184,15 @@ function buildReflectionCanvas(
   const sy = r.h / cutout.naturalHeight;
   const carBottomY = r.y + bounds.bottom * sy;
   const groundY = carBottomY + offsetY;
-  const sX = scaleXPct / 100;
-  const sY = scaleYPct / 100;
+  const s = Math.max(0.1, scalePct / 100);
   const centerX = r.x + r.w / 2 + offsetX;
   ctx.save();
   ctx.translate(centerX, groundY);
-  ctx.rotate((angleDeg * Math.PI) / 180);
-  ctx.transform(1, 0, Math.tan((skewDeg * Math.PI) / 180), 1, 0, 0);
-  ctx.scale(sX, -sY);
+  ctx.scale(s, -s);
   ctx.drawImage(cutout, -r.w / 2, -r.h, r.w, r.h);
   ctx.restore();
-  // Mask: gradient from full intensity at groundY fading downward.
-  // Cover full canvas so transformed reflections aren't clipped above groundY.
   ctx.globalCompositeOperation = "destination-in";
-  const fadeEnd = groundY + Math.max(20, r.h * 0.5 * Math.abs(sY));
+  const fadeEnd = groundY + Math.max(20, r.h * 0.5 * s);
   const grad = ctx.createLinearGradient(0, groundY, 0, fadeEnd);
   grad.addColorStop(0, `rgba(0,0,0,${intensity})`);
   grad.addColorStop(1, "rgba(0,0,0,0)");
@@ -258,23 +209,16 @@ type ComposeOpts = {
   overlayPos: Position;
   targetW: number;
   targetH: number;
+  shadowEnabled: boolean;
   shadowOpacity: number;
-  shadowBlur: number;
+  shadowScale: number;
   shadowX: number;
   shadowY: number;
-  shadowAngle: number;
-  shadowScaleX: number;
-  shadowScaleY: number;
-  shadowSkew: number;
-  reflectionIntensity: number;
+  reflectionEnabled: boolean;
+  reflectionOpacity: number;
+  reflectionScale: number;
   reflectionX: number;
   reflectionY: number;
-  reflectionAngle: number;
-  reflectionSkew: number;
-  reflectionScaleX: number;
-  reflectionScaleY: number;
-  tireContacts: boolean;
-  tireIntensity: number;
   carOpts: CarOpts;
 };
 
@@ -287,31 +231,22 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
   const bh = o.backdrop.naturalHeight * bScale;
   ctx.drawImage(o.backdrop, (targetW - bw) / 2, (targetH - bh) / 2, bw, bh);
 
-  if (o.reflectionIntensity > 0) {
+  if (o.reflectionEnabled && o.reflectionOpacity > 0) {
     const ref = buildReflectionCanvas(
       o.cutout, o.bounds, targetW, targetH,
-      o.reflectionIntensity, o.reflectionX, o.reflectionY,
-      o.reflectionAngle, o.reflectionSkew,
-      o.reflectionScaleX, o.reflectionScaleY,
+      o.reflectionOpacity, o.reflectionX, o.reflectionY, o.reflectionScale,
       o.carOpts,
     );
     ctx.drawImage(ref, 0, 0);
   }
 
-  if (o.shadowOpacity > 0) {
-    const sh = buildShadowCanvas(
+  if (o.shadowEnabled && o.shadowOpacity > 0) {
+    const sh = buildOvalShadowCanvas(
       o.cutout, o.bounds, targetW, targetH,
-      o.shadowOpacity, o.shadowBlur,
-      o.shadowX, o.shadowY, o.shadowAngle,
-      o.shadowScaleX, o.shadowScaleY, o.shadowSkew,
+      o.shadowOpacity, o.shadowScale, o.shadowX, o.shadowY,
       o.carOpts,
     );
     ctx.drawImage(sh, 0, 0);
-  }
-
-  if (o.tireContacts && o.tireIntensity > 0) {
-    const tc = buildTireContactCanvas(o.cutout, o.bounds, targetW, targetH, o.tireIntensity, o.carOpts);
-    ctx.drawImage(tc, 0, 0);
   }
 
   const r = carRect(o.cutout, targetW, targetH, o.carOpts);
