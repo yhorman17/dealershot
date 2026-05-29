@@ -56,7 +56,7 @@ async function runJob(job: Job) {
   inflight.add(job.photoId);
   notify();
   try {
-    const blob = await removeBackground(job.imageUrl);
+    const blob = await removeBackground(job.imageUrl, { model: "small", debug: true });
     const pngBlob = blob.type === "image/png" ? blob : new Blob([await blob.arrayBuffer()], { type: "image/png" });
 
     // Upload cutout to new path
