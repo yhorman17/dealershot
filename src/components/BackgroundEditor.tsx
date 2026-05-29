@@ -694,23 +694,14 @@ export function BackgroundEditor({
     compose(ctx, {
       cutout: cutoutImg, bounds, backdrop: backdropImg, overlay: overlayImg, overlayPos,
       targetW: baseSize.w, targetH: baseSize.h,
-      shadowOpacity: shadowIntensity / 100,
-      shadowBlur: shadowSoftness,
-      shadowX, shadowY, shadowAngle,
-      shadowScaleX, shadowScaleY, shadowSkew,
-      reflectionIntensity: reflectionIntensity / 100,
-      reflectionX, reflectionY, reflectionAngle, reflectionSkew,
-      reflectionScaleX, reflectionScaleY,
-      tireContacts, tireIntensity: tireIntensity / 100,
+      shadowEnabled, shadowOpacity: shadowOpacity / 100, shadowScale, shadowX, shadowY,
+      reflectionEnabled, reflectionOpacity: reflectionOpacity / 100, reflectionScale, reflectionX, reflectionY,
       carOpts: { offsetXPct: carX, offsetYPct: carY, scalePct: carScale },
     });
   }, [
     cutoutImg, bounds, backdropImg, overlayImg, overlayPos, baseSize,
-    shadowIntensity, shadowSoftness, shadowX, shadowY, shadowAngle,
-    shadowScaleX, shadowScaleY, shadowSkew,
-    reflectionIntensity, reflectionX, reflectionY, reflectionAngle, reflectionSkew,
-    reflectionScaleX, reflectionScaleY,
-    tireContacts, tireIntensity,
+    shadowEnabled, shadowOpacity, shadowScale, shadowX, shadowY,
+    reflectionEnabled, reflectionOpacity, reflectionScale, reflectionX, reflectionY,
     carX, carY, carScale,
   ]);
 
