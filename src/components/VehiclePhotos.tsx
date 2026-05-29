@@ -337,8 +337,8 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
               <ul className="space-y-2 mb-3">
                 {customShots.map((p) => (
                   <li key={p.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-background">
-                    <div className="flex-shrink-0 w-12 h-12 rounded overflow-hidden bg-secondary">
-                      <img src={p.image_url} alt={p.shot_type || ""} className="w-full h-full object-cover" />
+                    <div className="flex-shrink-0 w-12 h-12 rounded overflow-hidden bg-background">
+                      <img src={p.image_url} alt={p.shot_type || ""} className="w-full h-full object-contain" />
                     </div>
                     <span className="flex-1 text-sm text-card-foreground truncate">{p.shot_type}</span>
                   </li>
