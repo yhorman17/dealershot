@@ -1,8 +1,85 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { CONDITIONS, STATUSES } from "@/lib/vehicle-options";
+
+function pathFromDocumentUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const m = u.pathname.match(/\/documents\/(.+)$/);
+    return m ? decodeURIComponent(m[1].split("?")[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function DocumentThumb({ doc }: { doc: { id: string; image_url: string; name: string } }) {
+  const [state, setState] = useState<
+    { kind: "loading" } | { kind: "ready"; url: string } | { kind: "error"; msg: string }
+  >({ kind: "loading" });
+
+  const sign = async () => {
+    setState({ kind: "loading" });
+    const path = pathFromDocumentUrl(doc.image_url);
+    if (!path) {
+      const msg = "Could not parse document path";
+      setState({ kind: "error", msg });
+      toast.error(`Couldn't load "${doc.name}": ${msg}`);
+      return;
+    }
+    const { data, error } = await supabase.storage
+      .from("documents")
+      .createSignedUrl(path, 3600);
+    if (error || !data?.signedUrl) {
+      const msg = error?.message ?? "Could not generate signed URL";
+      // eslint-disable-next-line no-console
+      console.error("[documents] sign failed", path, error);
+      setState({ kind: "error", msg });
+      toast.error(`Couldn't load "${doc.name}": ${msg}`);
+      return;
+    }
+    setState({ kind: "ready", url: data.signedUrl });
+  };
+
+  useEffect(() => {
+    void sign();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.image_url]);
+
+  if (state.kind === "loading") {
+    return <div className="h-full w-full animate-pulse bg-secondary/60" aria-label="Loading preview" />;
+  }
+  if (state.kind === "error") {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center gap-2 p-3 text-center bg-destructive/10 text-destructive">
+        <span className="text-xs font-medium">Preview unavailable</span>
+        <span className="text-[10px] opacity-80 break-words">{state.msg}</span>
+        <button
+          type="button"
+          onClick={() => void sign()}
+          className="text-[10px] underline hover:no-underline"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={state.url}
+      alt={doc.name}
+      className="max-w-full max-h-full object-contain"
+      onError={() => {
+        const msg = "Image failed to load";
+        setState({ kind: "error", msg });
+        toast.error(`Couldn't load "${doc.name}": ${msg}`);
+      }}
+    />
+  );
+}
+
 
 export const Route = createFileRoute("/_authenticated/documents")({
   head: () => ({ meta: [{ title: "Documents — DealerShot" }] }),
