@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedOverlaysRouteImport } from './routes/_authenticated/overlays'
 import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
 import { Route as AuthenticatedExportRouteImport } from './routes/_authenticated/export'
@@ -48,6 +49,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedOverlaysRoute = AuthenticatedOverlaysRouteImport.update({
   id: '/overlays',
@@ -115,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/export': typeof AuthenticatedExportRoute
   '/inventory': typeof AuthenticatedInventoryRoute
   '/overlays': typeof AuthenticatedOverlaysRoute
+  '/users': typeof AuthenticatedUsersRoute
   '/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/export': typeof AuthenticatedExportRoute
   '/inventory': typeof AuthenticatedInventoryRoute
   '/overlays': typeof AuthenticatedOverlaysRoute
+  '/users': typeof AuthenticatedUsersRoute
   '/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
@@ -149,6 +157,7 @@ export interface FileRoutesById {
   '/_authenticated/export': typeof AuthenticatedExportRoute
   '/_authenticated/inventory': typeof AuthenticatedInventoryRoute
   '/_authenticated/overlays': typeof AuthenticatedOverlaysRoute
+  '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/_authenticated/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/_authenticated/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
@@ -167,6 +176,7 @@ export interface FileRouteTypes {
     | '/export'
     | '/inventory'
     | '/overlays'
+    | '/users'
     | '/vehicles/$id'
     | '/vehicles/new'
     | '/vehicles/$id/edit'
@@ -183,6 +193,7 @@ export interface FileRouteTypes {
     | '/export'
     | '/inventory'
     | '/overlays'
+    | '/users'
     | '/vehicles/$id'
     | '/vehicles/new'
     | '/vehicles/$id/edit'
@@ -200,6 +211,7 @@ export interface FileRouteTypes {
     | '/_authenticated/export'
     | '/_authenticated/inventory'
     | '/_authenticated/overlays'
+    | '/_authenticated/users'
     | '/_authenticated/vehicles/$id'
     | '/_authenticated/vehicles/new'
     | '/_authenticated/vehicles/$id/edit'
@@ -249,6 +261,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/users': {
+      id: '/_authenticated/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof AuthenticatedUsersRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/overlays': {
       id: '/_authenticated/overlays'
@@ -345,6 +364,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedExportRoute: typeof AuthenticatedExportRoute
   AuthenticatedInventoryRoute: typeof AuthenticatedInventoryRoute
   AuthenticatedOverlaysRoute: typeof AuthenticatedOverlaysRoute
+  AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
   AuthenticatedVehiclesIdRoute: typeof AuthenticatedVehiclesIdRouteWithChildren
   AuthenticatedVehiclesNewRoute: typeof AuthenticatedVehiclesNewRoute
 }
@@ -357,6 +377,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedExportRoute: AuthenticatedExportRoute,
   AuthenticatedInventoryRoute: AuthenticatedInventoryRoute,
   AuthenticatedOverlaysRoute: AuthenticatedOverlaysRoute,
+  AuthenticatedUsersRoute: AuthenticatedUsersRoute,
   AuthenticatedVehiclesIdRoute: AuthenticatedVehiclesIdRouteWithChildren,
   AuthenticatedVehiclesNewRoute: AuthenticatedVehiclesNewRoute,
 }
