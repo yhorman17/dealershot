@@ -214,6 +214,7 @@ export type Database = {
           full_name: string | null
           id: string
           role: Database["public"]["Enums"]["app_role"]
+          status: string
         }
         Insert: {
           created_at?: string
@@ -222,6 +223,7 @@ export type Database = {
           full_name?: string | null
           id: string
           role?: Database["public"]["Enums"]["app_role"]
+          status?: string
         }
         Update: {
           created_at?: string
@@ -230,10 +232,61 @@ export type Database = {
           full_name?: string | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          status?: string
         }
         Relationships: [
           {
             foreignKeyName: "profiles_dealership_id_fkey"
+            columns: ["dealership_id"]
+            isOneToOne: false
+            referencedRelation: "dealerships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_invitations: {
+        Row: {
+          accepted_at: string | null
+          dealership_id: string | null
+          email: string
+          expires_at: string
+          full_name: string
+          id: string
+          invited_at: string
+          invited_by: string
+          role: string
+          status: string
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          dealership_id?: string | null
+          email: string
+          expires_at?: string
+          full_name: string
+          id?: string
+          invited_at?: string
+          invited_by: string
+          role: string
+          status?: string
+          token: string
+        }
+        Update: {
+          accepted_at?: string | null
+          dealership_id?: string | null
+          email?: string
+          expires_at?: string
+          full_name?: string
+          id?: string
+          invited_at?: string
+          invited_by?: string
+          role?: string
+          status?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_invitations_dealership_id_fkey"
             columns: ["dealership_id"]
             isOneToOne: false
             referencedRelation: "dealerships"
@@ -368,6 +421,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_invitation: { Args: { _token: string }; Returns: Json }
+      get_invitation_details: {
+        Args: { _token: string }
+        Returns: {
+          dealership_id: string
+          dealership_name: string
+          email: string
+          expires_at: string
+          full_name: string
+          id: string
+          role: string
+          status: string
+        }[]
+      }
       get_user_dealership: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
