@@ -723,7 +723,7 @@ export function BackgroundEditor({
           setCutoutImg(base);
           return;
         }
-        const blob = await removeBackground(processedSrc);
+        const blob = await removeBackground(processedSrc, { model: "isnet_quint8", debug: true });
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
         if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
