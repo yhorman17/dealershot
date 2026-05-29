@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import { formatMiles, formatPrice } from "@/lib/vehicle-options";
 import { VehiclePhotos } from "@/components/VehiclePhotos";
 import { VehicleExportModal } from "@/components/VehicleExportModal";
