@@ -147,6 +147,20 @@ function VehicleDetailPage() {
           ))}
         </dl>
       </div>
+
+      {exportOpen && (
+        <VehicleExportModal
+          vehicle={{
+            id,
+            year: vehicle.year as number | null,
+            make: vehicle.make as string | null,
+            model: vehicle.model as string | null,
+            stock_number: vehicle.stock_number as string | null,
+            vin: vehicle.vin as string | null,
+          }}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
     </main>
   );
 }
