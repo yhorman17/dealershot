@@ -455,6 +455,9 @@ type Snapshot = {
   reflectionScaleY: number;
   tireContacts: boolean;
   tireIntensity: number;
+  carX: number;
+  carY: number;
+  carScale: number;
   adjustStraighten: number;
   adjustAspect: AspectKey;
   adjustCrop: CropRect | null;
