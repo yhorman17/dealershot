@@ -100,11 +100,14 @@ export function VehicleForm({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    const fe: { odometer?: string; price?: string } = {};
+    if (values.odometer.trim() === "" || isNaN(Number(values.odometer))) fe.odometer = "Enter a valid number";
+    if (values.price.trim() === "" || isNaN(Number(values.price))) fe.price = "Enter a valid number";
+    setFieldErrors(fe);
+    if (fe.odometer || fe.price) return;
     setSaving(true);
     try {
-      const payload = {
-        dealership_id: dealershipId,
-        vin: values.vin.trim() || null,
+      const basePayload = {
         year: values.year ? parseInt(values.year, 10) : null,
         make: values.make.trim() || null,
         model: values.model.trim() || null,
@@ -125,11 +128,16 @@ export function VehicleForm({
       };
 
       if (vehicleId) {
-        const { error: upErr } = await supabase.from("vehicles").update(payload).eq("id", vehicleId);
+        const { error: upErr } = await supabase.from("vehicles").update(basePayload).eq("id", vehicleId);
         if (upErr) throw upErr;
+        toast.success("Vehicle updated.");
         onSaved(vehicleId);
       } else {
-        const { data, error: insErr } = await supabase.from("vehicles").insert(payload).select("id").single();
+        const { data, error: insErr } = await supabase
+          .from("vehicles")
+          .insert({ ...basePayload, dealership_id: dealershipId, vin: values.vin.trim() || null })
+          .select("id")
+          .single();
         if (insErr) throw insErr;
         onSaved(data.id);
       }
