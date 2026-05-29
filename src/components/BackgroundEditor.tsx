@@ -42,23 +42,16 @@ const ASPECT_VALUE: Record<AspectKey, number | null> = {
 
 // Defaults
 const DEFAULTS = {
-  shadowIntensity: 60,
-  shadowSoftness: 25,
+  shadowEnabled: true,
+  shadowOpacity: 55,
+  shadowScale: 100,
   shadowX: 0,
   shadowY: 0,
-  shadowAngle: 0,
-  shadowScaleX: 100,
-  shadowScaleY: 100,
-  shadowSkew: 0,
-  reflectionIntensity: 35,
+  reflectionEnabled: true,
+  reflectionOpacity: 30,
+  reflectionScale: 100,
   reflectionX: 0,
   reflectionY: 0,
-  reflectionAngle: 0,
-  reflectionSkew: 0,
-  reflectionScaleX: 100,
-  reflectionScaleY: 100,
-  tireContacts: false,
-  tireIntensity: 50,
   carX: 0,
   carY: 0,
   carScale: 100,
@@ -133,19 +126,15 @@ function findSilhouetteBounds(img: HTMLImageElement): { top: number; bottom: num
   return { top, bottom, left, right };
 }
 
-function buildShadowCanvas(
+function buildOvalShadowCanvas(
   cutout: HTMLImageElement,
   bounds: { top: number; bottom: number; left: number; right: number },
   targetW: number,
   targetH: number,
   opacity: number,
-  blur: number,
+  scalePct: number,
   offsetX: number,
   offsetY: number,
-  angleDeg: number,
-  scaleXPct: number,
-  scaleYPct: number,
-  skewDeg: number,
   carOpts: CarOpts,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
@@ -158,58 +147,21 @@ function buildShadowCanvas(
   const carWidth = (bounds.right - bounds.left) * sx;
   const carBottomY = r.y + bounds.bottom * sy;
   const carCenterX = r.x + ((bounds.left + bounds.right) / 2) * sx;
-
-  const sX = scaleXPct / 100;
-  const sY = scaleYPct / 100;
-  const baseShadowH = carWidth * 0.22;
-  const shadowW = carWidth * 1.1 * sX;
-  const shadowH = baseShadowH * sY;
+  const s = scalePct / 100;
+  const rx = Math.max(4, carWidth * 0.55 * s);
+  const ry = Math.max(4, carWidth * 0.085 * s);
   const cx = carCenterX + offsetX;
-  const cy = carBottomY + offsetY;
-
-  ctx.filter = `blur(${blur}px)`;
+  const cy = carBottomY + offsetY - ry * 0.1;
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.rotate((angleDeg * Math.PI) / 180);
-  ctx.transform(1, 0, Math.tan((skewDeg * Math.PI) / 180), 1, 0, 0);
-  const scaleSilY = shadowH / r.h;
-  const scaleSilX = shadowW / r.w;
-  ctx.scale(scaleSilX, scaleSilY);
-  ctx.drawImage(cutout, -r.x - r.w / 2, -r.y - r.h / 2, r.w, r.h);
+  ctx.scale(rx, ry);
+  const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+  grad.addColorStop(0, `rgba(0,0,0,${opacity})`);
+  grad.addColorStop(0.55, `rgba(0,0,0,${opacity * 0.35})`);
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(-1, -1, 2, 2);
   ctx.restore();
-  ctx.filter = "none";
-  ctx.globalCompositeOperation = "source-in";
-  ctx.fillStyle = `rgba(0,0,0,${opacity})`;
-  ctx.fillRect(0, 0, targetW, targetH);
-  return c;
-}
-
-function buildTireContactCanvas(
-  cutout: HTMLImageElement,
-  bounds: { top: number; bottom: number; left: number; right: number },
-  targetW: number,
-  targetH: number,
-  opacity: number,
-  carOpts: CarOpts,
-): HTMLCanvasElement {
-  const c = document.createElement("canvas");
-  c.width = targetW;
-  c.height = targetH;
-  const ctx = c.getContext("2d")!;
-  const r = carRect(cutout, targetW, targetH, carOpts);
-  const sx = r.w / cutout.naturalWidth;
-  const sy = r.h / cutout.naturalHeight;
-  const carWidth = (bounds.right - bounds.left) * sx;
-  const carBottomY = r.y + bounds.bottom * sy;
-  const carCenterX = r.x + ((bounds.left + bounds.right) / 2) * sx;
-  const bandW = carWidth * 0.95;
-  const bandH = carWidth * 0.04;
-  ctx.filter = `blur(${Math.max(3, carWidth * 0.008)}px)`;
-  ctx.beginPath();
-  ctx.ellipse(carCenterX, carBottomY, bandW / 2, bandH, 0, 0, Math.PI * 2);
-  ctx.fillStyle = `rgba(0,0,0,${opacity})`;
-  ctx.fill();
-  ctx.filter = "none";
   return c;
 }
 
@@ -221,10 +173,7 @@ function buildReflectionCanvas(
   intensity: number,
   offsetX: number,
   offsetY: number,
-  angleDeg: number,
-  skewDeg: number,
-  scaleXPct: number,
-  scaleYPct: number,
+  scalePct: number,
   carOpts: CarOpts,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
@@ -235,20 +184,15 @@ function buildReflectionCanvas(
   const sy = r.h / cutout.naturalHeight;
   const carBottomY = r.y + bounds.bottom * sy;
   const groundY = carBottomY + offsetY;
-  const sX = scaleXPct / 100;
-  const sY = scaleYPct / 100;
+  const s = Math.max(0.1, scalePct / 100);
   const centerX = r.x + r.w / 2 + offsetX;
   ctx.save();
   ctx.translate(centerX, groundY);
-  ctx.rotate((angleDeg * Math.PI) / 180);
-  ctx.transform(1, 0, Math.tan((skewDeg * Math.PI) / 180), 1, 0, 0);
-  ctx.scale(sX, -sY);
+  ctx.scale(s, -s);
   ctx.drawImage(cutout, -r.w / 2, -r.h, r.w, r.h);
   ctx.restore();
-  // Mask: gradient from full intensity at groundY fading downward.
-  // Cover full canvas so transformed reflections aren't clipped above groundY.
   ctx.globalCompositeOperation = "destination-in";
-  const fadeEnd = groundY + Math.max(20, r.h * 0.5 * Math.abs(sY));
+  const fadeEnd = groundY + Math.max(20, r.h * 0.5 * s);
   const grad = ctx.createLinearGradient(0, groundY, 0, fadeEnd);
   grad.addColorStop(0, `rgba(0,0,0,${intensity})`);
   grad.addColorStop(1, "rgba(0,0,0,0)");
@@ -265,23 +209,16 @@ type ComposeOpts = {
   overlayPos: Position;
   targetW: number;
   targetH: number;
+  shadowEnabled: boolean;
   shadowOpacity: number;
-  shadowBlur: number;
+  shadowScale: number;
   shadowX: number;
   shadowY: number;
-  shadowAngle: number;
-  shadowScaleX: number;
-  shadowScaleY: number;
-  shadowSkew: number;
-  reflectionIntensity: number;
+  reflectionEnabled: boolean;
+  reflectionOpacity: number;
+  reflectionScale: number;
   reflectionX: number;
   reflectionY: number;
-  reflectionAngle: number;
-  reflectionSkew: number;
-  reflectionScaleX: number;
-  reflectionScaleY: number;
-  tireContacts: boolean;
-  tireIntensity: number;
   carOpts: CarOpts;
 };
 
@@ -294,31 +231,22 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
   const bh = o.backdrop.naturalHeight * bScale;
   ctx.drawImage(o.backdrop, (targetW - bw) / 2, (targetH - bh) / 2, bw, bh);
 
-  if (o.reflectionIntensity > 0) {
+  if (o.reflectionEnabled && o.reflectionOpacity > 0) {
     const ref = buildReflectionCanvas(
       o.cutout, o.bounds, targetW, targetH,
-      o.reflectionIntensity, o.reflectionX, o.reflectionY,
-      o.reflectionAngle, o.reflectionSkew,
-      o.reflectionScaleX, o.reflectionScaleY,
+      o.reflectionOpacity, o.reflectionX, o.reflectionY, o.reflectionScale,
       o.carOpts,
     );
     ctx.drawImage(ref, 0, 0);
   }
 
-  if (o.shadowOpacity > 0) {
-    const sh = buildShadowCanvas(
+  if (o.shadowEnabled && o.shadowOpacity > 0) {
+    const sh = buildOvalShadowCanvas(
       o.cutout, o.bounds, targetW, targetH,
-      o.shadowOpacity, o.shadowBlur,
-      o.shadowX, o.shadowY, o.shadowAngle,
-      o.shadowScaleX, o.shadowScaleY, o.shadowSkew,
+      o.shadowOpacity, o.shadowScale, o.shadowX, o.shadowY,
       o.carOpts,
     );
     ctx.drawImage(sh, 0, 0);
-  }
-
-  if (o.tireContacts && o.tireIntensity > 0) {
-    const tc = buildTireContactCanvas(o.cutout, o.bounds, targetW, targetH, o.tireIntensity, o.carOpts);
-    ctx.drawImage(tc, 0, 0);
   }
 
   const r = carRect(o.cutout, targetW, targetH, o.carOpts);
@@ -439,23 +367,16 @@ type Snapshot = {
   backdropId: string;
   overlayId: string;
   overlayPos: Position;
-  shadowIntensity: number;
-  shadowSoftness: number;
+  shadowEnabled: boolean;
+  shadowOpacity: number;
+  shadowScale: number;
   shadowX: number;
   shadowY: number;
-  shadowAngle: number;
-  shadowScaleX: number;
-  shadowScaleY: number;
-  shadowSkew: number;
-  reflectionIntensity: number;
+  reflectionEnabled: boolean;
+  reflectionOpacity: number;
+  reflectionScale: number;
   reflectionX: number;
   reflectionY: number;
-  reflectionAngle: number;
-  reflectionSkew: number;
-  reflectionScaleX: number;
-  reflectionScaleY: number;
-  tireContacts: boolean;
-  tireIntensity: number;
   carX: number;
   carY: number;
   carScale: number;
@@ -496,23 +417,16 @@ export function BackgroundEditor({
   const [activeTab, setActiveTab] = useState<TabKey>("background");
 
   // Compositing state
-  const [shadowIntensity, setShadowIntensity] = useState(DEFAULTS.shadowIntensity);
-  const [shadowSoftness, setShadowSoftness] = useState(DEFAULTS.shadowSoftness);
+  const [shadowEnabled, setShadowEnabled] = useState(DEFAULTS.shadowEnabled);
+  const [shadowOpacity, setShadowOpacity] = useState(DEFAULTS.shadowOpacity);
+  const [shadowScale, setShadowScale] = useState(DEFAULTS.shadowScale);
   const [shadowX, setShadowX] = useState(DEFAULTS.shadowX);
   const [shadowY, setShadowY] = useState(DEFAULTS.shadowY);
-  const [shadowAngle, setShadowAngle] = useState(DEFAULTS.shadowAngle);
-  const [shadowScaleX, setShadowScaleX] = useState(DEFAULTS.shadowScaleX);
-  const [shadowScaleY, setShadowScaleY] = useState(DEFAULTS.shadowScaleY);
-  const [shadowSkew, setShadowSkew] = useState(DEFAULTS.shadowSkew);
-  const [reflectionIntensity, setReflectionIntensity] = useState(DEFAULTS.reflectionIntensity);
+  const [reflectionEnabled, setReflectionEnabled] = useState(DEFAULTS.reflectionEnabled);
+  const [reflectionOpacity, setReflectionOpacity] = useState(DEFAULTS.reflectionOpacity);
+  const [reflectionScale, setReflectionScale] = useState(DEFAULTS.reflectionScale);
   const [reflectionX, setReflectionX] = useState(DEFAULTS.reflectionX);
   const [reflectionY, setReflectionY] = useState(DEFAULTS.reflectionY);
-  const [reflectionAngle, setReflectionAngle] = useState(DEFAULTS.reflectionAngle);
-  const [reflectionSkew, setReflectionSkew] = useState(DEFAULTS.reflectionSkew);
-  const [reflectionScaleX, setReflectionScaleX] = useState(DEFAULTS.reflectionScaleX);
-  const [reflectionScaleY, setReflectionScaleY] = useState(DEFAULTS.reflectionScaleY);
-  const [tireContacts, setTireContacts] = useState(DEFAULTS.tireContacts);
-  const [tireIntensity, setTireIntensity] = useState(DEFAULTS.tireIntensity);
   const [carX, setCarX] = useState(DEFAULTS.carX);
   const [carY, setCarY] = useState(DEFAULTS.carY);
   const [carScale, setCarScale] = useState(DEFAULTS.carScale);
@@ -540,20 +454,14 @@ export function BackgroundEditor({
 
   const snapshot = useCallback((): Snapshot => ({
     backdropId, overlayId, overlayPos,
-    shadowIntensity, shadowSoftness, shadowX, shadowY, shadowAngle,
-    shadowScaleX, shadowScaleY, shadowSkew,
-    reflectionIntensity, reflectionX, reflectionY,
-    reflectionAngle, reflectionSkew, reflectionScaleX, reflectionScaleY,
-    tireContacts, tireIntensity,
+    shadowEnabled, shadowOpacity, shadowScale, shadowX, shadowY,
+    reflectionEnabled, reflectionOpacity, reflectionScale, reflectionX, reflectionY,
     carX, carY, carScale,
     adjustStraighten, adjustAspect, adjustCrop, adjustFit,
   }), [
     backdropId, overlayId, overlayPos,
-    shadowIntensity, shadowSoftness, shadowX, shadowY, shadowAngle,
-    shadowScaleX, shadowScaleY, shadowSkew,
-    reflectionIntensity, reflectionX, reflectionY,
-    reflectionAngle, reflectionSkew, reflectionScaleX, reflectionScaleY,
-    tireContacts, tireIntensity,
+    shadowEnabled, shadowOpacity, shadowScale, shadowX, shadowY,
+    reflectionEnabled, reflectionOpacity, reflectionScale, reflectionX, reflectionY,
     carX, carY, carScale,
     adjustStraighten, adjustAspect, adjustCrop, adjustFit,
   ]);
@@ -563,23 +471,16 @@ export function BackgroundEditor({
     setBackdropId(s.backdropId);
     setOverlayId(s.overlayId);
     setOverlayPos(s.overlayPos);
-    setShadowIntensity(s.shadowIntensity);
-    setShadowSoftness(s.shadowSoftness);
+    setShadowEnabled(s.shadowEnabled);
+    setShadowOpacity(s.shadowOpacity);
+    setShadowScale(s.shadowScale);
     setShadowX(s.shadowX);
     setShadowY(s.shadowY);
-    setShadowAngle(s.shadowAngle);
-    setShadowScaleX(s.shadowScaleX);
-    setShadowScaleY(s.shadowScaleY);
-    setShadowSkew(s.shadowSkew);
-    setReflectionIntensity(s.reflectionIntensity);
+    setReflectionEnabled(s.reflectionEnabled);
+    setReflectionOpacity(s.reflectionOpacity);
+    setReflectionScale(s.reflectionScale);
     setReflectionX(s.reflectionX);
     setReflectionY(s.reflectionY);
-    setReflectionAngle(s.reflectionAngle);
-    setReflectionSkew(s.reflectionSkew);
-    setReflectionScaleX(s.reflectionScaleX);
-    setReflectionScaleY(s.reflectionScaleY);
-    setTireContacts(s.tireContacts);
-    setTireIntensity(s.tireIntensity);
     setCarX(s.carX);
     setCarY(s.carY);
     setCarScale(s.carScale);
@@ -587,7 +488,6 @@ export function BackgroundEditor({
     setAdjustAspect(s.adjustAspect);
     setAdjustCrop(s.adjustCrop);
     setAdjustFit(s.adjustFit);
-    // release suppression after this render batch
     setTimeout(() => { suppressHistoryRef.current = false; }, 0);
   };
 
@@ -615,23 +515,16 @@ export function BackgroundEditor({
 
   const resetCompositing = () => {
     recordHistory();
-    setShadowIntensity(DEFAULTS.shadowIntensity);
-    setShadowSoftness(DEFAULTS.shadowSoftness);
+    setShadowEnabled(DEFAULTS.shadowEnabled);
+    setShadowOpacity(DEFAULTS.shadowOpacity);
+    setShadowScale(DEFAULTS.shadowScale);
     setShadowX(DEFAULTS.shadowX);
     setShadowY(DEFAULTS.shadowY);
-    setShadowAngle(DEFAULTS.shadowAngle);
-    setShadowScaleX(DEFAULTS.shadowScaleX);
-    setShadowScaleY(DEFAULTS.shadowScaleY);
-    setShadowSkew(DEFAULTS.shadowSkew);
-    setReflectionIntensity(DEFAULTS.reflectionIntensity);
+    setReflectionEnabled(DEFAULTS.reflectionEnabled);
+    setReflectionOpacity(DEFAULTS.reflectionOpacity);
+    setReflectionScale(DEFAULTS.reflectionScale);
     setReflectionX(DEFAULTS.reflectionX);
     setReflectionY(DEFAULTS.reflectionY);
-    setReflectionAngle(DEFAULTS.reflectionAngle);
-    setReflectionSkew(DEFAULTS.reflectionSkew);
-    setReflectionScaleX(DEFAULTS.reflectionScaleX);
-    setReflectionScaleY(DEFAULTS.reflectionScaleY);
-    setTireContacts(DEFAULTS.tireContacts);
-    setTireIntensity(DEFAULTS.tireIntensity);
   };
 
   const resetAdjust = () => {
@@ -645,26 +538,19 @@ export function BackgroundEditor({
 
   const resetShadow = () => {
     recordHistory();
-    setShadowIntensity(DEFAULTS.shadowIntensity);
-    setShadowSoftness(DEFAULTS.shadowSoftness);
+    setShadowEnabled(DEFAULTS.shadowEnabled);
+    setShadowOpacity(DEFAULTS.shadowOpacity);
+    setShadowScale(DEFAULTS.shadowScale);
     setShadowX(DEFAULTS.shadowX);
     setShadowY(DEFAULTS.shadowY);
-    setShadowAngle(DEFAULTS.shadowAngle);
-    setShadowScaleX(DEFAULTS.shadowScaleX);
-    setShadowScaleY(DEFAULTS.shadowScaleY);
-    setShadowSkew(DEFAULTS.shadowSkew);
-    setTireContacts(DEFAULTS.tireContacts);
-    setTireIntensity(DEFAULTS.tireIntensity);
   };
   const resetReflection = () => {
     recordHistory();
-    setReflectionIntensity(DEFAULTS.reflectionIntensity);
+    setReflectionEnabled(DEFAULTS.reflectionEnabled);
+    setReflectionOpacity(DEFAULTS.reflectionOpacity);
+    setReflectionScale(DEFAULTS.reflectionScale);
     setReflectionX(DEFAULTS.reflectionX);
     setReflectionY(DEFAULTS.reflectionY);
-    setReflectionAngle(DEFAULTS.reflectionAngle);
-    setReflectionSkew(DEFAULTS.reflectionSkew);
-    setReflectionScaleX(DEFAULTS.reflectionScaleX);
-    setReflectionScaleY(DEFAULTS.reflectionScaleY);
   };
 
   const resetBackground = () => {
@@ -808,23 +694,14 @@ export function BackgroundEditor({
     compose(ctx, {
       cutout: cutoutImg, bounds, backdrop: backdropImg, overlay: overlayImg, overlayPos,
       targetW: baseSize.w, targetH: baseSize.h,
-      shadowOpacity: shadowIntensity / 100,
-      shadowBlur: shadowSoftness,
-      shadowX, shadowY, shadowAngle,
-      shadowScaleX, shadowScaleY, shadowSkew,
-      reflectionIntensity: reflectionIntensity / 100,
-      reflectionX, reflectionY, reflectionAngle, reflectionSkew,
-      reflectionScaleX, reflectionScaleY,
-      tireContacts, tireIntensity: tireIntensity / 100,
+      shadowEnabled, shadowOpacity: shadowOpacity / 100, shadowScale, shadowX, shadowY,
+      reflectionEnabled, reflectionOpacity: reflectionOpacity / 100, reflectionScale, reflectionX, reflectionY,
       carOpts: { offsetXPct: carX, offsetYPct: carY, scalePct: carScale },
     });
   }, [
     cutoutImg, bounds, backdropImg, overlayImg, overlayPos, baseSize,
-    shadowIntensity, shadowSoftness, shadowX, shadowY, shadowAngle,
-    shadowScaleX, shadowScaleY, shadowSkew,
-    reflectionIntensity, reflectionX, reflectionY, reflectionAngle, reflectionSkew,
-    reflectionScaleX, reflectionScaleY,
-    tireContacts, tireIntensity,
+    shadowEnabled, shadowOpacity, shadowScale, shadowX, shadowY,
+    reflectionEnabled, reflectionOpacity, reflectionScale, reflectionX, reflectionY,
     carX, carY, carScale,
   ]);
 
@@ -1256,37 +1133,26 @@ export function BackgroundEditor({
               {activeTab === "shadow" && (
                 <div className="rounded-lg border border-border bg-secondary/30 p-4">
                   <div className="rounded-md border border-border/60 bg-background/30 p-3">
-                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Shadow</h4>
-                    <div className="space-y-3">
-                      <SliderRow label="Intensity" value={shadowIntensity} min={0} max={100} suffix="%" onChange={track(setShadowIntensity)} />
-                      <SliderRow label="Softness" value={shadowSoftness} min={0} max={50} suffix="px" onChange={track(setShadowSoftness)} />
-                      <SliderRow label="Position X" value={shadowX} min={-200} max={200} suffix="px" onChange={track(setShadowX)} />
-                      <SliderRow label="Position Y" value={shadowY} min={-100} max={100} suffix="px" onChange={track(setShadowY)} />
-                      <SliderRow label="Angle" value={shadowAngle} min={-45} max={45} suffix="°" onChange={track(setShadowAngle)} />
-                      <SliderRow label="Skew" value={shadowSkew} min={-45} max={45} suffix="°" onChange={track(setShadowSkew)} />
-                      <SliderRow label="Scale X" value={shadowScaleX} min={50} max={200} suffix="%" onChange={track(setShadowScaleX)} />
-                      <SliderRow label="Scale Y" value={shadowScaleY} min={50} max={200} suffix="%" onChange={track(setShadowScaleY)} />
-
-                      <label className="flex items-center gap-2 pt-1 cursor-pointer min-h-[44px]">
-                        <input
-                          type="checkbox"
-                          checked={tireContacts}
-                          onChange={(e) => track(setTireContacts)(e.target.checked)}
-                          className="h-4 w-4 accent-primary"
-                        />
-                        <span className="text-xs font-medium text-card-foreground">Add tire contact shadows</span>
-                      </label>
-                      {tireContacts && (
-                        <SliderRow
-                          label="Tire Contact Intensity"
-                          value={tireIntensity}
-                          min={0}
-                          max={100}
-                          suffix="%"
-                          onChange={track(setTireIntensity)}
-                        />
-                      )}
-                    </div>
+                    <label className="flex items-center justify-between cursor-pointer min-h-[44px] mb-1">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Contact Shadow</span>
+                      <input
+                        type="checkbox"
+                        checked={shadowEnabled}
+                        onChange={(e) => track(setShadowEnabled)(e.target.checked)}
+                        className="h-4 w-4 accent-primary"
+                      />
+                    </label>
+                    <p className="text-[11px] text-muted-foreground mb-3">
+                      Soft oval contact shadow auto-placed under the car. Turn off for interiors or detail shots.
+                    </p>
+                    {shadowEnabled && (
+                      <div className="space-y-3">
+                        <SliderRow label="Opacity" value={shadowOpacity} min={0} max={100} suffix="%" onChange={track(setShadowOpacity)} />
+                        <SliderRow label="Size" value={shadowScale} min={40} max={180} suffix="%" onChange={track(setShadowScale)} />
+                        <SliderRow label="Position X" value={shadowX} min={-200} max={200} suffix="px" onChange={track(setShadowX)} />
+                        <SliderRow label="Position Y" value={shadowY} min={-100} max={100} suffix="px" onChange={track(setShadowY)} />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1294,24 +1160,26 @@ export function BackgroundEditor({
               {activeTab === "reflection" && (
                 <div className="rounded-lg border border-border bg-secondary/30 p-4">
                   <div className="rounded-md border border-border/60 bg-background/30 p-3">
-                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Reflection</h4>
-                    <div className="space-y-3">
-                      <SliderRow
-                        label="Intensity"
-                        value={reflectionIntensity}
-                        min={0}
-                        max={100}
-                        suffix="%"
-                        onChange={track(setReflectionIntensity)}
-                        hint={reflectionIntensity === 0 ? "Disabled" : undefined}
+                    <label className="flex items-center justify-between cursor-pointer min-h-[44px] mb-1">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Floor Reflection</span>
+                      <input
+                        type="checkbox"
+                        checked={reflectionEnabled}
+                        onChange={(e) => track(setReflectionEnabled)(e.target.checked)}
+                        className="h-4 w-4 accent-primary"
                       />
-                      <SliderRow label="Position X" value={reflectionX} min={-200} max={200} suffix="px" onChange={track(setReflectionX)} />
-                      <SliderRow label="Position Y" value={reflectionY} min={-100} max={100} suffix="px" onChange={track(setReflectionY)} />
-                      <SliderRow label="Angle" value={reflectionAngle} min={-45} max={45} suffix="°" onChange={track(setReflectionAngle)} />
-                      <SliderRow label="Skew" value={reflectionSkew} min={-45} max={45} suffix="°" onChange={track(setReflectionSkew)} />
-                      <SliderRow label="Scale X" value={reflectionScaleX} min={50} max={200} suffix="%" onChange={track(setReflectionScaleX)} />
-                      <SliderRow label="Scale Y" value={reflectionScaleY} min={50} max={200} suffix="%" onChange={track(setReflectionScaleY)} />
-                    </div>
+                    </label>
+                    <p className="text-[11px] text-muted-foreground mb-3">
+                      Mirror reflection under the car. Nudge to align if you move or resize it.
+                    </p>
+                    {reflectionEnabled && (
+                      <div className="space-y-3">
+                        <SliderRow label="Strength" value={reflectionOpacity} min={0} max={100} suffix="%" onChange={track(setReflectionOpacity)} />
+                        <SliderRow label="Size" value={reflectionScale} min={50} max={150} suffix="%" onChange={track(setReflectionScale)} />
+                        <SliderRow label="Position X" value={reflectionX} min={-200} max={200} suffix="px" onChange={track(setReflectionX)} />
+                        <SliderRow label="Position Y" value={reflectionY} min={-100} max={100} suffix="px" onChange={track(setReflectionY)} />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
