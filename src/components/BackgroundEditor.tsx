@@ -296,6 +296,7 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
       o.reflectionIntensity, o.reflectionX, o.reflectionY,
       o.reflectionAngle, o.reflectionSkew,
       o.reflectionScaleX, o.reflectionScaleY,
+      o.carOpts,
     );
     ctx.drawImage(ref, 0, 0);
   }
@@ -306,16 +307,17 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
       o.shadowOpacity, o.shadowBlur,
       o.shadowX, o.shadowY, o.shadowAngle,
       o.shadowScaleX, o.shadowScaleY, o.shadowSkew,
+      o.carOpts,
     );
     ctx.drawImage(sh, 0, 0);
   }
 
   if (o.tireContacts && o.tireIntensity > 0) {
-    const tc = buildTireContactCanvas(o.cutout, o.bounds, targetW, targetH, o.tireIntensity);
+    const tc = buildTireContactCanvas(o.cutout, o.bounds, targetW, targetH, o.tireIntensity, o.carOpts);
     ctx.drawImage(tc, 0, 0);
   }
 
-  const r = carRect(o.cutout, targetW, targetH);
+  const r = carRect(o.cutout, targetW, targetH, o.carOpts);
   ctx.drawImage(o.cutout, r.x, r.y, r.w, r.h);
 
   if (o.overlay) {
