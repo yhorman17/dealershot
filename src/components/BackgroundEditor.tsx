@@ -88,11 +88,22 @@ function destRect(baseW: number, baseH: number, ovW: number, ovH: number, pos: P
   return { x, y, w, h };
 }
 
-function carRect(cutout: HTMLImageElement, targetW: number, targetH: number) {
-  const scale = Math.min(targetW / cutout.naturalWidth, targetH / cutout.naturalHeight);
+type CarOpts = { offsetXPct: number; offsetYPct: number; scalePct: number };
+const DEFAULT_CAR_OPTS: CarOpts = { offsetXPct: 0, offsetYPct: 0, scalePct: 100 };
+
+function carRect(
+  cutout: HTMLImageElement,
+  targetW: number,
+  targetH: number,
+  opts: CarOpts = DEFAULT_CAR_OPTS,
+) {
+  const baseScale = Math.min(targetW / cutout.naturalWidth, targetH / cutout.naturalHeight);
+  const scale = baseScale * (opts.scalePct / 100);
   const w = cutout.naturalWidth * scale;
   const h = cutout.naturalHeight * scale;
-  return { x: (targetW - w) / 2, y: (targetH - h) / 2, w, h };
+  const x = (targetW - w) / 2 + (opts.offsetXPct / 100) * targetW;
+  const y = (targetH - h) / 2 + (opts.offsetYPct / 100) * targetH;
+  return { x, y, w, h };
 }
 
 function findSilhouetteBounds(img: HTMLImageElement): { top: number; bottom: number; left: number; right: number } {
