@@ -707,6 +707,14 @@ export function BackgroundEditor({
     void loadImage(photo.image_url).then(setOriginalImg);
   }, [photo.image_url]);
 
+  // Lock background page scroll while the editor is open so scrolling stays in the modal.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+
   // Run background removal ONCE per photo. Adjust transforms (crop/straighten/fit)
   // operate on the cached cutout PNG below — they never re-invoke the model.
   useEffect(() => {
