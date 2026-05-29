@@ -45,11 +45,13 @@ export function VehicleForm({
   onSaved: (id: string) => void;
   onCancel: () => void;
 }) {
+  const isEdit = Boolean(vehicleId);
   const [values, setValues] = useState<VehicleFormValues>(initial || emptyVehicleValues);
   const [decoding, setDecoding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [decodeMsg, setDecodeMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ odometer?: string; price?: string }>({});
   const [scannerOpen, setScannerOpen] = useState(false);
   const [vinPulse, setVinPulse] = useState(false);
   const vinInputRef = useRef<HTMLInputElement | null>(null);
