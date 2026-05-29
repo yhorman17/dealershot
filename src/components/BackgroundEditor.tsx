@@ -181,18 +181,26 @@ function buildReflectionCanvas(
   c.height = targetH;
   const ctx = c.getContext("2d")!;
   const r = carRect(cutout, targetW, targetH, carOpts);
+  const sx = r.w / cutout.naturalWidth;
   const sy = r.h / cutout.naturalHeight;
+  // Anchor at the silhouette's ground-contact point (bottom of cutout silhouette,
+  // horizontally centered on the silhouette — not the image frame).
   const carBottomY = r.y + bounds.bottom * sy;
+  const silCenterX = r.x + ((bounds.left + bounds.right) / 2) * sx;
+  const silH = Math.max(1, (bounds.bottom - bounds.top) * sy);
   const groundY = carBottomY + offsetY;
   const s = Math.max(0.1, scalePct / 100);
-  const centerX = r.x + r.w / 2 + offsetX;
+  const centerX = silCenterX + offsetX;
+  // Offset the cutout so its silhouette-bottom pixel lands at the local origin,
+  // then the vertical flip mirrors the car downward from groundY.
+  const dyAnchor = bounds.bottom * sy;
   ctx.save();
   ctx.translate(centerX, groundY);
   ctx.scale(s, -s);
-  ctx.drawImage(cutout, -r.w / 2, -r.h, r.w, r.h);
+  ctx.drawImage(cutout, -((bounds.left + bounds.right) / 2) * sx, -dyAnchor, r.w, r.h);
   ctx.restore();
   ctx.globalCompositeOperation = "destination-in";
-  const fadeEnd = groundY + Math.max(20, r.h * 0.5 * s);
+  const fadeEnd = groundY + Math.max(20, silH * 0.65 * s);
   const grad = ctx.createLinearGradient(0, groundY, 0, fadeEnd);
   grad.addColorStop(0, `rgba(0,0,0,${intensity})`);
   grad.addColorStop(1, "rgba(0,0,0,0)");
