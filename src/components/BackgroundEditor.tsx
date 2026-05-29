@@ -1326,12 +1326,21 @@ function TabBar<T extends string>({
     return () => ro.disconnect();
   }, [updateFades, tabs.length]);
 
-  // Auto-scroll active tab into view
+  // Auto-scroll active tab into view (horizontal only — never scrolls page vertically)
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const btn = el.querySelector<HTMLButtonElement>(`[data-tab-key="${activeTab}"]`);
-    btn?.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
+    if (!btn) return;
+    const elRect = el.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    const delta =
+      btnRect.left < elRect.left
+        ? btnRect.left - elRect.left - 8
+        : btnRect.right > elRect.right
+          ? btnRect.right - elRect.right + 8
+          : 0;
+    if (delta !== 0) el.scrollBy({ left: delta, behavior: "smooth" });
   }, [activeTab]);
 
   return (
@@ -1339,9 +1348,10 @@ function TabBar<T extends string>({
       <div
         ref={scrollRef}
         onScroll={updateFades}
-        className="border-b border-border flex gap-1 overflow-x-auto scrollbar-none -mx-1 px-1"
-        style={{ scrollbarWidth: "none" }}
+        className="border-b border-border flex gap-1 overflow-x-auto overflow-y-hidden scrollbar-none -mx-1 px-1"
+        style={{ scrollbarWidth: "none", touchAction: "pan-x", overscrollBehavior: "contain" }}
       >
+
         {tabs.map((t) => {
           const active = activeTab === t.key;
           return (
