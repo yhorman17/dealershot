@@ -483,7 +483,7 @@ export function BackgroundEditor({
   const [overlayId, setOverlayId] = useState<string>("");
   const [overlayPos, setOverlayPos] = useState<Position>("bottom");
   const [originalImg, setOriginalImg] = useState<HTMLImageElement | null>(null);
-  const [processedSrc, setProcessedSrc] = useState<string>(photo.image_url);
+  const [rawCutoutImg, setRawCutoutImg] = useState<HTMLImageElement | null>(null);
   const [cutoutImg, setCutoutImg] = useState<HTMLImageElement | null>(null);
   const [backdropImg, setBackdropImg] = useState<HTMLImageElement | null>(null);
   const [overlayImg, setOverlayImg] = useState<HTMLImageElement | null>(null);
@@ -707,30 +707,36 @@ export function BackgroundEditor({
     void loadImage(photo.image_url).then(setOriginalImg);
   }, [photo.image_url]);
 
-  // Whenever processedSrc changes, re-run bg removal and update base size.
+  // Lock background page scroll while the editor is open so scrolling stays in the modal.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+
+  // Run background removal ONCE per photo. Adjust transforms (crop/straighten/fit)
+  // operate on the cached cutout PNG below — they never re-invoke the model.
   useEffect(() => {
     let cancelled = false;
     setRemoving(true);
     setRemoveErr(null);
     void (async () => {
       try {
-        const base = await loadImage(processedSrc);
+        const base = await loadImage(photo.image_url);
         if (cancelled) return;
-        setBaseSize({ w: base.naturalWidth, h: base.naturalHeight });
-        // Skip removal when source is already a transparent cutout (auto-processed) and unmodified.
-        const alreadyCutout = photo.is_cutout && processedSrc === photo.image_url;
-        if (alreadyCutout) {
-          setCutoutImg(base);
+        if (photo.is_cutout) {
+          setRawCutoutImg(base);
           return;
         }
-        const blob = await removeBackground(processedSrc, { model: "isnet_quint8", debug: true });
+        const blob = await removeBackground(photo.image_url, { model: "isnet_quint8", debug: true });
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
         if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
         cutoutUrlRef.current = url;
         const img = await loadImage(url);
         if (cancelled) return;
-        setCutoutImg(img);
+        setRawCutoutImg(img);
       } catch (err) {
         if (!cancelled) setRemoveErr(err instanceof Error ? err.message : "Background removal failed");
       } finally {
@@ -738,21 +744,42 @@ export function BackgroundEditor({
       }
     })();
     return () => { cancelled = true; };
-  }, [processedSrc, photo.is_cutout, photo.image_url]);
+  }, [photo.image_url, photo.is_cutout]);
 
   useEffect(() => {
     return () => { if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current); };
   }, []);
 
-  // Debounced adjust → processedSrc bake
+  // Apply adjust transforms to the cached cutout (debounced).
+  // Preserves alpha — never re-runs the removal model.
   useEffect(() => {
-    if (!originalImg) return;
+    if (!rawCutoutImg) return;
+    let cancelled = false;
     const t = setTimeout(() => {
-      const url = buildProcessedDataURL(originalImg, adjustStraighten, adjustCrop, adjustAspect, adjustFit);
-      setProcessedSrc(url ?? photo.image_url);
-    }, 500);
-    return () => clearTimeout(t);
-  }, [originalImg, adjustStraighten, adjustCrop, adjustAspect, adjustFit, photo.image_url]);
+      try {
+        const url = buildProcessedDataURL(rawCutoutImg, adjustStraighten, adjustCrop, adjustAspect, adjustFit);
+        if (url === null) {
+          if (cancelled) return;
+          setCutoutImg(rawCutoutImg);
+          setBaseSize({ w: rawCutoutImg.naturalWidth, h: rawCutoutImg.naturalHeight });
+          return;
+        }
+        void loadImage(url).then((img) => {
+          if (cancelled) return;
+          setCutoutImg(img);
+          setBaseSize({ w: img.naturalWidth, h: img.naturalHeight });
+        }).catch((err) => {
+          // Don't tear down the editor on a bad transform — log and keep the last good cutout.
+          // eslint-disable-next-line no-console
+          console.warn("[bg-editor] adjust bake failed", err);
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[bg-editor] adjust bake failed", err);
+      }
+    }, 150);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [rawCutoutImg, adjustStraighten, adjustCrop, adjustAspect, adjustFit]);
 
   useEffect(() => {
     const sel = backdrops.find((b) => b.id === backdropId);
@@ -959,8 +986,9 @@ export function BackgroundEditor({
   const overlayCrop = pendingCrop ?? adjustCrop;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-background/80 backdrop-blur-sm p-0 sm:p-4 overflow-auto">
-      <div className="w-full sm:max-w-3xl sm:rounded-xl border-0 sm:border border-border bg-card p-4 sm:p-6 shadow-2xl sm:my-8 min-h-screen sm:min-h-0">
+    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-background/80 backdrop-blur-sm">
+      <div className="min-h-full w-full flex items-stretch sm:items-start justify-center p-0 sm:p-4">
+        <div className="w-full sm:max-w-3xl sm:rounded-xl border-0 sm:border border-border bg-card p-4 sm:p-6 shadow-2xl sm:my-8">
 
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -1073,8 +1101,9 @@ export function BackgroundEditor({
                     <div className="h-8 w-8 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
                     <p className="text-sm font-medium text-foreground">Cutting out the car…</p>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      First use downloads a ~40MB model. This happens entirely in your browser.
+                      First use downloads a ~12MB model. This happens entirely in your browser.
                     </p>
+
                   </div>
                 </div>
               )}
@@ -1349,6 +1378,7 @@ export function BackgroundEditor({
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );
