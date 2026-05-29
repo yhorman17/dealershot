@@ -526,9 +526,13 @@ function EditUserModal({
     e.preventDefault();
     setSaving(true);
     setError(null);
-    const update: Record<string, unknown> = { full_name: fullName.trim() };
+    const update: {
+      full_name: string;
+      role?: "owner" | "dealer_admin" | "staff";
+      dealership_id?: string | null;
+    } = { full_name: fullName.trim() };
     if (!isSelf) {
-      update.role = role;
+      update.role = role as "owner" | "dealer_admin" | "staff";
       update.dealership_id = dealershipId || null;
     }
     const { error: upErr } = await supabase.from("profiles").update(update).eq("id", user.id);
