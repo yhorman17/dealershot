@@ -46,6 +46,7 @@ export type Database = {
           logo_url: string | null
           name: string
           phone: string | null
+          status: string
           subscription_status: string
         }
         Insert: {
@@ -55,6 +56,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           phone?: string | null
+          status?: string
           subscription_status?: string
         }
         Update: {
@@ -64,6 +66,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           phone?: string | null
+          status?: string
           subscription_status?: string
         }
         Relationships: []
@@ -99,6 +102,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      impersonation_logs: {
+        Row: {
+          created_at: string
+          dealership_id: string
+          ended_at: string | null
+          id: string
+          owner_id: string
+          started_at: string
+        }
+        Insert: {
+          created_at?: string
+          dealership_id: string
+          ended_at?: string | null
+          id?: string
+          owner_id: string
+          started_at?: string
+        }
+        Update: {
+          created_at?: string
+          dealership_id?: string
+          ended_at?: string | null
+          id?: string
+          owner_id?: string
+          started_at?: string
+        }
+        Relationships: []
       }
       overlay_templates: {
         Row: {
