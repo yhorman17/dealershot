@@ -782,6 +782,7 @@ export function BackgroundEditor({
       reflectionX, reflectionY, reflectionAngle, reflectionSkew,
       reflectionScaleX, reflectionScaleY,
       tireContacts, tireIntensity: tireIntensity / 100,
+      carOpts: { offsetXPct: carX, offsetYPct: carY, scalePct: carScale },
     });
   }, [
     cutoutImg, bounds, backdropImg, overlayImg, overlayPos, baseSize,
@@ -790,6 +791,7 @@ export function BackgroundEditor({
     reflectionIntensity, reflectionX, reflectionY, reflectionAngle, reflectionSkew,
     reflectionScaleX, reflectionScaleY,
     tireContacts, tireIntensity,
+    carX, carY, carScale,
   ]);
 
   // Adjust-tab live preview render
