@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import { formatMiles, formatPrice } from "@/lib/vehicle-options";
 import { VehiclePhotos } from "@/components/VehiclePhotos";
 import { VehicleExportModal } from "@/components/VehicleExportModal";
@@ -17,6 +18,8 @@ type Vehicle = Record<string, string | number | null> & { id: string };
 function VehicleDetailPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const canDelete = profile?.role === "owner" || profile?.role === "dealer_admin";
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [heroUrl, setHeroUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -120,12 +123,14 @@ function VehicleDetailPage() {
           >
             Export Photos
           </button>
-          <button
-            onClick={() => void handleDelete()}
-            className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 min-h-[44px] text-sm text-destructive hover:bg-destructive/20"
-          >
-            Delete
-          </button>
+          {canDelete && (
+            <button
+              onClick={() => void handleDelete()}
+              className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 min-h-[44px] text-sm text-destructive hover:bg-destructive/20"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
 
