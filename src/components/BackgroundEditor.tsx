@@ -417,23 +417,16 @@ export function BackgroundEditor({
   const [activeTab, setActiveTab] = useState<TabKey>("background");
 
   // Compositing state
-  const [shadowIntensity, setShadowIntensity] = useState(DEFAULTS.shadowIntensity);
-  const [shadowSoftness, setShadowSoftness] = useState(DEFAULTS.shadowSoftness);
+  const [shadowEnabled, setShadowEnabled] = useState(DEFAULTS.shadowEnabled);
+  const [shadowOpacity, setShadowOpacity] = useState(DEFAULTS.shadowOpacity);
+  const [shadowScale, setShadowScale] = useState(DEFAULTS.shadowScale);
   const [shadowX, setShadowX] = useState(DEFAULTS.shadowX);
   const [shadowY, setShadowY] = useState(DEFAULTS.shadowY);
-  const [shadowAngle, setShadowAngle] = useState(DEFAULTS.shadowAngle);
-  const [shadowScaleX, setShadowScaleX] = useState(DEFAULTS.shadowScaleX);
-  const [shadowScaleY, setShadowScaleY] = useState(DEFAULTS.shadowScaleY);
-  const [shadowSkew, setShadowSkew] = useState(DEFAULTS.shadowSkew);
-  const [reflectionIntensity, setReflectionIntensity] = useState(DEFAULTS.reflectionIntensity);
+  const [reflectionEnabled, setReflectionEnabled] = useState(DEFAULTS.reflectionEnabled);
+  const [reflectionOpacity, setReflectionOpacity] = useState(DEFAULTS.reflectionOpacity);
+  const [reflectionScale, setReflectionScale] = useState(DEFAULTS.reflectionScale);
   const [reflectionX, setReflectionX] = useState(DEFAULTS.reflectionX);
   const [reflectionY, setReflectionY] = useState(DEFAULTS.reflectionY);
-  const [reflectionAngle, setReflectionAngle] = useState(DEFAULTS.reflectionAngle);
-  const [reflectionSkew, setReflectionSkew] = useState(DEFAULTS.reflectionSkew);
-  const [reflectionScaleX, setReflectionScaleX] = useState(DEFAULTS.reflectionScaleX);
-  const [reflectionScaleY, setReflectionScaleY] = useState(DEFAULTS.reflectionScaleY);
-  const [tireContacts, setTireContacts] = useState(DEFAULTS.tireContacts);
-  const [tireIntensity, setTireIntensity] = useState(DEFAULTS.tireIntensity);
   const [carX, setCarX] = useState(DEFAULTS.carX);
   const [carY, setCarY] = useState(DEFAULTS.carY);
   const [carScale, setCarScale] = useState(DEFAULTS.carScale);
