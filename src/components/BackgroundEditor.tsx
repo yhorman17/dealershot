@@ -454,20 +454,14 @@ export function BackgroundEditor({
 
   const snapshot = useCallback((): Snapshot => ({
     backdropId, overlayId, overlayPos,
-    shadowIntensity, shadowSoftness, shadowX, shadowY, shadowAngle,
-    shadowScaleX, shadowScaleY, shadowSkew,
-    reflectionIntensity, reflectionX, reflectionY,
-    reflectionAngle, reflectionSkew, reflectionScaleX, reflectionScaleY,
-    tireContacts, tireIntensity,
+    shadowEnabled, shadowOpacity, shadowScale, shadowX, shadowY,
+    reflectionEnabled, reflectionOpacity, reflectionScale, reflectionX, reflectionY,
     carX, carY, carScale,
     adjustStraighten, adjustAspect, adjustCrop, adjustFit,
   }), [
     backdropId, overlayId, overlayPos,
-    shadowIntensity, shadowSoftness, shadowX, shadowY, shadowAngle,
-    shadowScaleX, shadowScaleY, shadowSkew,
-    reflectionIntensity, reflectionX, reflectionY,
-    reflectionAngle, reflectionSkew, reflectionScaleX, reflectionScaleY,
-    tireContacts, tireIntensity,
+    shadowEnabled, shadowOpacity, shadowScale, shadowX, shadowY,
+    reflectionEnabled, reflectionOpacity, reflectionScale, reflectionX, reflectionY,
     carX, carY, carScale,
     adjustStraighten, adjustAspect, adjustCrop, adjustFit,
   ]);
@@ -477,23 +471,16 @@ export function BackgroundEditor({
     setBackdropId(s.backdropId);
     setOverlayId(s.overlayId);
     setOverlayPos(s.overlayPos);
-    setShadowIntensity(s.shadowIntensity);
-    setShadowSoftness(s.shadowSoftness);
+    setShadowEnabled(s.shadowEnabled);
+    setShadowOpacity(s.shadowOpacity);
+    setShadowScale(s.shadowScale);
     setShadowX(s.shadowX);
     setShadowY(s.shadowY);
-    setShadowAngle(s.shadowAngle);
-    setShadowScaleX(s.shadowScaleX);
-    setShadowScaleY(s.shadowScaleY);
-    setShadowSkew(s.shadowSkew);
-    setReflectionIntensity(s.reflectionIntensity);
+    setReflectionEnabled(s.reflectionEnabled);
+    setReflectionOpacity(s.reflectionOpacity);
+    setReflectionScale(s.reflectionScale);
     setReflectionX(s.reflectionX);
     setReflectionY(s.reflectionY);
-    setReflectionAngle(s.reflectionAngle);
-    setReflectionSkew(s.reflectionSkew);
-    setReflectionScaleX(s.reflectionScaleX);
-    setReflectionScaleY(s.reflectionScaleY);
-    setTireContacts(s.tireContacts);
-    setTireIntensity(s.tireIntensity);
     setCarX(s.carX);
     setCarY(s.carY);
     setCarScale(s.carScale);
@@ -501,7 +488,6 @@ export function BackgroundEditor({
     setAdjustAspect(s.adjustAspect);
     setAdjustCrop(s.adjustCrop);
     setAdjustFit(s.adjustFit);
-    // release suppression after this render batch
     setTimeout(() => { suppressHistoryRef.current = false; }, 0);
   };
 
@@ -529,23 +515,16 @@ export function BackgroundEditor({
 
   const resetCompositing = () => {
     recordHistory();
-    setShadowIntensity(DEFAULTS.shadowIntensity);
-    setShadowSoftness(DEFAULTS.shadowSoftness);
+    setShadowEnabled(DEFAULTS.shadowEnabled);
+    setShadowOpacity(DEFAULTS.shadowOpacity);
+    setShadowScale(DEFAULTS.shadowScale);
     setShadowX(DEFAULTS.shadowX);
     setShadowY(DEFAULTS.shadowY);
-    setShadowAngle(DEFAULTS.shadowAngle);
-    setShadowScaleX(DEFAULTS.shadowScaleX);
-    setShadowScaleY(DEFAULTS.shadowScaleY);
-    setShadowSkew(DEFAULTS.shadowSkew);
-    setReflectionIntensity(DEFAULTS.reflectionIntensity);
+    setReflectionEnabled(DEFAULTS.reflectionEnabled);
+    setReflectionOpacity(DEFAULTS.reflectionOpacity);
+    setReflectionScale(DEFAULTS.reflectionScale);
     setReflectionX(DEFAULTS.reflectionX);
     setReflectionY(DEFAULTS.reflectionY);
-    setReflectionAngle(DEFAULTS.reflectionAngle);
-    setReflectionSkew(DEFAULTS.reflectionSkew);
-    setReflectionScaleX(DEFAULTS.reflectionScaleX);
-    setReflectionScaleY(DEFAULTS.reflectionScaleY);
-    setTireContacts(DEFAULTS.tireContacts);
-    setTireIntensity(DEFAULTS.tireIntensity);
   };
 
   const resetAdjust = () => {
@@ -559,26 +538,19 @@ export function BackgroundEditor({
 
   const resetShadow = () => {
     recordHistory();
-    setShadowIntensity(DEFAULTS.shadowIntensity);
-    setShadowSoftness(DEFAULTS.shadowSoftness);
+    setShadowEnabled(DEFAULTS.shadowEnabled);
+    setShadowOpacity(DEFAULTS.shadowOpacity);
+    setShadowScale(DEFAULTS.shadowScale);
     setShadowX(DEFAULTS.shadowX);
     setShadowY(DEFAULTS.shadowY);
-    setShadowAngle(DEFAULTS.shadowAngle);
-    setShadowScaleX(DEFAULTS.shadowScaleX);
-    setShadowScaleY(DEFAULTS.shadowScaleY);
-    setShadowSkew(DEFAULTS.shadowSkew);
-    setTireContacts(DEFAULTS.tireContacts);
-    setTireIntensity(DEFAULTS.tireIntensity);
   };
   const resetReflection = () => {
     recordHistory();
-    setReflectionIntensity(DEFAULTS.reflectionIntensity);
+    setReflectionEnabled(DEFAULTS.reflectionEnabled);
+    setReflectionOpacity(DEFAULTS.reflectionOpacity);
+    setReflectionScale(DEFAULTS.reflectionScale);
     setReflectionX(DEFAULTS.reflectionX);
     setReflectionY(DEFAULTS.reflectionY);
-    setReflectionAngle(DEFAULTS.reflectionAngle);
-    setReflectionSkew(DEFAULTS.reflectionSkew);
-    setReflectionScaleX(DEFAULTS.reflectionScaleX);
-    setReflectionScaleY(DEFAULTS.reflectionScaleY);
   };
 
   const resetBackground = () => {
