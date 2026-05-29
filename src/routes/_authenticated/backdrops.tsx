@@ -114,7 +114,7 @@ function BackdropsPage() {
           {items.map((b) => (
             <div key={b.id} className="rounded-xl border border-border bg-card overflow-hidden">
               <div className="aspect-[16/9] bg-secondary overflow-hidden">
-                <img src={b.image_url} alt={b.name} className="w-full h-full object-cover" />
+                <img src={b.image_url} alt={b.name} className="w-full h-full object-contain bg-background" />
               </div>
               <div className="p-4">
                 <h3 className="font-medium text-card-foreground text-sm truncate">{b.name}</h3>
