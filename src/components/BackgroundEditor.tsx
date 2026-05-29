@@ -579,6 +579,9 @@ export function BackgroundEditor({
     setReflectionScaleY(s.reflectionScaleY);
     setTireContacts(s.tireContacts);
     setTireIntensity(s.tireIntensity);
+    setCarX(s.carX);
+    setCarY(s.carY);
+    setCarScale(s.carScale);
     setAdjustStraighten(s.adjustStraighten);
     setAdjustAspect(s.adjustAspect);
     setAdjustCrop(s.adjustCrop);
