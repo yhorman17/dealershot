@@ -210,8 +210,9 @@ function DocumentsPage() {
           {documents.map((d) => (
             <div key={d.id} className="rounded-xl border border-border bg-card overflow-hidden flex flex-col">
               <div className="aspect-[16/9] bg-secondary flex items-center justify-center overflow-hidden">
-                <img src={d.image_url} alt={d.name} className="max-w-full max-h-full object-contain" />
+                <DocumentThumb doc={d} />
               </div>
+
               <div className="p-4 flex-1 flex flex-col">
                 <h3 className="font-medium text-card-foreground text-sm truncate">{d.name}</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
