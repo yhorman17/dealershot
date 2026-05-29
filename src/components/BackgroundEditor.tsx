@@ -982,7 +982,7 @@ export function BackgroundEditor({
 
             <div
               ref={previewWrapRef}
-              className="relative w-full rounded-lg overflow-hidden bg-secondary border border-border select-none"
+              className="relative w-full rounded-lg overflow-hidden bg-background border border-border select-none"
               style={{ aspectRatio: previewAspect }}
             >
               {/* Composite canvas — visible on every tab except Adjust */}
