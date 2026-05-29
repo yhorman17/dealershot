@@ -108,13 +108,12 @@ function VehicleDetailPage() {
           <p className="text-xl sm:text-2xl font-semibold text-primary mt-3">{formatPrice(Number(vehicle.price))}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Link
-            to="/vehicles/$id/edit"
-            params={{ id }}
+          <button
+            onClick={() => setEditOpen(true)}
             className="rounded-md border border-border bg-secondary px-4 py-2 min-h-[44px] inline-flex items-center text-sm text-secondary-foreground hover:bg-secondary/80"
           >
             Edit
-          </Link>
+          </button>
           <button
             onClick={() => setExportOpen(true)}
             className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90"
