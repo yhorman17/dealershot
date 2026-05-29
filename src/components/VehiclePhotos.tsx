@@ -29,6 +29,8 @@ type Photo = {
   created_at: string;
   sort_order: number;
   is_main: boolean;
+  is_cutout?: boolean;
+  cutout_status?: string;
 };
 
 type VehicleDocument = {
