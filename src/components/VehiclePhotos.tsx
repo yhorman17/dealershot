@@ -93,7 +93,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
     const [{ data: ph }, { data: vd }] = await Promise.all([
       supabase
         .from("photos")
-        .select("id, vehicle_id, image_url, shot_type, created_at, sort_order, is_main")
+        .select("id, vehicle_id, image_url, shot_type, created_at, sort_order, is_main, is_cutout, cutout_status")
         .eq("vehicle_id", vehicleId),
       supabase
         .from("vehicle_documents")
@@ -107,6 +107,10 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
   useEffect(() => {
     void load();
   }, [vehicleId]);
+
+  // Subscribe to in-memory processing queue so badges update live.
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  useEffect(() => subscribeProcessing(setProcessingIds), []);
 
   const items: GalleryItem[] = useMemo(() => {
     const all: GalleryItem[] = [
