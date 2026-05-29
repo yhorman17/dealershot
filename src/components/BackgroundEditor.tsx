@@ -1321,3 +1321,79 @@ function SliderRow({
     </div>
   );
 }
+
+function TabBar<T extends string>({
+  tabs,
+  activeTab,
+  onChange,
+}: {
+  tabs: { key: T; label: string }[];
+  activeTab: T;
+  onChange: (k: T) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showLeft, setShowLeft] = useState(false);
+  const [showRight, setShowRight] = useState(false);
+
+  const updateFades = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setShowLeft(el.scrollLeft > 2);
+    setShowRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    updateFades();
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(updateFades);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [updateFades, tabs.length]);
+
+  // Auto-scroll active tab into view
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const btn = el.querySelector<HTMLButtonElement>(`[data-tab-key="${activeTab}"]`);
+    btn?.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
+  }, [activeTab]);
+
+  return (
+    <div className="relative mt-5">
+      <div
+        ref={scrollRef}
+        onScroll={updateFades}
+        className="border-b border-border flex gap-1 overflow-x-auto scrollbar-none -mx-1 px-1"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {tabs.map((t) => {
+          const active = activeTab === t.key;
+          return (
+            <button
+              key={t.key}
+              data-tab-key={t.key}
+              type="button"
+              onClick={() => onChange(t.key)}
+              className={`relative shrink-0 px-4 py-3 text-sm font-medium transition-colors min-h-[44px] ${
+                active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.label}
+              {active && (
+                <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-primary rounded-full" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {showLeft && (
+        <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent" />
+      )}
+      {showRight && (
+        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent" />
+      )}
+    </div>
+  );
+}
+
