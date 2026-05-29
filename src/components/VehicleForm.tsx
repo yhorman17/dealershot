@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CONDITIONS, STATUSES } from "@/lib/vehicle-options";
+import { VinScannerModal } from "@/components/VinScannerModal";
 
 export type VehicleFormValues = {
   vin: string;
@@ -48,6 +49,14 @@ export function VehicleForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [decodeMsg, setDecodeMsg] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [vinPulse, setVinPulse] = useState(false);
+  const vinInputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!vinPulse) return;
+    const t = setTimeout(() => setVinPulse(false), 1000);
+    return () => clearTimeout(t);
+  }, [vinPulse]);
 
   const set = <K extends keyof VehicleFormValues>(k: K, v: VehicleFormValues[K]) =>
     setValues((p) => ({ ...p, [k]: v }));
@@ -135,11 +144,20 @@ export function VehicleForm({
           <label className="block text-xs font-medium text-card-foreground mb-1.5">VIN</label>
           <div className="flex flex-col sm:flex-row gap-2">
             <input
+              ref={vinInputRef}
               value={values.vin}
               onChange={(e) => set("vin", e.target.value.toUpperCase())}
-              className="form-input flex-1"
+              className={`form-input flex-1 transition-shadow ${vinPulse ? "ring-2 ring-primary border-primary" : ""}`}
               placeholder="17-character VIN"
             />
+            <button
+              type="button"
+              onClick={() => setScannerOpen(true)}
+              className="md:hidden inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-sm text-secondary-foreground hover:bg-secondary/80 whitespace-nowrap"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Scan VIN
+            </button>
             <button
               type="button"
               onClick={() => void decodeVin()}
@@ -153,6 +171,18 @@ export function VehicleForm({
         </div>
         <Input label="Stock number" value={values.stock_number} onChange={(v) => set("stock_number", v)} />
       </Section>
+
+      {scannerOpen && (
+        <VinScannerModal
+          onClose={() => setScannerOpen(false)}
+          onDetected={(vin) => {
+            set("vin", vin);
+            setScannerOpen(false);
+            setVinPulse(true);
+            setTimeout(() => vinInputRef.current?.focus(), 0);
+          }}
+        />
+      )}
 
       <Section title="Specs">
         <Input label="Year" type="number" value={values.year} onChange={(v) => set("year", v)} />
