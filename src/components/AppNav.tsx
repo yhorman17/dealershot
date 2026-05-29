@@ -15,7 +15,7 @@ export function AppNav() {
     { to: "/overlays", label: "Overlays" },
     { to: "/backdrops", label: "Backdrops" },
     { to: "/documents", label: "Documents" },
-    ...(isOwner ? [{ to: "/dealerships", label: "Dealerships" }] : []),
+    ...(isOwner ? [{ to: "/dealerships", label: "Dealerships" }, { to: "/users", label: "Users" }] : []),
     { to: "/export", label: "Export" },
   ];
 

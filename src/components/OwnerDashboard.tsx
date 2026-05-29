@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useImpersonation } from "@/hooks/use-impersonation";
 import { relativeTime } from "@/lib/relative-time";
+import { InviteUserModal } from "@/components/InviteUserModal";
 
 type Dealership = {
   id: string;
@@ -44,6 +45,7 @@ export function OwnerDashboard() {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Dealership | null>(null);
   const [showSubs, setShowSubs] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Dealership | null>(null);
   const [impersonateTarget, setImpersonateTarget] = useState<Dealership | null>(null);
 
@@ -181,6 +183,12 @@ export function OwnerDashboard() {
         >
           Manage subscriptions
         </button>
+        <button
+          onClick={() => setShowInvite(true)}
+          className="rounded-md border border-border bg-secondary px-4 py-2.5 min-h-[44px] text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
+        >
+          Invite user
+        </button>
       </div>
 
       {/* Breakdown */}
@@ -296,6 +304,7 @@ export function OwnerDashboard() {
         />
       )}
       {showSubs && <SubsModal onClose={() => setShowSubs(false)} />}
+      {showInvite && <InviteUserModal onClose={() => setShowInvite(false)} onInvited={() => void load()} />}
       {deleteTarget && (
         <DeleteModal
           dealership={deleteTarget}

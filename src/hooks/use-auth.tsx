@@ -55,8 +55,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select("id, email, full_name, role, dealership_id")
       .eq("id", userId)
       .maybeSingle();
-    const p = data as Profile | null;
+    const p = data as (Profile & { status?: string }) | null;
     setProfile(p);
+
+    // Enforce account deactivation
+    if (p && (p as { status?: string }).status === "deactivated") {
+      alert("Your account has been deactivated. Contact your administrator.");
+      await supabase.auth.signOut();
+      return;
+    }
 
     // Enforce dealership suspension for non-owner users
     if (p && p.role !== "owner" && p.dealership_id) {
