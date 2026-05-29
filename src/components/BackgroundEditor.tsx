@@ -483,7 +483,7 @@ export function BackgroundEditor({
   const [overlayId, setOverlayId] = useState<string>("");
   const [overlayPos, setOverlayPos] = useState<Position>("bottom");
   const [originalImg, setOriginalImg] = useState<HTMLImageElement | null>(null);
-  const [processedSrc, setProcessedSrc] = useState<string>(photo.image_url);
+  const [rawCutoutImg, setRawCutoutImg] = useState<HTMLImageElement | null>(null);
   const [cutoutImg, setCutoutImg] = useState<HTMLImageElement | null>(null);
   const [backdropImg, setBackdropImg] = useState<HTMLImageElement | null>(null);
   const [overlayImg, setOverlayImg] = useState<HTMLImageElement | null>(null);
