@@ -219,9 +219,9 @@ function ExportPage() {
                 onChange={() => toggle(v.id)}
                 className="h-4 w-4"
               />
-              <div className="h-12 w-16 rounded bg-secondary overflow-hidden flex items-center justify-center text-[10px] text-muted-foreground shrink-0">
+              <div className="h-12 w-16 rounded bg-background overflow-hidden flex items-center justify-center text-[10px] text-muted-foreground shrink-0">
                 {v.thumbnail_url ? (
-                  <img src={v.thumbnail_url} alt="" className="h-full w-full object-cover" />
+                  <img src={v.thumbnail_url} alt="" className="h-full w-full object-contain" />
                 ) : (
                   "No photo"
                 )}
