@@ -186,12 +186,13 @@ function buildTireContactCanvas(
   targetW: number,
   targetH: number,
   opacity: number,
+  carOpts: CarOpts,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = targetW;
   c.height = targetH;
   const ctx = c.getContext("2d")!;
-  const r = carRect(cutout, targetW, targetH);
+  const r = carRect(cutout, targetW, targetH, carOpts);
   const sx = r.w / cutout.naturalWidth;
   const sy = r.h / cutout.naturalHeight;
   const carWidth = (bounds.right - bounds.left) * sx;
