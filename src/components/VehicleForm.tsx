@@ -158,27 +158,33 @@ export function VehicleForm({
               ref={vinInputRef}
               value={values.vin}
               onChange={(e) => set("vin", e.target.value.toUpperCase())}
-              className={`form-input flex-1 transition-shadow ${vinPulse ? "ring-2 ring-primary border-primary" : ""}`}
+              readOnly={isEdit}
+              className={`form-input flex-1 transition-shadow ${vinPulse ? "ring-2 ring-primary border-primary" : ""} ${isEdit ? "opacity-70 cursor-not-allowed" : ""}`}
               placeholder="17-character VIN"
             />
-            <button
-              type="button"
-              onClick={() => setScannerOpen(true)}
-              className="md:hidden inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-sm text-secondary-foreground hover:bg-secondary/80 whitespace-nowrap"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-              Scan VIN
-            </button>
-            <button
-              type="button"
-              onClick={() => void decodeVin()}
-              disabled={decoding || !values.vin.trim()}
-              className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-sm text-secondary-foreground hover:bg-secondary/80 disabled:opacity-60 whitespace-nowrap"
-            >
-              {decoding ? "Decoding…" : "Decode VIN"}
-            </button>
+            {!isEdit && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setScannerOpen(true)}
+                  className="md:hidden inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-sm text-secondary-foreground hover:bg-secondary/80 whitespace-nowrap"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  Scan VIN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void decodeVin()}
+                  disabled={decoding || !values.vin.trim()}
+                  className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-sm text-secondary-foreground hover:bg-secondary/80 disabled:opacity-60 whitespace-nowrap"
+                >
+                  {decoding ? "Decoding…" : "Decode VIN"}
+                </button>
+              </>
+            )}
           </div>
-          {decodeMsg && <p className="mt-1.5 text-xs text-primary">{decodeMsg}</p>}
+          {isEdit && <p className="mt-1.5 text-xs text-muted-foreground">VIN cannot be changed after creation</p>}
+          {!isEdit && decodeMsg && <p className="mt-1.5 text-xs text-primary">{decodeMsg}</p>}
         </div>
         <Input label="Stock number" value={values.stock_number} onChange={(v) => set("stock_number", v)} />
       </Section>
