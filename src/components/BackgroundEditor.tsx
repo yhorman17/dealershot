@@ -1370,6 +1370,7 @@ export function BackgroundEditor({
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );
