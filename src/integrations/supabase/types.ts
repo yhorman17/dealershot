@@ -422,6 +422,10 @@ export type Database = {
     }
     Functions: {
       accept_invitation: { Args: { _token: string }; Returns: Json }
+      check_invitation_account_exists: {
+        Args: { _token: string }
+        Returns: boolean
+      }
       get_invitation_details: {
         Args: { _token: string }
         Returns: {

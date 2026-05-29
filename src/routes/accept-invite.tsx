@@ -35,6 +35,7 @@ function AcceptInvitePage() {
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState<InvitationDetails | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [emailHasAccount, setEmailHasAccount] = useState(false);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -48,7 +49,6 @@ function AcceptInvitePage() {
         setLoading(false);
         return;
       }
-      // Wait briefly for Supabase to process the invite URL fragment
       const { data: sess } = await supabase.auth.getSession();
       setIsSignedIn(!!sess.session);
 
@@ -64,7 +64,13 @@ function AcceptInvitePage() {
         } else if (new Date(row.expires_at) < new Date()) {
           setLoadError("This invitation has expired.");
         } else {
-          setDetails(row);
+          // Check whether the invitee email already has a pre-existing account
+          const { data: exists } = await supabase.rpc("check_invitation_account_exists", { _token: token });
+          if (exists === true) {
+            setEmailHasAccount(true);
+          } else {
+            setDetails(row);
+          }
         }
       }
       setLoading(false);
@@ -116,6 +122,21 @@ function AcceptInvitePage() {
         <div className="rounded-xl border border-border bg-card p-8 shadow-xl">
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading invitation…</p>
+          ) : emailHasAccount ? (
+            <>
+              <h2 className="text-xl font-medium text-card-foreground mb-2">Account already exists</h2>
+              <p className="text-sm text-muted-foreground">
+                This email already has an account on DealerShot. Please sign in instead.
+              </p>
+              <div className="mt-6">
+                <Link
+                  to="/login"
+                  className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  Go to sign in
+                </Link>
+              </div>
+            </>
           ) : loadError || !details ? (
             <>
               <h2 className="text-xl font-medium text-card-foreground mb-2">Invitation unavailable</h2>
