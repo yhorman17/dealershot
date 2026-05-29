@@ -23,6 +23,7 @@ type Photo = {
   shot_type: string | null;
   sort_order: number;
   is_main: boolean;
+  is_cutout?: boolean;
 };
 
 type TabKey = "background" | "adjust" | "shadow" | "reflection" | "overlay";
@@ -716,6 +717,12 @@ export function BackgroundEditor({
         const base = await loadImage(processedSrc);
         if (cancelled) return;
         setBaseSize({ w: base.naturalWidth, h: base.naturalHeight });
+        // Skip removal when source is already a transparent cutout (auto-processed) and unmodified.
+        const alreadyCutout = photo.is_cutout && processedSrc === photo.image_url;
+        if (alreadyCutout) {
+          setCutoutImg(base);
+          return;
+        }
         const blob = await removeBackground(processedSrc);
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
@@ -731,7 +738,7 @@ export function BackgroundEditor({
       }
     })();
     return () => { cancelled = true; };
-  }, [processedSrc]);
+  }, [processedSrc, photo.is_cutout, photo.image_url]);
 
   useEffect(() => {
     return () => { if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current); };
