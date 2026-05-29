@@ -2,6 +2,8 @@ import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { AppNav } from "@/components/AppNav";
+import { ImpersonationProvider } from "@/hooks/use-impersonation";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 
 export const Route = createFileRoute("/_authenticated")({
   component: AuthenticatedLayout,
@@ -26,9 +28,12 @@ function AuthenticatedLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <AppNav />
-      <Outlet />
-    </div>
+    <ImpersonationProvider>
+      <div className="min-h-screen bg-background">
+        <ImpersonationBanner />
+        <AppNav />
+        <Outlet />
+      </div>
+    </ImpersonationProvider>
   );
 }

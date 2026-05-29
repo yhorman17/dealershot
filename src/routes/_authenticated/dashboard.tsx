@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/use-auth";
+import { OwnerDashboard } from "@/components/OwnerDashboard";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — DealerShot" }] }),
@@ -8,6 +9,11 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function DashboardPage() {
   const { user, profile } = useAuth();
+
+  if (profile?.role === "owner") {
+    return <OwnerDashboard />;
+  }
+
   const displayName = profile?.full_name || user?.email || "there";
   const roleLabel = profile?.role
     ? profile.role.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())
@@ -32,12 +38,6 @@ function DashboardPage() {
           <h3 className="font-medium text-card-foreground">Inventory</h3>
           <p className="text-sm text-muted-foreground mt-1">Manage your vehicles</p>
         </Link>
-        {profile?.role === "owner" && (
-          <Link to="/dealerships" className="rounded-xl border border-border bg-card p-6 hover:border-primary/60 transition-colors">
-            <h3 className="font-medium text-card-foreground">Dealerships</h3>
-            <p className="text-sm text-muted-foreground mt-1">Manage dealership accounts</p>
-          </Link>
-        )}
       </div>
     </main>
   );

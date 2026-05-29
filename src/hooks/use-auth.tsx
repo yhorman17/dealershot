@@ -55,8 +55,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select("id, email, full_name, role, dealership_id")
       .eq("id", userId)
       .maybeSingle();
-    setProfile(data as Profile | null);
+    const p = data as Profile | null;
+    setProfile(p);
+
+    // Enforce dealership suspension for non-owner users
+    if (p && p.role !== "owner" && p.dealership_id) {
+      const { data: d } = await supabase
+        .from("dealerships")
+        .select("status")
+        .eq("id", p.dealership_id)
+        .maybeSingle();
+      if (d && (d as { status: string }).status === "suspended") {
+        alert("Your dealership account has been suspended. Contact support.");
+        await supabase.auth.signOut();
+      }
+    }
   };
+
 
   const signOut = async () => {
     await supabase.auth.signOut();
