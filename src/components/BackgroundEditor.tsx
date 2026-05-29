@@ -23,6 +23,7 @@ type Photo = {
   shot_type: string | null;
   sort_order: number;
   is_main: boolean;
+  is_cutout?: boolean;
 };
 
 type TabKey = "background" | "adjust" | "shadow" | "reflection" | "overlay";
