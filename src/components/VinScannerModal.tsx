@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BrowserMultiFormatReader, type IScannerControls } from "@zxing/browser";
 import { BarcodeFormat, DecodeHintType, type Result } from "@zxing/library";
 
 function isValidVin(s: string): boolean {
   if (s.length !== 17) return false;
+  // VINs never contain I, O, or Q
   return /^[A-HJ-NPR-Z0-9]{17}$/.test(s);
 }
 
@@ -15,8 +16,10 @@ export function VinScannerModal({
   onDetected: (vin: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const handledRef = useRef(false);
+  const lastToastAtRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [hint, setHint] = useState(false);
@@ -26,6 +29,8 @@ export function VinScannerModal({
 
   useEffect(() => {
     let cancelled = false;
+
+    // Configure decoder with VIN-relevant formats
     const hints = new Map();
     hints.set(DecodeHintType.POSSIBLE_FORMATS, [
       BarcodeFormat.CODE_39,
@@ -33,7 +38,8 @@ export function VinScannerModal({
       BarcodeFormat.DATA_MATRIX,
       BarcodeFormat.QR_CODE,
     ]);
-    const reader = new BrowserMultiFormatReader(hints);
+    hints.set(DecodeHintType.TRY_HARDER, true);
+    const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 120 });
 
     const start = async () => {
       try {
@@ -41,39 +47,61 @@ export function VinScannerModal({
           setError("No camera detected on this device.");
           return;
         }
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
-          audio: false,
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        const track = stream.getVideoTracks()[0];
-        const caps = (track.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
-        if (caps.torch) setTorchSupported(true);
+        const video = videoRef.current;
+        if (!video) return;
 
-        if (!videoRef.current) return;
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
-
-        const controls = await reader.decodeFromVideoElement(
-          videoRef.current,
-          (result: Result | undefined) => {
+        // decodeFromConstraints handles getUserMedia, attaches stream to <video>,
+        // and runs the decoder continuously, calling our callback for each frame.
+        const controls = await reader.decodeFromConstraints(
+          {
+            audio: false,
+            video: { facingMode: { ideal: "environment" } },
+          },
+          video,
+          (result: Result | undefined, err: unknown) => {
+            if (cancelled || handledRef.current) return;
+            if (err) {
+              // NotFoundException is thrown every frame with no barcode — ignore it.
+              const name = (err as { name?: string })?.name;
+              if (name && name !== "NotFoundException") {
+                // eslint-disable-next-line no-console
+                console.warn("[VIN scanner] decode error:", err);
+              }
+              return;
+            }
             if (!result) return;
             const text = result.getText().trim().toUpperCase();
             if (!isValidVin(text)) {
-              showToast("Not a valid VIN — keep scanning");
+              const now = Date.now();
+              if (now - lastToastAtRef.current > 1200) {
+                lastToastAtRef.current = now;
+                showToast("Not a valid VIN — keep scanning");
+              }
               return;
             }
+            handledRef.current = true;
             if (navigator.vibrate) navigator.vibrate(100);
             cleanup();
             onDetected(text);
           },
         );
+        if (cancelled) {
+          controls.stop();
+          return;
+        }
         controlsRef.current = controls;
+
+        // Pull the live stream off the video element to control torch.
+        const srcObj = video.srcObject;
+        if (srcObj instanceof MediaStream) {
+          streamRef.current = srcObj;
+          const track = srcObj.getVideoTracks()[0];
+          const caps = (track?.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
+          if (caps.torch) setTorchSupported(true);
+        }
       } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("[VIN scanner] start failed:", e);
         const err = e as DOMException;
         if (err?.name === "NotAllowedError" || err?.name === "SecurityError") {
           setError("Camera access is needed to scan VINs. Please enable camera permissions in your browser settings.");
@@ -99,11 +127,19 @@ export function VinScannerModal({
   function cleanup() {
     try {
       controlsRef.current?.stop();
-    } catch {}
+    } catch {
+      /* noop */
+    }
     controlsRef.current = null;
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+    const stream = streamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+    }
+    if (videoRef.current) {
+      try {
+        videoRef.current.srcObject = null;
+      } catch { /* noop */ }
     }
   }
 
@@ -134,11 +170,12 @@ export function VinScannerModal({
     <div className="fixed inset-0 z-[100] bg-black flex flex-col">
       <video
         ref={videoRef}
+        autoPlay
         playsInline
         muted
         className="absolute inset-0 w-full h-full object-cover"
       />
-      <div className="absolute inset-0 bg-black/40" />
+      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
 
       {/* top bar */}
       <div className="relative flex items-center justify-between p-4 z-10">
