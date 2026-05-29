@@ -1037,26 +1037,12 @@ export function BackgroundEditor({
             </div>
 
             {/* Tab bar */}
-            <div className="mt-5 border-b border-border flex gap-1">
-              {TABS.map((t) => {
-                const active = activeTab === t.key;
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => setActiveTab(t.key)}
-                    className={`relative px-4 py-3 text-sm font-medium transition-colors min-h-[44px] ${
-                      active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {t.label}
-                    {active && (
-                      <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-primary rounded-full" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            <TabBar
+              tabs={TABS}
+              activeTab={activeTab}
+              onChange={setActiveTab}
+            />
+
 
             {/* Tab content */}
             <div className="mt-4">
