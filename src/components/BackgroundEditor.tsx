@@ -1092,8 +1092,9 @@ export function BackgroundEditor({
                     <div className="h-8 w-8 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
                     <p className="text-sm font-medium text-foreground">Cutting out the car…</p>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      First use downloads a ~40MB model. This happens entirely in your browser.
+                      First use downloads a ~12MB model. This happens entirely in your browser.
                     </p>
+
                   </div>
                 </div>
               )}
