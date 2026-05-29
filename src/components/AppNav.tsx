@@ -16,6 +16,7 @@ export function AppNav() {
     { to: "/backdrops", label: "Backdrops" },
     { to: "/documents", label: "Documents" },
     ...(isOwner ? [{ to: "/dealerships", label: "Dealerships" }] : []),
+    { to: "/export", label: "Export" },
   ];
 
   // Close drawer on Esc + lock body scroll while open

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatMiles, formatPrice } from "@/lib/vehicle-options";
 import { VehiclePhotos } from "@/components/VehiclePhotos";
+import { VehicleExportModal } from "@/components/VehicleExportModal";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id")({
   head: () => ({ meta: [{ title: "Vehicle — DealerShot" }] }),
@@ -17,6 +18,7 @@ function VehicleDetailPage() {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [heroUrl, setHeroUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -110,6 +112,12 @@ function VehicleDetailPage() {
             Edit
           </Link>
           <button
+            onClick={() => setExportOpen(true)}
+            className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Export Photos
+          </button>
+          <button
             onClick={() => void handleDelete()}
             className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 min-h-[44px] text-sm text-destructive hover:bg-destructive/20"
           >
@@ -139,6 +147,20 @@ function VehicleDetailPage() {
           ))}
         </dl>
       </div>
+
+      {exportOpen && (
+        <VehicleExportModal
+          vehicle={{
+            id,
+            year: vehicle.year as number | null,
+            make: vehicle.make as string | null,
+            model: vehicle.model as string | null,
+            stock_number: vehicle.stock_number as string | null,
+            vin: vehicle.vin as string | null,
+          }}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
     </main>
   );
 }
