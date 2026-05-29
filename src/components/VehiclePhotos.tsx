@@ -292,7 +292,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                   <div className="flex items-start gap-3 sm:contents w-full">
                     <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-secondary flex items-center justify-center">
                       {taken ? (
-                        <img src={taken.image_url} alt={shot.name} className="w-full h-full object-cover" />
+                        <img src={taken.image_url} alt={shot.name} className="w-full h-full object-contain bg-background" />
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
