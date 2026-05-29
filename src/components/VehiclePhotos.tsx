@@ -421,9 +421,9 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
               const canMoveDown = !it.is_main && nonMainIdx !== -1 && nonMainIdx < orderedNonMain.length - 1;
               const isDoc = it.kind === "document";
               return (
-                <div key={it.key} className={`group relative rounded-md overflow-hidden bg-secondary ${it.is_main ? "ring-2 ring-primary" : ""}`}>
+                <div key={it.key} className={`group relative rounded-md overflow-hidden bg-background ${it.is_main ? "ring-2 ring-primary" : ""}`}>
                   <div className="aspect-square relative">
-                    <img src={it.image_url} alt={it.label} className={`w-full h-full ${isDoc ? "object-contain bg-background" : "object-cover"}`} />
+                    <img src={it.image_url} alt={it.label} className="w-full h-full object-contain" />
 
                     {it.label && (
                       <span className="absolute top-1.5 left-1.5 inline-flex items-center rounded bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-medium text-white max-w-[80%] truncate">
