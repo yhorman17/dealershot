@@ -505,6 +505,14 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                           DOCUMENT
                         </span>
                       )}
+                      {isCutout && !isDoc && (
+                        <span
+                          title="Background removed"
+                          className="inline-flex items-center justify-center rounded bg-primary/90 w-5 h-5 text-[11px] text-primary-foreground"
+                        >
+                          ✂
+                        </span>
+                      )}
                     </div>
                   </div>
 
