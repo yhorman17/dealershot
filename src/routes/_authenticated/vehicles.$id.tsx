@@ -18,6 +18,8 @@ type Vehicle = Record<string, string | number | null> & { id: string };
 function VehicleDetailPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const canDelete = profile?.role === "owner" || profile?.role === "dealer_admin";
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [heroUrl, setHeroUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
