@@ -433,7 +433,27 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
 
       {/* Gallery */}
       <div className="border-t border-border p-6">
-        <h3 className="text-sm font-semibold text-card-foreground mb-4">All Photos ({items.length})</h3>
+        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+          <h3 className="text-sm font-semibold text-card-foreground">All Photos ({items.length})</h3>
+          {photos.some((p) => isExteriorShot(p.shot_type)) && (
+            <button
+              onClick={() => {
+                const eligible = photos.filter((p) => isExteriorShot(p.shot_type));
+                if (eligible.length === 0) return;
+                if (!confirm(`This will re-run background removal on ${eligible.length} exterior shot${eligible.length === 1 ? "" : "s"}. Continue?`)) return;
+                eligible.forEach((p) => {
+                  enqueueCutout(p.id, p.image_url, (res) => {
+                    if (!res.ok) toast.error(`Cutout failed for ${p.shot_type ?? "photo"}`);
+                    void load();
+                  });
+                });
+              }}
+              className="text-xs text-primary hover:underline"
+            >
+              Re-process all exterior shots
+            </button>
+          )}
+        </div>
         {items.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">No photos yet.</p>
         ) : (
@@ -443,15 +463,35 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
               const canMoveUp = !it.is_main && nonMainIdx > 0;
               const canMoveDown = !it.is_main && nonMainIdx !== -1 && nonMainIdx < orderedNonMain.length - 1;
               const isDoc = it.kind === "document";
+              const photo = it.photo;
+              const processing = !!photo && (processingIds.has(photo.id) || photo.cutout_status === "pending");
+              const isCutout = !!photo?.is_cutout;
               return (
                 <div key={it.key} className={`group relative rounded-md overflow-hidden bg-background ${it.is_main ? "ring-2 ring-primary" : ""}`}>
-                  <div className="aspect-square relative">
+                  <div
+                    className="aspect-square relative"
+                    style={isCutout ? {
+                      backgroundImage:
+                        "linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.04) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.04) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.04) 75%)",
+                      backgroundSize: "16px 16px",
+                      backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0",
+                    } : undefined}
+                  >
                     <img src={it.image_url} alt={it.label} className="w-full h-full object-contain" />
 
                     {it.label && (
                       <span className="absolute top-1.5 left-1.5 inline-flex items-center rounded bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-medium text-white max-w-[80%] truncate">
                         {it.label}
                       </span>
+                    )}
+
+                    {processing && (
+                      <div className="absolute inset-0 flex items-end justify-center pb-2 pointer-events-none">
+                        <span className="inline-flex items-center gap-1.5 rounded bg-black/70 backdrop-blur-sm px-2 py-1 text-[10px] font-medium text-white animate-pulse">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary" />
+                          Processing cutout…
+                        </span>
+                      </div>
                     )}
 
                     <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1">
