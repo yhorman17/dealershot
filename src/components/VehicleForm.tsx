@@ -49,6 +49,14 @@ export function VehicleForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [decodeMsg, setDecodeMsg] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [vinPulse, setVinPulse] = useState(false);
+  const vinInputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!vinPulse) return;
+    const t = setTimeout(() => setVinPulse(false), 1000);
+    return () => clearTimeout(t);
+  }, [vinPulse]);
 
   const set = <K extends keyof VehicleFormValues>(k: K, v: VehicleFormValues[K]) =>
     setValues((p) => ({ ...p, [k]: v }));
