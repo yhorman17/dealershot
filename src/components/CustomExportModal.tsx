@@ -253,7 +253,7 @@ function PhotoRow({
   return (
     <label className="flex items-center gap-3 rounded border border-border/50 p-2 cursor-pointer">
       <input type="checkbox" checked={checked} onChange={onToggle} className="h-4 w-4" />
-      <img src={url} alt="" className="h-10 w-14 object-cover rounded bg-secondary" />
+      <img src={url} alt="" className="h-10 w-14 object-contain rounded bg-background" />
       <div className="min-w-0 flex-1">
         <p className="text-xs truncate">{label}</p>
         <p className="text-[11px] text-muted-foreground truncate font-mono">{filename}</p>
