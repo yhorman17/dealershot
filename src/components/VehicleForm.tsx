@@ -265,12 +265,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Input({
-  label, value, onChange, type = "text",
-}: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+  label, value, onChange, type = "text", error,
+}: { label: string; value: string; onChange: (v: string) => void; type?: string; error?: string }) {
   return (
     <div>
       <label className="block text-xs font-medium text-card-foreground mb-1.5">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="form-input" />
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className={`form-input ${error ? "border-destructive" : ""}`} />
+      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
     </div>
   );
 }
