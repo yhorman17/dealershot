@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatMiles, formatPrice } from "@/lib/vehicle-options";
 import { VehiclePhotos } from "@/components/VehiclePhotos";
 import { VehicleExportModal } from "@/components/VehicleExportModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { VehicleForm, type VehicleFormValues, emptyVehicleValues } from "@/components/VehicleForm";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id")({
   head: () => ({ meta: [{ title: "Vehicle — DealerShot" }] }),
