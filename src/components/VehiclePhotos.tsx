@@ -292,7 +292,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                   <div className="flex items-start gap-3 sm:contents w-full">
                     <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-secondary flex items-center justify-center">
                       {taken ? (
-                        <img src={taken.image_url} alt={shot.name} className="w-full h-full object-cover" />
+                        <img src={taken.image_url} alt={shot.name} className="w-full h-full object-contain bg-background" />
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -337,8 +337,8 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
               <ul className="space-y-2 mb-3">
                 {customShots.map((p) => (
                   <li key={p.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-background">
-                    <div className="flex-shrink-0 w-12 h-12 rounded overflow-hidden bg-secondary">
-                      <img src={p.image_url} alt={p.shot_type || ""} className="w-full h-full object-cover" />
+                    <div className="flex-shrink-0 w-12 h-12 rounded overflow-hidden bg-background">
+                      <img src={p.image_url} alt={p.shot_type || ""} className="w-full h-full object-contain" />
                     </div>
                     <span className="flex-1 text-sm text-card-foreground truncate">{p.shot_type}</span>
                   </li>
@@ -421,9 +421,9 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
               const canMoveDown = !it.is_main && nonMainIdx !== -1 && nonMainIdx < orderedNonMain.length - 1;
               const isDoc = it.kind === "document";
               return (
-                <div key={it.key} className={`group relative rounded-md overflow-hidden bg-secondary ${it.is_main ? "ring-2 ring-primary" : ""}`}>
+                <div key={it.key} className={`group relative rounded-md overflow-hidden bg-background ${it.is_main ? "ring-2 ring-primary" : ""}`}>
                   <div className="aspect-square relative">
-                    <img src={it.image_url} alt={it.label} className={`w-full h-full ${isDoc ? "object-contain bg-background" : "object-cover"}`} />
+                    <img src={it.image_url} alt={it.label} className="w-full h-full object-contain" />
 
                     {it.label && (
                       <span className="absolute top-1.5 left-1.5 inline-flex items-center rounded bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-medium text-white max-w-[80%] truncate">

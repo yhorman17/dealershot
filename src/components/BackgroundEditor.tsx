@@ -58,6 +58,9 @@ const DEFAULTS = {
   reflectionScaleY: 100,
   tireContacts: false,
   tireIntensity: 50,
+  carX: 0,
+  carY: 0,
+  carScale: 100,
   adjustStraighten: 0,
   adjustAspect: "free" as AspectKey,
   adjustCrop: null as CropRect | null,
@@ -88,11 +91,22 @@ function destRect(baseW: number, baseH: number, ovW: number, ovH: number, pos: P
   return { x, y, w, h };
 }
 
-function carRect(cutout: HTMLImageElement, targetW: number, targetH: number) {
-  const scale = Math.min(targetW / cutout.naturalWidth, targetH / cutout.naturalHeight);
+type CarOpts = { offsetXPct: number; offsetYPct: number; scalePct: number };
+const DEFAULT_CAR_OPTS: CarOpts = { offsetXPct: 0, offsetYPct: 0, scalePct: 100 };
+
+function carRect(
+  cutout: HTMLImageElement,
+  targetW: number,
+  targetH: number,
+  opts: CarOpts = DEFAULT_CAR_OPTS,
+) {
+  const baseScale = Math.min(targetW / cutout.naturalWidth, targetH / cutout.naturalHeight);
+  const scale = baseScale * (opts.scalePct / 100);
   const w = cutout.naturalWidth * scale;
   const h = cutout.naturalHeight * scale;
-  return { x: (targetW - w) / 2, y: (targetH - h) / 2, w, h };
+  const x = (targetW - w) / 2 + (opts.offsetXPct / 100) * targetW;
+  const y = (targetH - h) / 2 + (opts.offsetYPct / 100) * targetH;
+  return { x, y, w, h };
 }
 
 function findSilhouetteBounds(img: HTMLImageElement): { top: number; bottom: number; left: number; right: number } {
@@ -131,12 +145,13 @@ function buildShadowCanvas(
   scaleXPct: number,
   scaleYPct: number,
   skewDeg: number,
+  carOpts: CarOpts,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = targetW;
   c.height = targetH;
   const ctx = c.getContext("2d")!;
-  const r = carRect(cutout, targetW, targetH);
+  const r = carRect(cutout, targetW, targetH, carOpts);
   const sx = r.w / cutout.naturalWidth;
   const sy = r.h / cutout.naturalHeight;
   const carWidth = (bounds.right - bounds.left) * sx;
@@ -174,12 +189,13 @@ function buildTireContactCanvas(
   targetW: number,
   targetH: number,
   opacity: number,
+  carOpts: CarOpts,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = targetW;
   c.height = targetH;
   const ctx = c.getContext("2d")!;
-  const r = carRect(cutout, targetW, targetH);
+  const r = carRect(cutout, targetW, targetH, carOpts);
   const sx = r.w / cutout.naturalWidth;
   const sy = r.h / cutout.naturalHeight;
   const carWidth = (bounds.right - bounds.left) * sx;
@@ -208,12 +224,13 @@ function buildReflectionCanvas(
   skewDeg: number,
   scaleXPct: number,
   scaleYPct: number,
+  carOpts: CarOpts,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = targetW;
   c.height = targetH;
   const ctx = c.getContext("2d")!;
-  const r = carRect(cutout, targetW, targetH);
+  const r = carRect(cutout, targetW, targetH, carOpts);
   const sy = r.h / cutout.naturalHeight;
   const carBottomY = r.y + bounds.bottom * sy;
   const groundY = carBottomY + offsetY;
@@ -264,6 +281,7 @@ type ComposeOpts = {
   reflectionScaleY: number;
   tireContacts: boolean;
   tireIntensity: number;
+  carOpts: CarOpts;
 };
 
 function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
@@ -281,6 +299,7 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
       o.reflectionIntensity, o.reflectionX, o.reflectionY,
       o.reflectionAngle, o.reflectionSkew,
       o.reflectionScaleX, o.reflectionScaleY,
+      o.carOpts,
     );
     ctx.drawImage(ref, 0, 0);
   }
@@ -291,16 +310,17 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
       o.shadowOpacity, o.shadowBlur,
       o.shadowX, o.shadowY, o.shadowAngle,
       o.shadowScaleX, o.shadowScaleY, o.shadowSkew,
+      o.carOpts,
     );
     ctx.drawImage(sh, 0, 0);
   }
 
   if (o.tireContacts && o.tireIntensity > 0) {
-    const tc = buildTireContactCanvas(o.cutout, o.bounds, targetW, targetH, o.tireIntensity);
+    const tc = buildTireContactCanvas(o.cutout, o.bounds, targetW, targetH, o.tireIntensity, o.carOpts);
     ctx.drawImage(tc, 0, 0);
   }
 
-  const r = carRect(o.cutout, targetW, targetH);
+  const r = carRect(o.cutout, targetW, targetH, o.carOpts);
   ctx.drawImage(o.cutout, r.x, r.y, r.w, r.h);
 
   if (o.overlay) {
@@ -435,6 +455,9 @@ type Snapshot = {
   reflectionScaleY: number;
   tireContacts: boolean;
   tireIntensity: number;
+  carX: number;
+  carY: number;
+  carScale: number;
   adjustStraighten: number;
   adjustAspect: AspectKey;
   adjustCrop: CropRect | null;
@@ -489,6 +512,10 @@ export function BackgroundEditor({
   const [reflectionScaleY, setReflectionScaleY] = useState(DEFAULTS.reflectionScaleY);
   const [tireContacts, setTireContacts] = useState(DEFAULTS.tireContacts);
   const [tireIntensity, setTireIntensity] = useState(DEFAULTS.tireIntensity);
+  const [carX, setCarX] = useState(DEFAULTS.carX);
+  const [carY, setCarY] = useState(DEFAULTS.carY);
+  const [carScale, setCarScale] = useState(DEFAULTS.carScale);
+  const [carPosOpen, setCarPosOpen] = useState(true);
 
   // Adjust tab state
   const [adjustStraighten, setAdjustStraighten] = useState(DEFAULTS.adjustStraighten);
@@ -517,6 +544,7 @@ export function BackgroundEditor({
     reflectionIntensity, reflectionX, reflectionY,
     reflectionAngle, reflectionSkew, reflectionScaleX, reflectionScaleY,
     tireContacts, tireIntensity,
+    carX, carY, carScale,
     adjustStraighten, adjustAspect, adjustCrop, adjustFit,
   }), [
     backdropId, overlayId, overlayPos,
@@ -525,6 +553,7 @@ export function BackgroundEditor({
     reflectionIntensity, reflectionX, reflectionY,
     reflectionAngle, reflectionSkew, reflectionScaleX, reflectionScaleY,
     tireContacts, tireIntensity,
+    carX, carY, carScale,
     adjustStraighten, adjustAspect, adjustCrop, adjustFit,
   ]);
 
@@ -550,6 +579,9 @@ export function BackgroundEditor({
     setReflectionScaleY(s.reflectionScaleY);
     setTireContacts(s.tireContacts);
     setTireIntensity(s.tireIntensity);
+    setCarX(s.carX);
+    setCarY(s.carY);
+    setCarScale(s.carScale);
     setAdjustStraighten(s.adjustStraighten);
     setAdjustAspect(s.adjustAspect);
     setAdjustCrop(s.adjustCrop);
@@ -634,8 +666,16 @@ export function BackgroundEditor({
     setReflectionScaleY(DEFAULTS.reflectionScaleY);
   };
 
+  const resetBackground = () => {
+    recordHistory();
+    setBackdropId(defaultBackdropId);
+    setCarX(DEFAULTS.carX);
+    setCarY(DEFAULTS.carY);
+    setCarScale(DEFAULTS.carScale);
+  };
+
   const resetCurrentTab = () => {
-    if (activeTab === "background") { recordHistory(); setBackdropId(defaultBackdropId); }
+    if (activeTab === "background") resetBackground();
     else if (activeTab === "adjust") resetAdjust();
     else if (activeTab === "shadow") resetShadow();
     else if (activeTab === "reflection") resetReflection();
@@ -742,6 +782,7 @@ export function BackgroundEditor({
       reflectionX, reflectionY, reflectionAngle, reflectionSkew,
       reflectionScaleX, reflectionScaleY,
       tireContacts, tireIntensity: tireIntensity / 100,
+      carOpts: { offsetXPct: carX, offsetYPct: carY, scalePct: carScale },
     });
   }, [
     cutoutImg, bounds, backdropImg, overlayImg, overlayPos, baseSize,
@@ -750,6 +791,7 @@ export function BackgroundEditor({
     reflectionIntensity, reflectionX, reflectionY, reflectionAngle, reflectionSkew,
     reflectionScaleX, reflectionScaleY,
     tireContacts, tireIntensity,
+    carX, carY, carScale,
   ]);
 
   // Adjust-tab live preview render
@@ -940,7 +982,7 @@ export function BackgroundEditor({
 
             <div
               ref={previewWrapRef}
-              className="relative w-full rounded-lg overflow-hidden bg-secondary border border-border select-none"
+              className="relative w-full rounded-lg overflow-hidden bg-background border border-border select-none"
               style={{ aspectRatio: previewAspect }}
             >
               {/* Composite canvas — visible on every tab except Adjust */}
@@ -1065,9 +1107,29 @@ export function BackgroundEditor({
               </div>
 
               {activeTab === "background" && (
-                <div className="rounded-lg border border-border bg-secondary/30 p-4 text-xs text-muted-foreground">
-                  Choose a backdrop above. The preview updates instantly. Use the Adjust tab to crop or
-                  straighten the source, Compositing to refine shadows and reflections, and Overlay to add a banner.
+                <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
+                  <p className="text-xs text-muted-foreground">
+                    Choose a backdrop above. The preview updates instantly.
+                  </p>
+                  <div className="rounded-md border border-border/60 bg-background/30">
+                    <button
+                      type="button"
+                      onClick={() => setCarPosOpen((v) => !v)}
+                      className="w-full flex items-center justify-between px-3 py-2 min-h-[44px] text-left"
+                    >
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Car Position
+                      </span>
+                      <span className="text-xs text-muted-foreground">{carPosOpen ? "−" : "+"}</span>
+                    </button>
+                    {carPosOpen && (
+                      <div className="px-3 pb-3 space-y-3">
+                        <SliderRow label="Position X" value={carX} min={-50} max={50} suffix="%" onChange={track(setCarX)} />
+                        <SliderRow label="Position Y" value={carY} min={-50} max={50} suffix="%" onChange={track(setCarY)} />
+                        <SliderRow label="Scale" value={carScale} min={50} max={150} suffix="%" onChange={track(setCarScale)} />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

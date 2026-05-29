@@ -185,7 +185,7 @@ export function VehicleExportModal({ vehicle, onClose }: Props) {
                     <img
                       src={p.image_url}
                       alt=""
-                      className="h-12 w-16 object-cover rounded bg-secondary"
+                      className="h-12 w-16 object-contain rounded bg-background"
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm truncate">{p.shot_type || "Untitled"}</p>
@@ -210,7 +210,7 @@ export function VehicleExportModal({ vehicle, onClose }: Props) {
                       <img
                         src={d.image_url}
                         alt=""
-                        className="h-12 w-16 object-cover rounded bg-secondary"
+                        className="h-12 w-16 object-contain rounded bg-background"
                       />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm truncate">{d.doc_name || "Document"}</p>
