@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CONDITIONS, STATUSES } from "@/lib/vehicle-options";
+import { VinScannerModal } from "@/components/VinScannerModal";
 
 export type VehicleFormValues = {
   vin: string;
