@@ -544,6 +544,7 @@ export function BackgroundEditor({
     reflectionIntensity, reflectionX, reflectionY,
     reflectionAngle, reflectionSkew, reflectionScaleX, reflectionScaleY,
     tireContacts, tireIntensity,
+    carX, carY, carScale,
     adjustStraighten, adjustAspect, adjustCrop, adjustFit,
   }), [
     backdropId, overlayId, overlayPos,
@@ -552,6 +553,7 @@ export function BackgroundEditor({
     reflectionIntensity, reflectionX, reflectionY,
     reflectionAngle, reflectionSkew, reflectionScaleX, reflectionScaleY,
     tireContacts, tireIntensity,
+    carX, carY, carScale,
     adjustStraighten, adjustAspect, adjustCrop, adjustFit,
   ]);
 
