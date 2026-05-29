@@ -278,6 +278,7 @@ type ComposeOpts = {
   reflectionScaleY: number;
   tireContacts: boolean;
   tireIntensity: number;
+  carOpts: CarOpts;
 };
 
 function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
