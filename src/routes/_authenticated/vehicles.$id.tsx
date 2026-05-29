@@ -21,6 +21,37 @@ function VehicleDetailPage() {
   const [heroUrl, setHeroUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [exportOpen, setExportOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [{ data }, { data: photos }, { data: docs }] = await Promise.all([
+      supabase.from("vehicles").select("*").eq("id", id).maybeSingle(),
+      supabase
+        .from("photos")
+        .select("image_url, shot_type, sort_order, created_at, is_main")
+        .eq("vehicle_id", id),
+      supabase
+        .from("vehicle_documents")
+        .select("sort_order, is_main, created_at, document:documents(image_url)")
+        .eq("vehicle_id", id),
+    ]);
+    setVehicle(data as Vehicle | null);
+    const photoRows = (photos as { image_url: string; shot_type: string | null; sort_order: number; created_at: string; is_main: boolean }[]) || [];
+    const docRows = ((docs as unknown as { sort_order: number; is_main: boolean; created_at: string; document: { image_url: string } | null }[]) || [])
+      .filter((d) => d.document?.image_url)
+      .map((d) => ({ image_url: d.document!.image_url, shot_type: null as string | null, sort_order: d.sort_order, created_at: d.created_at, is_main: d.is_main }));
+    const all = [...photoRows, ...docRows];
+    const main = all.find((p) => p.is_main);
+    const front = photoRows.find((p) => p.shot_type === "Front");
+    const first = [...all].sort((a, b) =>
+      a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : a.created_at.localeCompare(b.created_at),
+    )[0];
+    setHeroUrl(main?.image_url ?? front?.image_url ?? first?.image_url ?? null);
+    setLoading(false);
+  }, [id]);
+
+  useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     void (async () => {
