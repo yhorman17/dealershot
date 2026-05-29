@@ -163,12 +163,27 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
     return data as Photo;
   };
 
+  const queueCutoutIfEligible = (photo: Photo) => {
+    if (!isExteriorShot(photo.shot_type)) return;
+    enqueueCutout(photo.id, photo.image_url, (res) => {
+      if (res.ok) {
+        void load();
+      } else {
+        toast.error("Cutout failed — using original");
+        void load();
+      }
+    });
+  };
+
   const handleGuidedUpload = async (shotName: string, file: File) => {
     setUploading(shotName);
     const existing = photos.find((p) => p.shot_type === shotName);
     const created = await uploadFile(file, shotName);
     if (created && existing) await deletePhoto(existing, true);
-    if (created) await load();
+    if (created) {
+      await load();
+      queueCutoutIfEligible(created);
+    }
     setUploading(null);
   };
 
