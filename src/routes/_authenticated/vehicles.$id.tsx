@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatMiles, formatPrice } from "@/lib/vehicle-options";
 import { VehiclePhotos } from "@/components/VehiclePhotos";
 import { VehicleExportModal } from "@/components/VehicleExportModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { VehicleForm, type VehicleFormValues, emptyVehicleValues } from "@/components/VehicleForm";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id")({
   head: () => ({ meta: [{ title: "Vehicle — DealerShot" }] }),
@@ -19,36 +21,38 @@ function VehicleDetailPage() {
   const [heroUrl, setHeroUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [exportOpen, setExportOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
-  useEffect(() => {
-    void (async () => {
-      setLoading(true);
-      const [{ data }, { data: photos }, { data: docs }] = await Promise.all([
-        supabase.from("vehicles").select("*").eq("id", id).maybeSingle(),
-        supabase
-          .from("photos")
-          .select("image_url, shot_type, sort_order, created_at, is_main")
-          .eq("vehicle_id", id),
-        supabase
-          .from("vehicle_documents")
-          .select("sort_order, is_main, created_at, document:documents(image_url)")
-          .eq("vehicle_id", id),
-      ]);
-      setVehicle(data as Vehicle | null);
-      const photoRows = (photos as { image_url: string; shot_type: string | null; sort_order: number; created_at: string; is_main: boolean }[]) || [];
-      const docRows = ((docs as unknown as { sort_order: number; is_main: boolean; created_at: string; document: { image_url: string } | null }[]) || [])
-        .filter((d) => d.document?.image_url)
-        .map((d) => ({ image_url: d.document!.image_url, shot_type: null as string | null, sort_order: d.sort_order, created_at: d.created_at, is_main: d.is_main }));
-      const all = [...photoRows, ...docRows];
-      const main = all.find((p) => p.is_main);
-      const front = photoRows.find((p) => p.shot_type === "Front");
-      const first = [...all].sort((a, b) =>
-        a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : a.created_at.localeCompare(b.created_at),
-      )[0];
-      setHeroUrl(main?.image_url ?? front?.image_url ?? first?.image_url ?? null);
-      setLoading(false);
-    })();
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [{ data }, { data: photos }, { data: docs }] = await Promise.all([
+      supabase.from("vehicles").select("*").eq("id", id).maybeSingle(),
+      supabase
+        .from("photos")
+        .select("image_url, shot_type, sort_order, created_at, is_main")
+        .eq("vehicle_id", id),
+      supabase
+        .from("vehicle_documents")
+        .select("sort_order, is_main, created_at, document:documents(image_url)")
+        .eq("vehicle_id", id),
+    ]);
+    setVehicle(data as Vehicle | null);
+    const photoRows = (photos as { image_url: string; shot_type: string | null; sort_order: number; created_at: string; is_main: boolean }[]) || [];
+    const docRows = ((docs as unknown as { sort_order: number; is_main: boolean; created_at: string; document: { image_url: string } | null }[]) || [])
+      .filter((d) => d.document?.image_url)
+      .map((d) => ({ image_url: d.document!.image_url, shot_type: null as string | null, sort_order: d.sort_order, created_at: d.created_at, is_main: d.is_main }));
+    const all = [...photoRows, ...docRows];
+    const main = all.find((p) => p.is_main);
+    const front = photoRows.find((p) => p.shot_type === "Front");
+    const first = [...all].sort((a, b) =>
+      a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : a.created_at.localeCompare(b.created_at),
+    )[0];
+    setHeroUrl(main?.image_url ?? front?.image_url ?? first?.image_url ?? null);
+    setLoading(false);
   }, [id]);
+
+  useEffect(() => { void load(); }, [load]);
+
 
   const handleDelete = async () => {
     if (!confirm("Delete this vehicle? This cannot be undone.")) return;
@@ -104,13 +108,12 @@ function VehicleDetailPage() {
           <p className="text-xl sm:text-2xl font-semibold text-primary mt-3">{formatPrice(Number(vehicle.price))}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Link
-            to="/vehicles/$id/edit"
-            params={{ id }}
+          <button
+            onClick={() => setEditOpen(true)}
             className="rounded-md border border-border bg-secondary px-4 py-2 min-h-[44px] inline-flex items-center text-sm text-secondary-foreground hover:bg-secondary/80"
           >
             Edit
-          </Link>
+          </button>
           <button
             onClick={() => setExportOpen(true)}
             className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90"
@@ -161,6 +164,40 @@ function VehicleDetailPage() {
           onClose={() => setExportOpen(false)}
         />
       )}
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-3xl w-[calc(100vw-1rem)] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Vehicle</DialogTitle>
+          </DialogHeader>
+          <VehicleForm
+            initial={vehicleToFormValues(vehicle)}
+            dealershipId={(vehicle.dealership_id as string) || ""}
+            vehicleId={id}
+            onSaved={() => {
+              setEditOpen(false);
+              void load();
+            }}
+            onCancel={() => setEditOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </main>
   );
+}
+
+function vehicleToFormValues(v: Vehicle): VehicleFormValues {
+  const s = (k: string) => {
+    const val = (v as Record<string, string | number | null>)[k];
+    return val == null ? "" : String(val);
+  };
+  return {
+    ...emptyVehicleValues,
+    vin: s("vin"), year: s("year"), make: s("make"), model: s("model"), trim: s("trim"),
+    body_class: s("body_class"), engine: s("engine"), cylinders: s("cylinders"),
+    transmission: s("transmission"), drivetrain: s("drivetrain"), fuel_type: s("fuel_type"),
+    exterior_color: s("exterior_color"), interior_color: s("interior_color"),
+    odometer: s("odometer"), price: s("price"), stock_number: s("stock_number"),
+    condition: s("condition") || "Used", status: s("status") || "Available",
+  };
 }

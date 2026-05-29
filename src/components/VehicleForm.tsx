@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CONDITIONS, STATUSES } from "@/lib/vehicle-options";
 import { VinScannerModal } from "@/components/VinScannerModal";
+import { toast } from "sonner";
 
 export type VehicleFormValues = {
   vin: string;
@@ -44,11 +45,13 @@ export function VehicleForm({
   onSaved: (id: string) => void;
   onCancel: () => void;
 }) {
+  const isEdit = Boolean(vehicleId);
   const [values, setValues] = useState<VehicleFormValues>(initial || emptyVehicleValues);
   const [decoding, setDecoding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [decodeMsg, setDecodeMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ odometer?: string; price?: string }>({});
   const [scannerOpen, setScannerOpen] = useState(false);
   const [vinPulse, setVinPulse] = useState(false);
   const vinInputRef = useRef<HTMLInputElement | null>(null);
@@ -97,11 +100,14 @@ export function VehicleForm({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    const fe: { odometer?: string; price?: string } = {};
+    if (values.odometer.trim() === "" || isNaN(Number(values.odometer))) fe.odometer = "Enter a valid number";
+    if (values.price.trim() === "" || isNaN(Number(values.price))) fe.price = "Enter a valid number";
+    setFieldErrors(fe);
+    if (fe.odometer || fe.price) return;
     setSaving(true);
     try {
-      const payload = {
-        dealership_id: dealershipId,
-        vin: values.vin.trim() || null,
+      const basePayload = {
         year: values.year ? parseInt(values.year, 10) : null,
         make: values.make.trim() || null,
         model: values.model.trim() || null,
@@ -122,11 +128,16 @@ export function VehicleForm({
       };
 
       if (vehicleId) {
-        const { error: upErr } = await supabase.from("vehicles").update(payload).eq("id", vehicleId);
+        const { error: upErr } = await supabase.from("vehicles").update(basePayload).eq("id", vehicleId);
         if (upErr) throw upErr;
+        toast.success("Vehicle updated.");
         onSaved(vehicleId);
       } else {
-        const { data, error: insErr } = await supabase.from("vehicles").insert(payload).select("id").single();
+        const { data, error: insErr } = await supabase
+          .from("vehicles")
+          .insert({ ...basePayload, dealership_id: dealershipId, vin: values.vin.trim() || null })
+          .select("id")
+          .single();
         if (insErr) throw insErr;
         onSaved(data.id);
       }
@@ -147,27 +158,33 @@ export function VehicleForm({
               ref={vinInputRef}
               value={values.vin}
               onChange={(e) => set("vin", e.target.value.toUpperCase())}
-              className={`form-input flex-1 transition-shadow ${vinPulse ? "ring-2 ring-primary border-primary" : ""}`}
+              readOnly={isEdit}
+              className={`form-input flex-1 transition-shadow ${vinPulse ? "ring-2 ring-primary border-primary" : ""} ${isEdit ? "opacity-70 cursor-not-allowed" : ""}`}
               placeholder="17-character VIN"
             />
-            <button
-              type="button"
-              onClick={() => setScannerOpen(true)}
-              className="md:hidden inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-sm text-secondary-foreground hover:bg-secondary/80 whitespace-nowrap"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-              Scan VIN
-            </button>
-            <button
-              type="button"
-              onClick={() => void decodeVin()}
-              disabled={decoding || !values.vin.trim()}
-              className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-sm text-secondary-foreground hover:bg-secondary/80 disabled:opacity-60 whitespace-nowrap"
-            >
-              {decoding ? "Decoding…" : "Decode VIN"}
-            </button>
+            {!isEdit && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setScannerOpen(true)}
+                  className="md:hidden inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-sm text-secondary-foreground hover:bg-secondary/80 whitespace-nowrap"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  Scan VIN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void decodeVin()}
+                  disabled={decoding || !values.vin.trim()}
+                  className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-sm text-secondary-foreground hover:bg-secondary/80 disabled:opacity-60 whitespace-nowrap"
+                >
+                  {decoding ? "Decoding…" : "Decode VIN"}
+                </button>
+              </>
+            )}
           </div>
-          {decodeMsg && <p className="mt-1.5 text-xs text-primary">{decodeMsg}</p>}
+          {isEdit && <p className="mt-1.5 text-xs text-muted-foreground">VIN cannot be changed after creation</p>}
+          {!isEdit && decodeMsg && <p className="mt-1.5 text-xs text-primary">{decodeMsg}</p>}
         </div>
         <Input label="Stock number" value={values.stock_number} onChange={(v) => set("stock_number", v)} />
       </Section>
@@ -197,8 +214,8 @@ export function VehicleForm({
         <Input label="Fuel type" value={values.fuel_type} onChange={(v) => set("fuel_type", v)} />
         <Input label="Exterior color" value={values.exterior_color} onChange={(v) => set("exterior_color", v)} />
         <Input label="Interior color" value={values.interior_color} onChange={(v) => set("interior_color", v)} />
-        <Input label="Odometer (mi)" type="number" value={values.odometer} onChange={(v) => set("odometer", v)} />
-        <Input label="Price (USD)" type="number" value={values.price} onChange={(v) => set("price", v)} />
+        <Input label="Odometer (mi)" type="number" value={values.odometer} onChange={(v) => set("odometer", v)} error={fieldErrors.odometer} />
+        <Input label="Price (USD)" type="number" value={values.price} onChange={(v) => set("price", v)} error={fieldErrors.price} />
       </Section>
 
       <Section title="Status">
@@ -248,12 +265,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Input({
-  label, value, onChange, type = "text",
-}: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+  label, value, onChange, type = "text", error,
+}: { label: string; value: string; onChange: (v: string) => void; type?: string; error?: string }) {
   return (
     <div>
       <label className="block text-xs font-medium text-card-foreground mb-1.5">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="form-input" />
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className={`form-input ${error ? "border-destructive" : ""}`} />
+      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
     </div>
   );
 }
