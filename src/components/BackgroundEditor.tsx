@@ -509,6 +509,10 @@ export function BackgroundEditor({
   const [reflectionScaleY, setReflectionScaleY] = useState(DEFAULTS.reflectionScaleY);
   const [tireContacts, setTireContacts] = useState(DEFAULTS.tireContacts);
   const [tireIntensity, setTireIntensity] = useState(DEFAULTS.tireIntensity);
+  const [carX, setCarX] = useState(DEFAULTS.carX);
+  const [carY, setCarY] = useState(DEFAULTS.carY);
+  const [carScale, setCarScale] = useState(DEFAULTS.carScale);
+  const [carPosOpen, setCarPosOpen] = useState(true);
 
   // Adjust tab state
   const [adjustStraighten, setAdjustStraighten] = useState(DEFAULTS.adjustStraighten);
