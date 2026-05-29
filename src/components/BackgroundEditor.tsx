@@ -1133,37 +1133,26 @@ export function BackgroundEditor({
               {activeTab === "shadow" && (
                 <div className="rounded-lg border border-border bg-secondary/30 p-4">
                   <div className="rounded-md border border-border/60 bg-background/30 p-3">
-                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Shadow</h4>
-                    <div className="space-y-3">
-                      <SliderRow label="Intensity" value={shadowIntensity} min={0} max={100} suffix="%" onChange={track(setShadowIntensity)} />
-                      <SliderRow label="Softness" value={shadowSoftness} min={0} max={50} suffix="px" onChange={track(setShadowSoftness)} />
-                      <SliderRow label="Position X" value={shadowX} min={-200} max={200} suffix="px" onChange={track(setShadowX)} />
-                      <SliderRow label="Position Y" value={shadowY} min={-100} max={100} suffix="px" onChange={track(setShadowY)} />
-                      <SliderRow label="Angle" value={shadowAngle} min={-45} max={45} suffix="°" onChange={track(setShadowAngle)} />
-                      <SliderRow label="Skew" value={shadowSkew} min={-45} max={45} suffix="°" onChange={track(setShadowSkew)} />
-                      <SliderRow label="Scale X" value={shadowScaleX} min={50} max={200} suffix="%" onChange={track(setShadowScaleX)} />
-                      <SliderRow label="Scale Y" value={shadowScaleY} min={50} max={200} suffix="%" onChange={track(setShadowScaleY)} />
-
-                      <label className="flex items-center gap-2 pt-1 cursor-pointer min-h-[44px]">
-                        <input
-                          type="checkbox"
-                          checked={tireContacts}
-                          onChange={(e) => track(setTireContacts)(e.target.checked)}
-                          className="h-4 w-4 accent-primary"
-                        />
-                        <span className="text-xs font-medium text-card-foreground">Add tire contact shadows</span>
-                      </label>
-                      {tireContacts && (
-                        <SliderRow
-                          label="Tire Contact Intensity"
-                          value={tireIntensity}
-                          min={0}
-                          max={100}
-                          suffix="%"
-                          onChange={track(setTireIntensity)}
-                        />
-                      )}
-                    </div>
+                    <label className="flex items-center justify-between cursor-pointer min-h-[44px] mb-1">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Contact Shadow</span>
+                      <input
+                        type="checkbox"
+                        checked={shadowEnabled}
+                        onChange={(e) => track(setShadowEnabled)(e.target.checked)}
+                        className="h-4 w-4 accent-primary"
+                      />
+                    </label>
+                    <p className="text-[11px] text-muted-foreground mb-3">
+                      Soft oval contact shadow auto-placed under the car. Turn off for interiors or detail shots.
+                    </p>
+                    {shadowEnabled && (
+                      <div className="space-y-3">
+                        <SliderRow label="Opacity" value={shadowOpacity} min={0} max={100} suffix="%" onChange={track(setShadowOpacity)} />
+                        <SliderRow label="Size" value={shadowScale} min={40} max={180} suffix="%" onChange={track(setShadowScale)} />
+                        <SliderRow label="Position X" value={shadowX} min={-200} max={200} suffix="px" onChange={track(setShadowX)} />
+                        <SliderRow label="Position Y" value={shadowY} min={-100} max={100} suffix="px" onChange={track(setShadowY)} />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1171,24 +1160,26 @@ export function BackgroundEditor({
               {activeTab === "reflection" && (
                 <div className="rounded-lg border border-border bg-secondary/30 p-4">
                   <div className="rounded-md border border-border/60 bg-background/30 p-3">
-                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Reflection</h4>
-                    <div className="space-y-3">
-                      <SliderRow
-                        label="Intensity"
-                        value={reflectionIntensity}
-                        min={0}
-                        max={100}
-                        suffix="%"
-                        onChange={track(setReflectionIntensity)}
-                        hint={reflectionIntensity === 0 ? "Disabled" : undefined}
+                    <label className="flex items-center justify-between cursor-pointer min-h-[44px] mb-1">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Floor Reflection</span>
+                      <input
+                        type="checkbox"
+                        checked={reflectionEnabled}
+                        onChange={(e) => track(setReflectionEnabled)(e.target.checked)}
+                        className="h-4 w-4 accent-primary"
                       />
-                      <SliderRow label="Position X" value={reflectionX} min={-200} max={200} suffix="px" onChange={track(setReflectionX)} />
-                      <SliderRow label="Position Y" value={reflectionY} min={-100} max={100} suffix="px" onChange={track(setReflectionY)} />
-                      <SliderRow label="Angle" value={reflectionAngle} min={-45} max={45} suffix="°" onChange={track(setReflectionAngle)} />
-                      <SliderRow label="Skew" value={reflectionSkew} min={-45} max={45} suffix="°" onChange={track(setReflectionSkew)} />
-                      <SliderRow label="Scale X" value={reflectionScaleX} min={50} max={200} suffix="%" onChange={track(setReflectionScaleX)} />
-                      <SliderRow label="Scale Y" value={reflectionScaleY} min={50} max={200} suffix="%" onChange={track(setReflectionScaleY)} />
-                    </div>
+                    </label>
+                    <p className="text-[11px] text-muted-foreground mb-3">
+                      Mirror reflection under the car. Nudge to align if you move or resize it.
+                    </p>
+                    {reflectionEnabled && (
+                      <div className="space-y-3">
+                        <SliderRow label="Strength" value={reflectionOpacity} min={0} max={100} suffix="%" onChange={track(setReflectionOpacity)} />
+                        <SliderRow label="Size" value={reflectionScale} min={50} max={150} suffix="%" onChange={track(setReflectionScale)} />
+                        <SliderRow label="Position X" value={reflectionX} min={-200} max={200} suffix="px" onChange={track(setReflectionX)} />
+                        <SliderRow label="Position Y" value={reflectionY} min={-100} max={100} suffix="px" onChange={track(setReflectionY)} />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
