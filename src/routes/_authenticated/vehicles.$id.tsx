@@ -164,6 +164,40 @@ function VehicleDetailPage() {
           onClose={() => setExportOpen(false)}
         />
       )}
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-3xl w-[calc(100vw-1rem)] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Vehicle</DialogTitle>
+          </DialogHeader>
+          <VehicleForm
+            initial={vehicleToFormValues(vehicle)}
+            dealershipId={(vehicle.dealership_id as string) || ""}
+            vehicleId={id}
+            onSaved={() => {
+              setEditOpen(false);
+              void load();
+            }}
+            onCancel={() => setEditOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </main>
   );
+}
+
+function vehicleToFormValues(v: Vehicle): VehicleFormValues {
+  const s = (k: string) => {
+    const val = (v as Record<string, string | number | null>)[k];
+    return val == null ? "" : String(val);
+  };
+  return {
+    ...emptyVehicleValues,
+    vin: s("vin"), year: s("year"), make: s("make"), model: s("model"), trim: s("trim"),
+    body_class: s("body_class"), engine: s("engine"), cylinders: s("cylinders"),
+    transmission: s("transmission"), drivetrain: s("drivetrain"), fuel_type: s("fuel_type"),
+    exterior_color: s("exterior_color"), interior_color: s("interior_color"),
+    odometer: s("odometer"), price: s("price"), stock_number: s("stock_number"),
+    condition: s("condition") || "Used", status: s("status") || "Available",
+  };
 }
