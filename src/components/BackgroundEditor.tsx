@@ -707,30 +707,28 @@ export function BackgroundEditor({
     void loadImage(photo.image_url).then(setOriginalImg);
   }, [photo.image_url]);
 
-  // Whenever processedSrc changes, re-run bg removal and update base size.
+  // Run background removal ONCE per photo. Adjust transforms (crop/straighten/fit)
+  // operate on the cached cutout PNG below — they never re-invoke the model.
   useEffect(() => {
     let cancelled = false;
     setRemoving(true);
     setRemoveErr(null);
     void (async () => {
       try {
-        const base = await loadImage(processedSrc);
+        const base = await loadImage(photo.image_url);
         if (cancelled) return;
-        setBaseSize({ w: base.naturalWidth, h: base.naturalHeight });
-        // Skip removal when source is already a transparent cutout (auto-processed) and unmodified.
-        const alreadyCutout = photo.is_cutout && processedSrc === photo.image_url;
-        if (alreadyCutout) {
-          setCutoutImg(base);
+        if (photo.is_cutout) {
+          setRawCutoutImg(base);
           return;
         }
-        const blob = await removeBackground(processedSrc, { model: "isnet_quint8", debug: true });
+        const blob = await removeBackground(photo.image_url, { model: "isnet_quint8", debug: true });
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
         if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
         cutoutUrlRef.current = url;
         const img = await loadImage(url);
         if (cancelled) return;
-        setCutoutImg(img);
+        setRawCutoutImg(img);
       } catch (err) {
         if (!cancelled) setRemoveErr(err instanceof Error ? err.message : "Background removal failed");
       } finally {
@@ -738,21 +736,42 @@ export function BackgroundEditor({
       }
     })();
     return () => { cancelled = true; };
-  }, [processedSrc, photo.is_cutout, photo.image_url]);
+  }, [photo.image_url, photo.is_cutout]);
 
   useEffect(() => {
     return () => { if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current); };
   }, []);
 
-  // Debounced adjust → processedSrc bake
+  // Apply adjust transforms to the cached cutout (debounced).
+  // Preserves alpha — never re-runs the removal model.
   useEffect(() => {
-    if (!originalImg) return;
+    if (!rawCutoutImg) return;
+    let cancelled = false;
     const t = setTimeout(() => {
-      const url = buildProcessedDataURL(originalImg, adjustStraighten, adjustCrop, adjustAspect, adjustFit);
-      setProcessedSrc(url ?? photo.image_url);
-    }, 500);
-    return () => clearTimeout(t);
-  }, [originalImg, adjustStraighten, adjustCrop, adjustAspect, adjustFit, photo.image_url]);
+      try {
+        const url = buildProcessedDataURL(rawCutoutImg, adjustStraighten, adjustCrop, adjustAspect, adjustFit);
+        if (url === null) {
+          if (cancelled) return;
+          setCutoutImg(rawCutoutImg);
+          setBaseSize({ w: rawCutoutImg.naturalWidth, h: rawCutoutImg.naturalHeight });
+          return;
+        }
+        void loadImage(url).then((img) => {
+          if (cancelled) return;
+          setCutoutImg(img);
+          setBaseSize({ w: img.naturalWidth, h: img.naturalHeight });
+        }).catch((err) => {
+          // Don't tear down the editor on a bad transform — log and keep the last good cutout.
+          // eslint-disable-next-line no-console
+          console.warn("[bg-editor] adjust bake failed", err);
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[bg-editor] adjust bake failed", err);
+      }
+    }, 150);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [rawCutoutImg, adjustStraighten, adjustCrop, adjustAspect, adjustFit]);
 
   useEffect(() => {
     const sel = backdrops.find((b) => b.id === backdropId);
