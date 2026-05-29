@@ -666,8 +666,16 @@ export function BackgroundEditor({
     setReflectionScaleY(DEFAULTS.reflectionScaleY);
   };
 
+  const resetBackground = () => {
+    recordHistory();
+    setBackdropId(defaultBackdropId);
+    setCarX(DEFAULTS.carX);
+    setCarY(DEFAULTS.carY);
+    setCarScale(DEFAULTS.carScale);
+  };
+
   const resetCurrentTab = () => {
-    if (activeTab === "background") { recordHistory(); setBackdropId(defaultBackdropId); }
+    if (activeTab === "background") resetBackground();
     else if (activeTab === "adjust") resetAdjust();
     else if (activeTab === "shadow") resetShadow();
     else if (activeTab === "reflection") resetReflection();
