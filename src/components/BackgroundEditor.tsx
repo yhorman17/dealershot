@@ -1107,9 +1107,29 @@ export function BackgroundEditor({
               </div>
 
               {activeTab === "background" && (
-                <div className="rounded-lg border border-border bg-secondary/30 p-4 text-xs text-muted-foreground">
-                  Choose a backdrop above. The preview updates instantly. Use the Adjust tab to crop or
-                  straighten the source, Compositing to refine shadows and reflections, and Overlay to add a banner.
+                <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
+                  <p className="text-xs text-muted-foreground">
+                    Choose a backdrop above. The preview updates instantly.
+                  </p>
+                  <div className="rounded-md border border-border/60 bg-background/30">
+                    <button
+                      type="button"
+                      onClick={() => setCarPosOpen((v) => !v)}
+                      className="w-full flex items-center justify-between px-3 py-2 min-h-[44px] text-left"
+                    >
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Car Position
+                      </span>
+                      <span className="text-xs text-muted-foreground">{carPosOpen ? "−" : "+"}</span>
+                    </button>
+                    {carPosOpen && (
+                      <div className="px-3 pb-3 space-y-3">
+                        <SliderRow label="Position X" value={carX} min={-50} max={50} suffix="%" onChange={track(setCarX)} />
+                        <SliderRow label="Position Y" value={carY} min={-50} max={50} suffix="%" onChange={track(setCarY)} />
+                        <SliderRow label="Scale" value={carScale} min={50} max={150} suffix="%" onChange={track(setCarScale)} />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
