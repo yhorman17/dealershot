@@ -214,8 +214,8 @@ export function VehicleForm({
         <Input label="Fuel type" value={values.fuel_type} onChange={(v) => set("fuel_type", v)} />
         <Input label="Exterior color" value={values.exterior_color} onChange={(v) => set("exterior_color", v)} />
         <Input label="Interior color" value={values.interior_color} onChange={(v) => set("interior_color", v)} />
-        <Input label="Odometer (mi)" type="number" value={values.odometer} onChange={(v) => set("odometer", v)} />
-        <Input label="Price (USD)" type="number" value={values.price} onChange={(v) => set("price", v)} />
+        <Input label="Odometer (mi)" type="number" value={values.odometer} onChange={(v) => set("odometer", v)} error={fieldErrors.odometer} />
+        <Input label="Price (USD)" type="number" value={values.price} onChange={(v) => set("price", v)} error={fieldErrors.price} />
       </Section>
 
       <Section title="Status">
