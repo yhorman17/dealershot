@@ -221,12 +221,13 @@ function buildReflectionCanvas(
   skewDeg: number,
   scaleXPct: number,
   scaleYPct: number,
+  carOpts: CarOpts,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = targetW;
   c.height = targetH;
   const ctx = c.getContext("2d")!;
-  const r = carRect(cutout, targetW, targetH);
+  const r = carRect(cutout, targetW, targetH, carOpts);
   const sy = r.h / cutout.naturalHeight;
   const carBottomY = r.y + bounds.bottom * sy;
   const groundY = carBottomY + offsetY;
