@@ -168,8 +168,10 @@ export type Database = {
       photos: {
         Row: {
           created_at: string
+          cutout_status: string
           id: string
           image_url: string
+          is_cutout: boolean
           is_main: boolean
           overlay_id: string | null
           shot_type: string | null
@@ -178,8 +180,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          cutout_status?: string
           id?: string
           image_url: string
+          is_cutout?: boolean
           is_main?: boolean
           overlay_id?: string | null
           shot_type?: string | null
@@ -188,8 +192,10 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          cutout_status?: string
           id?: string
           image_url?: string
+          is_cutout?: boolean
           is_main?: boolean
           overlay_id?: string | null
           shot_type?: string | null
