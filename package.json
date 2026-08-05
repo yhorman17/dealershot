@@ -9,7 +9,8 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:security": "node --test tests/user-account-policy.test.ts && powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-security-policies.ps1"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
