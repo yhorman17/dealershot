@@ -8,6 +8,7 @@ type Profile = {
   full_name: string | null;
   role: "owner" | "dealer_admin" | "staff";
   dealership_id: string | null;
+  status: "active" | "deactivated";
 };
 
 type AuthContextValue = {
@@ -15,6 +16,8 @@ type AuthContextValue = {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  authorizationError: string | null;
+  retryAuthorization: () => void;
   signOut: () => Promise<void>;
 };
 
@@ -24,75 +27,149 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authorizationError, setAuthorizationError] = useState<string | null>(null);
+  const [authorizationAttempt, setAuthorizationAttempt] = useState(0);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      if (newSession?.user) {
-        // Defer the profile fetch to avoid deadlocks
-        setTimeout(() => {
-          void loadProfile(newSession.user.id);
-        }, 0);
+    let active = true;
+
+    const rejectSession = async (message: string) => {
+      if (!active) return;
+      setProfile(null);
+      setAuthorizationError(null);
+      window.alert(message);
+      await supabase.auth.signOut();
+    };
+
+    const failAuthorizationCheck = (message: string) => {
+      if (!active) return;
+      setProfile(null);
+      setAuthorizationError(message);
+    };
+
+    const loadProfile = async (userId: string) => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, email, full_name, role, dealership_id, status")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (!active) return;
+      const nextProfile = data as Profile | null;
+      if (error) {
+        failAuthorizationCheck("We couldn't verify your account. Check your connection and retry.");
+        return;
+      }
+      if (!nextProfile) {
+        await rejectSession("Your account is unavailable. Contact your administrator.");
+        return;
+      }
+      if (nextProfile.status !== "active") {
+        await rejectSession("Your account has been deactivated. Contact your administrator.");
+        return;
+      }
+
+      if (nextProfile.role !== "owner") {
+        if (!nextProfile.dealership_id) {
+          await rejectSession("Your account is not assigned to a dealership. Contact support.");
+          return;
+        }
+
+        const { data: dealership, error: dealershipError } = await supabase
+          .from("dealerships")
+          .select("status, subscription_status")
+          .eq("id", nextProfile.dealership_id)
+          .maybeSingle();
+
+        if (dealershipError) {
+          failAuthorizationCheck(
+            "We couldn't verify your dealership access. Check your connection and retry.",
+          );
+          return;
+        }
+        if (
+          !dealership ||
+          !["active", "trial"].includes(dealership.status) ||
+          dealership.subscription_status !== "active"
+        ) {
+          await rejectSession("Your dealership account is not active. Contact support.");
+          return;
+        }
+      }
+
+      setProfile(nextProfile);
+      setAuthorizationError(null);
+    };
+
+    const resolveSession = async (nextSession: Session | null) => {
+      if (!active) return;
+      setLoading(true);
+      setSession(nextSession);
+      setProfile(null);
+      setAuthorizationError(null);
+      if (nextSession?.user) {
+        await loadProfile(nextSession.user.id);
       } else {
         setProfile(null);
       }
+      if (active) setLoading(false);
+    };
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setTimeout(() => {
+        void resolveSession(nextSession);
+      }, 0);
     });
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      if (data.session?.user) {
-        void loadProfile(data.session.user.id);
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        if (active) {
+          setSession(null);
+          failAuthorizationCheck(
+            "We couldn't restore your session. Check your connection and retry.",
+          );
+          setLoading(false);
+        }
+        return;
       }
-      setLoading(false);
+      void resolveSession(data.session);
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const loadProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, email, full_name, role, dealership_id")
-      .eq("id", userId)
-      .maybeSingle();
-    const p = data as (Profile & { status?: string }) | null;
-    setProfile(p);
-
-    // Enforce account deactivation
-    if (p && (p as { status?: string }).status === "deactivated") {
-      alert("Your account has been deactivated. Contact your administrator.");
-      await supabase.auth.signOut();
-      return;
-    }
-
-    // Enforce dealership suspension for non-owner users
-    if (p && p.role !== "owner" && p.dealership_id) {
-      const { data: d } = await supabase
-        .from("dealerships")
-        .select("status")
-        .eq("id", p.dealership_id)
-        .maybeSingle();
-      if (d && (d as { status: string }).status === "suspended") {
-        alert("Your dealership account has been suspended. Contact support.");
-        await supabase.auth.signOut();
-      }
-    }
-  };
-
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [authorizationAttempt]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
+  const retryAuthorization = () => {
+    setAuthorizationAttempt((attempt) => attempt + 1);
+  };
+
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, loading, signOut }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        user: session?.user ?? null,
+        profile,
+        loading,
+        authorizationError,
+        retryAuthorization,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  return context;
 }

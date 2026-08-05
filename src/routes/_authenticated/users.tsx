@@ -8,6 +8,8 @@ import {
   deleteUserAccount,
   listUsersWithAuth,
   resendInvite,
+  setUserActivation,
+  updateUserAccount,
 } from "@/lib/api/users.functions";
 import { relativeTime } from "@/lib/relative-time";
 import { toast } from "sonner";
@@ -46,6 +48,7 @@ function UsersPage() {
   const callList = useServerFn(listUsersWithAuth);
   const callDelete = useServerFn(deleteUserAccount);
   const callResend = useServerFn(resendInvite);
+  const callSetActivation = useServerFn(setUserActivation);
 
   const [tab, setTab] = useState<"active" | "pending">("active");
   const [dealerships, setDealerships] = useState<Dealership[]>([]);
@@ -108,10 +111,13 @@ function UsersPage() {
 
   const handleToggleActive = async (u: UserRow) => {
     const next = u.status === "deactivated" ? "active" : "deactivated";
-    const { error } = await supabase.from("profiles").update({ status: next }).eq("id", u.id);
-    if (error) return toast.error(error.message);
-    toast.success(next === "deactivated" ? "User deactivated" : "User reactivated");
-    void load();
+    try {
+      await callSetActivation({ data: { user_id: u.id, status: next } });
+      toast.success(next === "deactivated" ? "User deactivated" : "User reactivated");
+      void load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update user");
+    }
   };
 
   const handleDelete = async (u: UserRow) => {
@@ -516,6 +522,7 @@ function EditUserModal({
   onSaved: () => void;
   isSelf: boolean;
 }) {
+  const callUpdateUser = useServerFn(updateUserAccount);
   const [fullName, setFullName] = useState(user.full_name ?? "");
   const [role, setRole] = useState(user.role);
   const [dealershipId, setDealershipId] = useState(user.dealership_id ?? "");
@@ -526,20 +533,30 @@ function EditUserModal({
     e.preventDefault();
     setSaving(true);
     setError(null);
-    const update: {
-      full_name: string;
-      role?: "owner" | "dealer_admin" | "staff";
-      dealership_id?: string | null;
-    } = { full_name: fullName.trim() };
-    if (!isSelf) {
-      update.role = role as "owner" | "dealer_admin" | "staff";
-      update.dealership_id = dealershipId || null;
+    try {
+      if (isSelf) {
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ full_name: fullName.trim() })
+          .eq("id", user.id);
+        if (updateError) throw updateError;
+      } else {
+        await callUpdateUser({
+          data: {
+            user_id: user.id,
+            full_name: fullName.trim(),
+            role: user.role === "owner" ? undefined : (role as "dealer_admin" | "staff"),
+            dealership_id: user.role === "owner" ? null : dealershipId || null,
+          },
+        });
+      }
+      toast.success("User updated");
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update user");
+    } finally {
+      setSaving(false);
     }
-    const { error: upErr } = await supabase.from("profiles").update(update).eq("id", user.id);
-    setSaving(false);
-    if (upErr) return setError(upErr.message);
-    toast.success("User updated");
-    onSaved();
   };
 
   return (
@@ -567,21 +584,25 @@ function EditUserModal({
             <label className="block text-xs font-medium text-card-foreground mb-1.5">Role</label>
             <select
               value={role}
-              disabled={isSelf}
+              disabled={isSelf || user.role === "owner"}
               onChange={(e) => setRole(e.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"
             >
               <option value="staff">Staff</option>
               <option value="dealer_admin">Dealer Admin</option>
-              <option value="owner">Owner</option>
+              {user.role === "owner" && <option value="owner">Owner</option>}
             </select>
-            {isSelf && <p className="mt-1 text-[11px] text-muted-foreground">You can't change your own role.</p>}
+            {(isSelf || user.role === "owner") && (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {isSelf ? "You can't change your own role." : "Owner roles cannot be changed here."}
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">Dealership</label>
             <select
               value={dealershipId}
-              disabled={isSelf}
+              disabled={isSelf || user.role === "owner"}
               onChange={(e) => setDealershipId(e.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"
             >
