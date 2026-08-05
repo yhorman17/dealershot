@@ -15,7 +15,12 @@ export function AppNav() {
     { to: "/overlays", label: "Overlays" },
     { to: "/backdrops", label: "Backdrops" },
     { to: "/documents", label: "Documents" },
-    ...(isOwner ? [{ to: "/dealerships", label: "Dealerships" }, { to: "/users", label: "Users" }] : []),
+    ...(isOwner
+      ? [
+          { to: "/dealerships", label: "Dealerships" },
+          { to: "/users", label: "Users" },
+        ]
+      : []),
     { to: "/export", label: "Export" },
   ];
 
@@ -43,7 +48,15 @@ export function AppNav() {
             aria-label="Open navigation"
             className="inline-flex h-11 w-11 items-center justify-center rounded-md text-foreground hover:bg-secondary"
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
               <line x1="4" y1="7" x2="20" y2="7" />
               <line x1="4" y1="12" x2="20" y2="12" />
               <line x1="4" y1="17" x2="20" y2="17" />
@@ -61,7 +74,9 @@ export function AppNav() {
           </Link>
           <nav className="flex items-center gap-1">
             {items.map((i) => (
-              <NavLink key={i.to} to={i.to}>{i.label}</NavLink>
+              <NavLink key={i.to} to={i.to}>
+                {i.label}
+              </NavLink>
             ))}
           </nav>
         </div>
@@ -88,7 +103,9 @@ export function AppNav() {
           />
           <aside className="absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-background border-r border-border shadow-2xl flex flex-col animate-in slide-in-from-left">
             <div className="h-14 px-5 flex items-center justify-between border-b border-border">
-              <span className="text-lg font-semibold tracking-tight text-foreground">DealerShot</span>
+              <span className="text-lg font-semibold tracking-tight text-foreground">
+                DealerShot
+              </span>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -105,7 +122,10 @@ export function AppNav() {
                   to={i.to}
                   onClick={() => setOpen(false)}
                   className="block px-4 py-3 min-h-[44px] rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                  activeProps={{ className: "block px-4 py-3 min-h-[44px] rounded-md text-sm text-foreground bg-secondary font-medium" }}
+                  activeProps={{
+                    className:
+                      "block px-4 py-3 min-h-[44px] rounded-md text-sm text-foreground bg-secondary font-medium",
+                  }}
                 >
                   {i.label}
                 </Link>
@@ -113,7 +133,9 @@ export function AppNav() {
             </nav>
             <div className="border-t border-border p-4 space-y-3">
               <div className="px-1">
-                <p className="text-sm text-foreground truncate">{profile?.full_name || user?.email}</p>
+                <p className="text-sm text-foreground truncate">
+                  {profile?.full_name || user?.email}
+                </p>
                 {profile?.role && (
                   <span className="inline-flex mt-1 items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide text-secondary-foreground">
                     {profile.role}
@@ -121,7 +143,10 @@ export function AppNav() {
                 )}
               </div>
               <button
-                onClick={() => { setOpen(false); void signOut(); }}
+                onClick={() => {
+                  setOpen(false);
+                  void signOut();
+                }}
                 className="w-full text-left px-4 py-3 min-h-[44px] rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
               >
                 Sign out

@@ -62,7 +62,9 @@ function InventoryPage() {
     void (async () => {
       const { data } = await supabase
         .from("vehicles")
-        .select("id, dealership_id, year, make, model, trim, price, odometer, condition, status, exterior_color, stock_number")
+        .select(
+          "id, dealership_id, year, make, model, trim, price, odometer, condition, status, exterior_color, stock_number",
+        )
         .eq("dealership_id", selectedDealershipId)
         .order("created_at", { ascending: false });
       const list = (data as Vehicle[]) || [];
@@ -72,7 +74,14 @@ function InventoryPage() {
           .from("photos")
           .select("vehicle_id, image_url, shot_type, created_at, sort_order, is_main")
           .in("vehicle_id", ids);
-        type PRow = { vehicle_id: string; image_url: string; shot_type: string | null; created_at: string; sort_order: number; is_main: boolean };
+        type PRow = {
+          vehicle_id: string;
+          image_url: string;
+          shot_type: string | null;
+          created_at: string;
+          sort_order: number;
+          is_main: boolean;
+        };
         // Priority: is_main (1) > Front (2) > anything else (3); within same rank, lower sort_order then older created_at.
         const rank = (r: PRow) => (r.is_main ? 1 : r.shot_type === "Front" ? 2 : 3);
         const byVehicle = new Map<string, PRow>();
@@ -82,7 +91,9 @@ function InventoryPage() {
             !cur ||
             rank(row) < rank(cur) ||
             (rank(row) === rank(cur) && row.sort_order < cur.sort_order) ||
-            (rank(row) === rank(cur) && row.sort_order === cur.sort_order && row.created_at < cur.created_at)
+            (rank(row) === rank(cur) &&
+              row.sort_order === cur.sort_order &&
+              row.created_at < cur.created_at)
           ) {
             byVehicle.set(row.vehicle_id, row);
           }
@@ -104,7 +115,7 @@ function InventoryPage() {
 
   const filtered = vehicles.filter((v) => {
     const q = search.toLowerCase().trim();
-    if (q && !(`${v.make} ${v.model}`.toLowerCase().includes(q))) return false;
+    if (q && !`${v.make} ${v.model}`.toLowerCase().includes(q)) return false;
     if (yearFilter && String(v.year) !== yearFilter) return false;
     if (conditionFilter && v.condition !== conditionFilter) return false;
     if (statusFilter && v.status !== statusFilter) return false;
@@ -128,13 +139,15 @@ function InventoryPage() {
               className="form-input"
             >
               {dealerships.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
               ))}
             </select>
           )}
           <Link
             to="/vehicles/new"
-            search={selectedDealershipId ? { dealership: selectedDealershipId } : undefined}
+            search={{ dealership: selectedDealershipId ?? undefined }}
             className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             Add Vehicle
@@ -149,17 +162,41 @@ function InventoryPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="form-input"
         />
-        <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} className="form-input">
+        <select
+          value={yearFilter}
+          onChange={(e) => setYearFilter(e.target.value)}
+          className="form-input"
+        >
           <option value="">All years</option>
-          {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
         </select>
-        <select value={conditionFilter} onChange={(e) => setConditionFilter(e.target.value)} className="form-input">
+        <select
+          value={conditionFilter}
+          onChange={(e) => setConditionFilter(e.target.value)}
+          className="form-input"
+        >
           <option value="">All conditions</option>
-          {CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+          {CONDITIONS.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
         </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="form-input">
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="form-input"
+        >
           <option value="">All statuses</option>
-          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -180,7 +217,11 @@ function InventoryPage() {
             >
               <div className="aspect-[4/3] bg-secondary flex items-center justify-center text-muted-foreground text-xs overflow-hidden">
                 {v.thumbnail_url ? (
-                  <img src={v.thumbnail_url} alt={`${v.year} ${v.make} ${v.model}`} className="w-full h-full object-cover" />
+                  <img
+                    src={v.thumbnail_url}
+                    alt={`${v.year} ${v.make} ${v.model}`}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   "No photo"
                 )}

@@ -84,8 +84,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "DealerShot - Project" },
       { name: "twitter:description", content: "Yhorman's DealerShot Project" },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f4e8b7dc-9cf1-4189-8809-916032aab4c0/id-preview-153d7fd3--ce5eb0f1-0578-4e12-949c-cdcf98b881cb.lovable.app-1779983508356.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f4e8b7dc-9cf1-4189-8809-916032aab4c0/id-preview-153d7fd3--ce5eb0f1-0578-4e12-949c-cdcf98b881cb.lovable.app-1779983508356.png" },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f4e8b7dc-9cf1-4189-8809-916032aab4c0/id-preview-153d7fd3--ce5eb0f1-0578-4e12-949c-cdcf98b881cb.lovable.app-1779983508356.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f4e8b7dc-9cf1-4189-8809-916032aab4c0/id-preview-153d7fd3--ce5eb0f1-0578-4e12-949c-cdcf98b881cb.lovable.app-1779983508356.png",
+      },
     ],
     links: [
       {

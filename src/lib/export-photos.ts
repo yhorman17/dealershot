@@ -124,10 +124,7 @@ export async function buildAndDownloadZip(
     { type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } },
     (meta) => {
       if (onProgress && totalPhotos > 0) {
-        const synthetic = Math.min(
-          totalPhotos,
-          Math.round(totalPhotos * (meta.percent / 100)),
-        );
+        const synthetic = Math.min(totalPhotos, Math.round(totalPhotos * (meta.percent / 100)));
         onProgress(Math.max(done, synthetic), totalPhotos);
       }
     },
@@ -178,12 +175,32 @@ export async function loadVehiclePhotos(vehicleId: string): Promise<{
       .select("sort_order, is_main, created_at, document:documents(name, image_url)")
       .eq("vehicle_id", vehicleId),
   ]);
-  const sortFn = (a: { sort_order: number; created_at: string }, b: { sort_order: number; created_at: string }) =>
-    a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : a.created_at.localeCompare(b.created_at);
-  const photoList: ExportPhoto[] = ((photos as { image_url: string; shot_type: string | null; sort_order: number; created_at: string; is_main: boolean }[]) || [])
+  const sortFn = (
+    a: { sort_order: number; created_at: string },
+    b: { sort_order: number; created_at: string },
+  ) =>
+    a.sort_order !== b.sort_order
+      ? a.sort_order - b.sort_order
+      : a.created_at.localeCompare(b.created_at);
+  const photoList: ExportPhoto[] = (
+    (photos as {
+      image_url: string;
+      shot_type: string | null;
+      sort_order: number;
+      created_at: string;
+      is_main: boolean;
+    }[]) || []
+  )
     .sort(sortFn)
     .map((p) => ({ image_url: p.image_url, shot_type: p.shot_type }));
-  const docList: ExportPhoto[] = (((docs as unknown) as { sort_order: number; created_at: string; is_main: boolean; document: { name: string; image_url: string } | null }[]) || [])
+  const docList: ExportPhoto[] = (
+    (docs as unknown as {
+      sort_order: number;
+      created_at: string;
+      is_main: boolean;
+      document: { name: string; image_url: string } | null;
+    }[]) || []
+  )
     .filter((d) => d.document?.image_url)
     .sort(sortFn)
     .map((d) => ({

@@ -65,7 +65,9 @@ function AcceptInvitePage() {
           setLoadError("This invitation has expired.");
         } else {
           // Check whether the invitee email already has a pre-existing account
-          const { data: exists } = await supabase.rpc("check_invitation_account_exists", { _token: token });
+          const { data: exists } = await supabase.rpc("check_invitation_account_exists", {
+            _token: token,
+          });
           if (exists === true) {
             setEmailHasAccount(true);
           } else {
@@ -76,7 +78,9 @@ function AcceptInvitePage() {
       setLoading(false);
     };
     void run();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_e, s) => {
       setIsSignedIn(!!s);
     });
     return () => subscription.unsubscribe();
@@ -124,7 +128,9 @@ function AcceptInvitePage() {
             <p className="text-sm text-muted-foreground">Loading invitation…</p>
           ) : emailHasAccount ? (
             <>
-              <h2 className="text-xl font-medium text-card-foreground mb-2">Account already exists</h2>
+              <h2 className="text-xl font-medium text-card-foreground mb-2">
+                Account already exists
+              </h2>
               <p className="text-sm text-muted-foreground">
                 This email already has an account on DealerShot. Please sign in instead.
               </p>
@@ -139,17 +145,24 @@ function AcceptInvitePage() {
             </>
           ) : loadError || !details ? (
             <>
-              <h2 className="text-xl font-medium text-card-foreground mb-2">Invitation unavailable</h2>
+              <h2 className="text-xl font-medium text-card-foreground mb-2">
+                Invitation unavailable
+              </h2>
               <p className="text-sm text-muted-foreground">
-                {loadError ?? "This invitation has expired or is no longer valid. Please contact your dealership admin."}
+                {loadError ??
+                  "This invitation has expired or is no longer valid. Please contact your dealership admin."}
               </p>
               <div className="mt-6">
-                <Link to="/login" className="text-sm text-foreground hover:underline">Back to sign in</Link>
+                <Link to="/login" className="text-sm text-foreground hover:underline">
+                  Back to sign in
+                </Link>
               </div>
             </>
           ) : (
             <>
-              <h2 className="text-xl font-medium text-card-foreground mb-1">Welcome to DealerShot</h2>
+              <h2 className="text-xl font-medium text-card-foreground mb-1">
+                Welcome to DealerShot
+              </h2>
               <p className="text-sm text-muted-foreground mb-5">
                 You've been invited to join {details.dealership_name ?? "DealerShot"}.
               </p>
@@ -157,11 +170,15 @@ function AcceptInvitePage() {
                 <Row label="Email" value={details.email} />
                 <Row label="Name" value={details.full_name} />
                 <Row label="Role" value={roleLabel(details.role)} />
-                {details.dealership_name && <Row label="Dealership" value={details.dealership_name} />}
+                {details.dealership_name && (
+                  <Row label="Dealership" value={details.dealership_name} />
+                )}
               </div>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-card-foreground mb-1.5">Set password</label>
+                  <label className="block text-sm font-medium text-card-foreground mb-1.5">
+                    Set password
+                  </label>
                   <input
                     type="password"
                     required
@@ -174,7 +191,9 @@ function AcceptInvitePage() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-card-foreground mb-1.5">Confirm password</label>
+                  <label className="block text-sm font-medium text-card-foreground mb-1.5">
+                    Confirm password
+                  </label>
                   <input
                     type="password"
                     required

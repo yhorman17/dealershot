@@ -15,9 +15,23 @@ type Dealership = {
   subscription_status: string;
   created_at: string;
 };
-type Vehicle = { id: string; dealership_id: string; year: number | null; make: string | null; model: string | null; created_at: string };
+type Vehicle = {
+  id: string;
+  dealership_id: string;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  created_at: string;
+};
 type Photo = { id: string; vehicle_id: string; created_at: string };
-type Profile = { id: string; full_name: string | null; email: string; role: string; dealership_id: string | null; created_at: string };
+type Profile = {
+  id: string;
+  full_name: string | null;
+  email: string;
+  role: string;
+  dealership_id: string | null;
+  created_at: string;
+};
 
 type ActivityEvent = {
   id: string;
@@ -53,9 +67,21 @@ export function OwnerDashboard() {
     setLoading(true);
     const [d, v, p, pr] = await Promise.all([
       supabase.from("dealerships").select("*").order("created_at", { ascending: false }),
-      supabase.from("vehicles").select("id, dealership_id, year, make, model, created_at").order("created_at", { ascending: false }).limit(200),
-      supabase.from("photos").select("id, vehicle_id, created_at").order("created_at", { ascending: false }).limit(500),
-      supabase.from("profiles").select("id, full_name, email, role, dealership_id, created_at").order("created_at", { ascending: false }).limit(200),
+      supabase
+        .from("vehicles")
+        .select("id, dealership_id, year, make, model, created_at")
+        .order("created_at", { ascending: false })
+        .limit(200),
+      supabase
+        .from("photos")
+        .select("id, vehicle_id, created_at")
+        .order("created_at", { ascending: false })
+        .limit(500),
+      supabase
+        .from("profiles")
+        .select("id, full_name, email, role, dealership_id, created_at")
+        .order("created_at", { ascending: false })
+        .limit(200),
     ]);
     setDealerships((d.data as Dealership[]) || []);
     setVehicles((v.data as Vehicle[]) || []);
@@ -64,7 +90,9 @@ export function OwnerDashboard() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const dealershipById = useMemo(() => {
     const m = new Map<string, Dealership>();
@@ -105,30 +133,63 @@ export function OwnerDashboard() {
     vehicles.slice(0, 30).forEach((v) => {
       const dn = dealershipById.get(v.dealership_id)?.name ?? null;
       const label = [v.year, v.make, v.model].filter(Boolean).join(" ") || "Vehicle";
-      e.push({ id: `v-${v.id}`, type: "vehicle", description: `New vehicle added: ${label}`, dealershipName: dn, created_at: v.created_at });
+      e.push({
+        id: `v-${v.id}`,
+        type: "vehicle",
+        description: `New vehicle added: ${label}`,
+        dealershipName: dn,
+        created_at: v.created_at,
+      });
     });
     photos.slice(0, 30).forEach((ph) => {
       const veh = vehicleById.get(ph.vehicle_id);
-      const dn = veh ? dealershipById.get(veh.dealership_id)?.name ?? null : null;
-      const label = veh ? [veh.year, veh.make, veh.model].filter(Boolean).join(" ") || "vehicle" : "vehicle";
-      e.push({ id: `p-${ph.id}`, type: "photo", description: `New photo uploaded for ${label}`, dealershipName: dn, created_at: ph.created_at });
+      const dn = veh ? (dealershipById.get(veh.dealership_id)?.name ?? null) : null;
+      const label = veh
+        ? [veh.year, veh.make, veh.model].filter(Boolean).join(" ") || "vehicle"
+        : "vehicle";
+      e.push({
+        id: `p-${ph.id}`,
+        type: "photo",
+        description: `New photo uploaded for ${label}`,
+        dealershipName: dn,
+        created_at: ph.created_at,
+      });
     });
     profiles.slice(0, 30).forEach((pr) => {
       if (pr.id === user?.id) return;
-      const dn = pr.dealership_id ? dealershipById.get(pr.dealership_id)?.name ?? null : null;
+      const dn = pr.dealership_id ? (dealershipById.get(pr.dealership_id)?.name ?? null) : null;
       const name = pr.full_name || pr.email;
-      e.push({ id: `u-${pr.id}`, type: "user", description: `New user signed up: ${name}`, dealershipName: dn, created_at: pr.created_at });
+      e.push({
+        id: `u-${pr.id}`,
+        type: "user",
+        description: `New user signed up: ${name}`,
+        dealershipName: dn,
+        created_at: pr.created_at,
+      });
     });
     dealerships.slice(0, 20).forEach((d) => {
-      e.push({ id: `d-${d.id}`, type: "dealership", description: `New dealership created: ${d.name}`, dealershipName: d.name, created_at: d.created_at });
+      e.push({
+        id: `d-${d.id}`,
+        type: "dealership",
+        description: `New dealership created: ${d.name}`,
+        dealershipName: d.name,
+        created_at: d.created_at,
+      });
     });
     return e.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at)).slice(0, 20);
   }, [vehicles, photos, profiles, dealerships, dealershipById, vehicleById, user?.id]);
 
   const handleToggleStatus = async (d: Dealership) => {
     const newStatus = d.status === "suspended" ? "active" : "suspended";
-    if (newStatus === "suspended" && !confirm(`Suspend ${d.name}? Users from this dealership will be unable to sign in.`)) return;
-    const { error } = await supabase.from("dealerships").update({ status: newStatus }).eq("id", d.id);
+    if (
+      newStatus === "suspended" &&
+      !confirm(`Suspend ${d.name}? Users from this dealership will be unable to sign in.`)
+    )
+      return;
+    const { error } = await supabase
+      .from("dealerships")
+      .update({ status: newStatus })
+      .eq("id", d.id);
     if (error) return alert(error.message);
     void load();
   };
@@ -141,7 +202,9 @@ export function OwnerDashboard() {
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-10">
       <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">Owner Dashboard</h1>
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
+          Owner Dashboard
+        </h1>
         <p className="text-sm text-muted-foreground mt-1">Command center for all dealerships</p>
       </div>
 
@@ -162,7 +225,9 @@ export function OwnerDashboard() {
           {loading ? (
             <div className="px-5 py-8 text-sm text-muted-foreground text-center">Loading…</div>
           ) : events.length === 0 ? (
-            <div className="px-5 py-8 text-sm text-muted-foreground text-center">No activity yet.</div>
+            <div className="px-5 py-8 text-sm text-muted-foreground text-center">
+              No activity yet.
+            </div>
           ) : (
             events.map((e) => <EventRow key={e.id} event={e} />)
           )}
@@ -172,7 +237,10 @@ export function OwnerDashboard() {
       {/* Quick Actions */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
         <button
-          onClick={() => { setEditing(null); setShowCreate(true); }}
+          onClick={() => {
+            setEditing(null);
+            setShowCreate(true);
+          }}
           className="rounded-md bg-primary px-4 py-2.5 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
           + Create new dealership
@@ -225,7 +293,11 @@ export function OwnerDashboard() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             {d.logo_url ? (
-                              <img src={d.logo_url} alt="" className="h-8 w-8 rounded object-cover bg-secondary" />
+                              <img
+                                src={d.logo_url}
+                                alt=""
+                                className="h-8 w-8 rounded object-cover bg-secondary"
+                              />
                             ) : (
                               <div className="h-8 w-8 rounded bg-secondary flex items-center justify-center text-xs text-muted-foreground">
                                 {d.name.charAt(0).toUpperCase()}
@@ -234,15 +306,22 @@ export function OwnerDashboard() {
                             <span className="font-medium text-card-foreground">{d.name}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3"><StatusBadge status={d.status} /></td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={d.status} />
+                        </td>
                         <td className="px-4 py-3 text-right text-card-foreground">{s.users}</td>
                         <td className="px-4 py-3 text-right text-card-foreground">{s.vehicles}</td>
                         <td className="px-4 py-3 text-right text-card-foreground">{s.photos}</td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs">{new Date(d.created_at).toLocaleDateString()}</td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs">
+                          {new Date(d.created_at).toLocaleDateString()}
+                        </td>
                         <td className="px-4 py-3 text-right">
                           <RowActions
                             d={d}
-                            onEdit={() => { setEditing(d); setShowCreate(true); }}
+                            onEdit={() => {
+                              setEditing(d);
+                              setShowCreate(true);
+                            }}
                             onToggle={() => void handleToggleStatus(d)}
                             onImpersonate={() => setImpersonateTarget(d)}
                             onDelete={() => setDeleteTarget(d)}
@@ -263,7 +342,11 @@ export function OwnerDashboard() {
                   <div key={d.id} className="p-4">
                     <div className="flex items-start gap-3">
                       {d.logo_url ? (
-                        <img src={d.logo_url} alt="" className="h-10 w-10 rounded object-cover bg-secondary shrink-0" />
+                        <img
+                          src={d.logo_url}
+                          alt=""
+                          className="h-10 w-10 rounded object-cover bg-secondary shrink-0"
+                        />
                       ) : (
                         <div className="h-10 w-10 rounded bg-secondary flex items-center justify-center text-sm text-muted-foreground shrink-0">
                           {d.name.charAt(0).toUpperCase()}
@@ -273,7 +356,9 @@ export function OwnerDashboard() {
                         <p className="font-medium text-card-foreground truncate">{d.name}</p>
                         <div className="mt-1 flex items-center gap-2 flex-wrap">
                           <StatusBadge status={d.status} />
-                          <span className="text-[10px] text-muted-foreground">{new Date(d.created_at).toLocaleDateString()}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(d.created_at).toLocaleDateString()}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -283,10 +368,33 @@ export function OwnerDashboard() {
                       <Stat label="Photos" value={s.photos} />
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button onClick={() => { setEditing(d); setShowCreate(true); }} className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground hover:bg-secondary/80">Edit</button>
-                      <button onClick={() => void handleToggleStatus(d)} className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground hover:bg-secondary/80">{d.status === "suspended" ? "Reactivate" : "Suspend"}</button>
-                      <button onClick={() => setImpersonateTarget(d)} className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 min-h-[44px] text-xs font-medium text-amber-300 hover:bg-amber-500/20">Impersonate</button>
-                      <button onClick={() => setDeleteTarget(d)} className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 min-h-[44px] text-xs font-medium text-destructive hover:bg-destructive/20">Delete</button>
+                      <button
+                        onClick={() => {
+                          setEditing(d);
+                          setShowCreate(true);
+                        }}
+                        className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground hover:bg-secondary/80"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => void handleToggleStatus(d)}
+                        className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground hover:bg-secondary/80"
+                      >
+                        {d.status === "suspended" ? "Reactivate" : "Suspend"}
+                      </button>
+                      <button
+                        onClick={() => setImpersonateTarget(d)}
+                        className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 min-h-[44px] text-xs font-medium text-amber-300 hover:bg-amber-500/20"
+                      >
+                        Impersonate
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(d)}
+                        className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 min-h-[44px] text-xs font-medium text-destructive hover:bg-destructive/20"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 );
@@ -300,16 +408,24 @@ export function OwnerDashboard() {
         <DealershipModal
           dealership={editing}
           onClose={() => setShowCreate(false)}
-          onSaved={() => { setShowCreate(false); void load(); }}
+          onSaved={() => {
+            setShowCreate(false);
+            void load();
+          }}
         />
       )}
       {showSubs && <SubsModal onClose={() => setShowSubs(false)} />}
-      {showInvite && <InviteUserModal onClose={() => setShowInvite(false)} onInvited={() => void load()} />}
+      {showInvite && (
+        <InviteUserModal onClose={() => setShowInvite(false)} onInvited={() => void load()} />
+      )}
       {deleteTarget && (
         <DeleteModal
           dealership={deleteTarget}
           onClose={() => setDeleteTarget(null)}
-          onDeleted={() => { setDeleteTarget(null); void load(); }}
+          onDeleted={() => {
+            setDeleteTarget(null);
+            void load();
+          }}
         />
       )}
       {impersonateTarget && (
@@ -346,7 +462,9 @@ function Stat({ label, value }: { label: string; value: number }) {
 function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_STYLES[status] ?? STATUS_STYLES.active;
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}
+    >
       {status}
     </span>
   );
@@ -362,7 +480,9 @@ const EVENT_ICONS: Record<ActivityEvent["type"], string> = {
 function EventRow({ event }: { event: ActivityEvent }) {
   return (
     <div className="px-5 py-3 flex items-start gap-3">
-      <span className="text-base shrink-0 mt-0.5" aria-hidden>{EVENT_ICONS[event.type]}</span>
+      <span className="text-base shrink-0 mt-0.5" aria-hidden>
+        {EVENT_ICONS[event.type]}
+      </span>
       <div className="flex-1 min-w-0">
         <p className="text-sm text-card-foreground truncate">{event.description}</p>
         <div className="mt-0.5 flex items-center gap-2 flex-wrap">
@@ -371,7 +491,9 @@ function EventRow({ event }: { event: ActivityEvent }) {
               {event.dealershipName}
             </span>
           )}
-          <span className="text-[11px] text-muted-foreground">{relativeTime(event.created_at)}</span>
+          <span className="text-[11px] text-muted-foreground">
+            {relativeTime(event.created_at)}
+          </span>
         </div>
       </div>
     </div>
@@ -379,24 +501,48 @@ function EventRow({ event }: { event: ActivityEvent }) {
 }
 
 function RowActions({
-  d, onEdit, onToggle, onImpersonate, onDelete,
-}: { d: Dealership; onEdit: () => void; onToggle: () => void; onImpersonate: () => void; onDelete: () => void }) {
+  d,
+  onEdit,
+  onToggle,
+  onImpersonate,
+  onDelete,
+}: {
+  d: Dealership;
+  onEdit: () => void;
+  onToggle: () => void;
+  onImpersonate: () => void;
+  onDelete: () => void;
+}) {
   return (
     <div className="inline-flex items-center gap-2 text-xs">
-      <button onClick={onEdit} className="text-muted-foreground hover:text-foreground">Edit</button>
+      <button onClick={onEdit} className="text-muted-foreground hover:text-foreground">
+        Edit
+      </button>
       <span className="text-border">·</span>
-      <button onClick={onToggle} className="text-muted-foreground hover:text-foreground">{d.status === "suspended" ? "Reactivate" : "Suspend"}</button>
+      <button onClick={onToggle} className="text-muted-foreground hover:text-foreground">
+        {d.status === "suspended" ? "Reactivate" : "Suspend"}
+      </button>
       <span className="text-border">·</span>
-      <button onClick={onImpersonate} className="text-amber-400 hover:text-amber-300">Impersonate</button>
+      <button onClick={onImpersonate} className="text-amber-400 hover:text-amber-300">
+        Impersonate
+      </button>
       <span className="text-border">·</span>
-      <button onClick={onDelete} className="text-destructive hover:text-destructive/80">Delete</button>
+      <button onClick={onDelete} className="text-destructive hover:text-destructive/80">
+        Delete
+      </button>
     </div>
   );
 }
 
 function DealershipModal({
-  dealership, onClose, onSaved,
-}: { dealership: Dealership | null; onClose: () => void; onSaved: () => void }) {
+  dealership,
+  onClose,
+  onSaved,
+}: {
+  dealership: Dealership | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [name, setName] = useState(dealership?.name || "");
   const [address, setAddress] = useState(dealership?.address || "");
   const [phone, setPhone] = useState(dealership?.phone || "");
@@ -408,13 +554,16 @@ function DealershipModal({
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null); setSaving(true);
+    setError(null);
+    setSaving(true);
     try {
       let finalLogo = logoUrl;
       if (logoFile) {
         const ext = logoFile.name.split(".").pop();
         const path = `${crypto.randomUUID()}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("dealership-logos").upload(path, logoFile);
+        const { error: upErr } = await supabase.storage
+          .from("dealership-logos")
+          .upload(path, logoFile);
         if (upErr) throw upErr;
         finalLogo = supabase.storage.from("dealership-logos").getPublicUrl(path).data.publicUrl;
       }
@@ -426,7 +575,10 @@ function DealershipModal({
         status,
       };
       if (dealership) {
-        const { error: e1 } = await supabase.from("dealerships").update(payload).eq("id", dealership.id);
+        const { error: e1 } = await supabase
+          .from("dealerships")
+          .update(payload)
+          .eq("id", dealership.id);
         if (e1) throw e1;
       } else {
         const { error: e1 } = await supabase.from("dealerships").insert(payload);
@@ -435,14 +587,21 @@ function DealershipModal({
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Modal onClose={onClose} title={dealership ? "Edit dealership" : "Create new dealership"}>
       <form onSubmit={submit} className="space-y-4">
         <FieldLabel label="Name" required>
-          <input required value={name} onChange={(e) => setName(e.target.value)} className="form-input" />
+          <input
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="form-input"
+          />
         </FieldLabel>
         <FieldLabel label="Initial status">
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="form-input">
@@ -452,21 +611,46 @@ function DealershipModal({
           </select>
         </FieldLabel>
         <FieldLabel label="Address">
-          <input value={address} onChange={(e) => setAddress(e.target.value)} className="form-input" />
+          <input
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            className="form-input"
+          />
         </FieldLabel>
         <FieldLabel label="Phone">
           <input value={phone} onChange={(e) => setPhone(e.target.value)} className="form-input" />
         </FieldLabel>
         <FieldLabel label="Logo">
           <div className="flex items-center gap-3">
-            {logoUrl && !logoFile && <img src={logoUrl} alt="" className="h-10 w-10 rounded object-cover bg-secondary" />}
-            <input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} className="text-xs text-muted-foreground file:mr-3 file:rounded file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:text-secondary-foreground" />
+            {logoUrl && !logoFile && (
+              <img src={logoUrl} alt="" className="h-10 w-10 rounded object-cover bg-secondary" />
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+              className="text-xs text-muted-foreground file:mr-3 file:rounded file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:text-secondary-foreground"
+            />
           </div>
         </FieldLabel>
-        {error && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">{error}</div>}
+        {error && (
+          <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-          <button type="submit" disabled={saving} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          >
             {saving ? "Saving…" : dealership ? "Save changes" : "Create"}
           </button>
         </div>
@@ -482,15 +666,26 @@ function SubsModal({ onClose }: { onClose: () => void }) {
         Subscription management coming soon when billing is connected.
       </p>
       <div className="flex justify-end pt-4">
-        <button onClick={onClose} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">Close</button>
+        <button
+          onClick={onClose}
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Close
+        </button>
       </div>
     </Modal>
   );
 }
 
 function DeleteModal({
-  dealership, onClose, onDeleted,
-}: { dealership: Dealership; onClose: () => void; onDeleted: () => void }) {
+  dealership,
+  onClose,
+  onDeleted,
+}: {
+  dealership: Dealership;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -498,27 +693,49 @@ function DeleteModal({
 
   const submit = async () => {
     if (!canDelete) return;
-    setBusy(true); setErr(null);
+    setBusy(true);
+    setErr(null);
     try {
       const { error } = await supabase.from("dealerships").delete().eq("id", dealership.id);
       if (error) throw error;
       onDeleted();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <Modal onClose={onClose} title="Delete dealership">
       <p className="text-sm text-foreground">
-        This will permanently delete <strong>{dealership.name}</strong> and ALL of its vehicles, photos, overlays, documents, backdrops, and users.
+        This will permanently delete <strong>{dealership.name}</strong> and ALL of its vehicles,
+        photos, overlays, documents, backdrops, and users.
       </p>
       <p className="text-sm text-muted-foreground mt-2">Type the dealership name to confirm:</p>
-      <input value={typed} onChange={(e) => setTyped(e.target.value)} className="form-input mt-2" placeholder={dealership.name} />
-      {err && <div className="mt-2 rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">{err}</div>}
+      <input
+        value={typed}
+        onChange={(e) => setTyped(e.target.value)}
+        className="form-input mt-2"
+        placeholder={dealership.name}
+      />
+      {err && (
+        <div className="mt-2 rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
+          {err}
+        </div>
+      )}
       <div className="flex justify-end gap-2 pt-4">
-        <button onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-        <button onClick={() => void submit()} disabled={!canDelete || busy} className="rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => void submit()}
+          disabled={!canDelete || busy}
+          className="rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+        >
           {busy ? "Deleting…" : "Delete forever"}
         </button>
       </div>
@@ -527,16 +744,31 @@ function DeleteModal({
 }
 
 function ImpersonateModal({
-  dealership, onClose, onConfirm,
-}: { dealership: Dealership; onClose: () => void; onConfirm: () => void }) {
+  dealership,
+  onClose,
+  onConfirm,
+}: {
+  dealership: Dealership;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
   return (
     <Modal onClose={onClose} title="Impersonate dealership">
       <p className="text-sm text-foreground">
-        You will view the app as a Dealer Admin of <strong>{dealership.name}</strong>. All actions you take will be logged. Continue?
+        You will view the app as a Dealer Admin of <strong>{dealership.name}</strong>. All actions
+        you take will be logged. Continue?
       </p>
       <div className="flex justify-end gap-2 pt-4">
-        <button onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-        <button onClick={onConfirm} className="rounded-md bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950 hover:bg-amber-400">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onConfirm}
+          className="rounded-md bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950 hover:bg-amber-400"
+        >
           Start impersonating
         </button>
       </div>
@@ -544,13 +776,27 @@ function ImpersonateModal({
   );
 }
 
-function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+function Modal({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-start justify-between mb-4">
           <h2 className="text-lg font-semibold text-card-foreground">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="text-muted-foreground hover:text-foreground">✕</button>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            ✕
+          </button>
         </div>
         {children}
       </div>
@@ -558,11 +804,20 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
   );
 }
 
-function FieldLabel({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function FieldLabel({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <label className="block text-xs font-medium text-card-foreground mb-1.5">
-        {label}{required && <span className="text-destructive ml-0.5">*</span>}
+        {label}
+        {required && <span className="text-destructive ml-0.5">*</span>}
       </label>
       {children}
     </div>

@@ -96,7 +96,9 @@ function OverlaysPage() {
               className="form-input"
             >
               {dealerships.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
               ))}
             </select>
           )}
@@ -121,7 +123,11 @@ function OverlaysPage() {
           {overlays.map((o) => (
             <div key={o.id} className="rounded-xl border border-border bg-card overflow-hidden">
               <div className="aspect-[16/9] bg-[conic-gradient(at_top_left,_#1a1a2e,_#0f0f1a)] flex items-center justify-center overflow-hidden">
-                <img src={o.image_url} alt={o.name} className="max-w-full max-h-full object-contain" />
+                <img
+                  src={o.image_url}
+                  alt={o.name}
+                  className="max-w-full max-h-full object-contain"
+                />
               </div>
               <div className="p-4">
                 <h3 className="font-medium text-card-foreground text-sm truncate">{o.name}</h3>
@@ -144,7 +150,10 @@ function OverlaysPage() {
         <OverlayForm
           dealershipId={selectedDealershipId}
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); void load(); }}
+          onSaved={() => {
+            setShowForm(false);
+            void load();
+          }}
         />
       )}
     </main>
@@ -207,12 +216,27 @@ function OverlayForm({
             <label className="block text-xs font-medium text-card-foreground mb-1.5">
               Name <span className="text-destructive">*</span>
             </label>
-            <input required value={name} onChange={(e) => setName(e.target.value)} className="form-input" />
+            <input
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="form-input"
+            />
           </div>
           <div>
-            <label className="block text-xs font-medium text-card-foreground mb-1.5">Category</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} className="form-input">
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            <label className="block text-xs font-medium text-card-foreground mb-1.5">
+              Category
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="form-input"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -233,7 +257,11 @@ function OverlayForm({
             </div>
           )}
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+            >
               Cancel
             </button>
             <button

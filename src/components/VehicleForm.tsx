@@ -26,10 +26,24 @@ export type VehicleFormValues = {
 };
 
 export const emptyVehicleValues: VehicleFormValues = {
-  vin: "", year: "", make: "", model: "", trim: "", body_class: "",
-  engine: "", cylinders: "", transmission: "", drivetrain: "", fuel_type: "",
-  exterior_color: "", interior_color: "", odometer: "", price: "",
-  stock_number: "", condition: "Used", status: "Available",
+  vin: "",
+  year: "",
+  make: "",
+  model: "",
+  trim: "",
+  body_class: "",
+  engine: "",
+  cylinders: "",
+  transmission: "",
+  drivetrain: "",
+  fuel_type: "",
+  exterior_color: "",
+  interior_color: "",
+  odometer: "",
+  price: "",
+  stock_number: "",
+  condition: "Used",
+  status: "Available",
 };
 
 export function VehicleForm({
@@ -101,8 +115,10 @@ export function VehicleForm({
     e.preventDefault();
     setError(null);
     const fe: { odometer?: string; price?: string } = {};
-    if (values.odometer.trim() === "" || isNaN(Number(values.odometer))) fe.odometer = "Enter a valid number";
-    if (values.price.trim() === "" || isNaN(Number(values.price))) fe.price = "Enter a valid number";
+    if (values.odometer.trim() === "" || isNaN(Number(values.odometer)))
+      fe.odometer = "Enter a valid number";
+    if (values.price.trim() === "" || isNaN(Number(values.price)))
+      fe.price = "Enter a valid number";
     setFieldErrors(fe);
     if (fe.odometer || fe.price) return;
     setSaving(true);
@@ -128,7 +144,10 @@ export function VehicleForm({
       };
 
       if (vehicleId) {
-        const { error: upErr } = await supabase.from("vehicles").update(basePayload).eq("id", vehicleId);
+        const { error: upErr } = await supabase
+          .from("vehicles")
+          .update(basePayload)
+          .eq("id", vehicleId);
         if (upErr) throw upErr;
         toast.success("Vehicle updated.");
         onSaved(vehicleId);
@@ -169,7 +188,20 @@ export function VehicleForm({
                   onClick={() => setScannerOpen(true)}
                   className="md:hidden inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-sm text-secondary-foreground hover:bg-secondary/80 whitespace-nowrap"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
                   Scan VIN
                 </button>
                 <button
@@ -183,10 +215,18 @@ export function VehicleForm({
               </>
             )}
           </div>
-          {isEdit && <p className="mt-1.5 text-xs text-muted-foreground">VIN cannot be changed after creation</p>}
+          {isEdit && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              VIN cannot be changed after creation
+            </p>
+          )}
           {!isEdit && decodeMsg && <p className="mt-1.5 text-xs text-primary">{decodeMsg}</p>}
         </div>
-        <Input label="Stock number" value={values.stock_number} onChange={(v) => set("stock_number", v)} />
+        <Input
+          label="Stock number"
+          value={values.stock_number}
+          onChange={(v) => set("stock_number", v)}
+        />
       </Section>
 
       {scannerOpen && (
@@ -206,29 +246,82 @@ export function VehicleForm({
         <Input label="Make" value={values.make} onChange={(v) => set("make", v)} />
         <Input label="Model" value={values.model} onChange={(v) => set("model", v)} />
         <Input label="Trim" value={values.trim} onChange={(v) => set("trim", v)} />
-        <Input label="Body class" value={values.body_class} onChange={(v) => set("body_class", v)} />
+        <Input
+          label="Body class"
+          value={values.body_class}
+          onChange={(v) => set("body_class", v)}
+        />
         <Input label="Engine" value={values.engine} onChange={(v) => set("engine", v)} />
-        <Input label="Cylinders" type="number" value={values.cylinders} onChange={(v) => set("cylinders", v)} />
-        <Input label="Transmission" value={values.transmission} onChange={(v) => set("transmission", v)} />
-        <Input label="Drivetrain" value={values.drivetrain} onChange={(v) => set("drivetrain", v)} />
+        <Input
+          label="Cylinders"
+          type="number"
+          value={values.cylinders}
+          onChange={(v) => set("cylinders", v)}
+        />
+        <Input
+          label="Transmission"
+          value={values.transmission}
+          onChange={(v) => set("transmission", v)}
+        />
+        <Input
+          label="Drivetrain"
+          value={values.drivetrain}
+          onChange={(v) => set("drivetrain", v)}
+        />
         <Input label="Fuel type" value={values.fuel_type} onChange={(v) => set("fuel_type", v)} />
-        <Input label="Exterior color" value={values.exterior_color} onChange={(v) => set("exterior_color", v)} />
-        <Input label="Interior color" value={values.interior_color} onChange={(v) => set("interior_color", v)} />
-        <Input label="Odometer (mi)" type="number" value={values.odometer} onChange={(v) => set("odometer", v)} error={fieldErrors.odometer} />
-        <Input label="Price (USD)" type="number" value={values.price} onChange={(v) => set("price", v)} error={fieldErrors.price} />
+        <Input
+          label="Exterior color"
+          value={values.exterior_color}
+          onChange={(v) => set("exterior_color", v)}
+        />
+        <Input
+          label="Interior color"
+          value={values.interior_color}
+          onChange={(v) => set("interior_color", v)}
+        />
+        <Input
+          label="Odometer (mi)"
+          type="number"
+          value={values.odometer}
+          onChange={(v) => set("odometer", v)}
+          error={fieldErrors.odometer}
+        />
+        <Input
+          label="Price (USD)"
+          type="number"
+          value={values.price}
+          onChange={(v) => set("price", v)}
+          error={fieldErrors.price}
+        />
       </Section>
 
       <Section title="Status">
         <div>
           <label className="block text-xs font-medium text-card-foreground mb-1.5">Condition</label>
-          <select value={values.condition} onChange={(e) => set("condition", e.target.value)} className="form-input">
-            {CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+          <select
+            value={values.condition}
+            onChange={(e) => set("condition", e.target.value)}
+            className="form-input"
+          >
+            {CONDITIONS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
           </select>
         </div>
         <div>
           <label className="block text-xs font-medium text-card-foreground mb-1.5">Status</label>
-          <select value={values.status} onChange={(e) => set("status", e.target.value)} className="form-input">
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          <select
+            value={values.status}
+            onChange={(e) => set("status", e.target.value)}
+            className="form-input"
+          >
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
         </div>
       </Section>
@@ -240,7 +333,11 @@ export function VehicleForm({
       )}
 
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 border-t border-border pt-4">
-        <button type="button" onClick={onCancel} className="w-full sm:w-auto px-4 py-2 min-h-[44px] text-sm text-muted-foreground hover:text-foreground rounded-md hover:bg-secondary">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="w-full sm:w-auto px-4 py-2 min-h-[44px] text-sm text-muted-foreground hover:text-foreground rounded-md hover:bg-secondary"
+        >
           Cancel
         </button>
         <button
@@ -265,12 +362,27 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Input({
-  label, value, onChange, type = "text", error,
-}: { label: string; value: string; onChange: (v: string) => void; type?: string; error?: string }) {
+  label,
+  value,
+  onChange,
+  type = "text",
+  error,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  error?: string;
+}) {
   return (
     <div>
       <label className="block text-xs font-medium text-card-foreground mb-1.5">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className={`form-input ${error ? "border-destructive" : ""}`} />
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`form-input ${error ? "border-destructive" : ""}`}
+      />
       {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
     </div>
   );

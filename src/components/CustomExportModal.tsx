@@ -166,7 +166,8 @@ export function CustomExportModal({ vehicles, onClose }: Props) {
                         onToggle={() =>
                           updateVehicle(v.id, (x) => {
                             const n = new Set(x.selectedPhotos);
-                            n.has(i) ? n.delete(i) : n.add(i);
+                            if (n.has(i)) n.delete(i);
+                            else n.add(i);
                             return { ...x, selectedPhotos: n };
                           })
                         }
@@ -183,7 +184,8 @@ export function CustomExportModal({ vehicles, onClose }: Props) {
                           onToggle={() =>
                             updateVehicle(v.id, (x) => {
                               const n = new Set(x.selectedDocs);
-                              n.has(i) ? n.delete(i) : n.add(i);
+                              if (n.has(i)) n.delete(i);
+                              else n.add(i);
                               return { ...x, selectedDocs: n };
                             })
                           }

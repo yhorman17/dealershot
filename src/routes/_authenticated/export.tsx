@@ -72,7 +72,14 @@ function ExportPage() {
           .from("photos")
           .select("vehicle_id, image_url, shot_type, created_at, sort_order, is_main")
           .in("vehicle_id", ids);
-        type PRow = { vehicle_id: string; image_url: string; shot_type: string | null; created_at: string; sort_order: number; is_main: boolean };
+        type PRow = {
+          vehicle_id: string;
+          image_url: string;
+          shot_type: string | null;
+          created_at: string;
+          sort_order: number;
+          is_main: boolean;
+        };
         const rank = (r: PRow) => (r.is_main ? 1 : r.shot_type === "Front" ? 2 : 3);
         const byVehicle = new Map<string, PRow>();
         const counts = new Map<string, number>();
@@ -109,7 +116,8 @@ function ExportPage() {
   const toggle = (id: string) => {
     setSelected((prev) => {
       const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
       return n;
     });
   };
@@ -175,19 +183,41 @@ function ExportPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="form-input"
         />
-        <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} className="form-input">
+        <select
+          value={yearFilter}
+          onChange={(e) => setYearFilter(e.target.value)}
+          className="form-input"
+        >
           <option value="">All years</option>
           {years.map((y) => (
-            <option key={y} value={y}>{y}</option>
+            <option key={y} value={y}>
+              {y}
+            </option>
           ))}
         </select>
-        <select value={conditionFilter} onChange={(e) => setConditionFilter(e.target.value)} className="form-input">
+        <select
+          value={conditionFilter}
+          onChange={(e) => setConditionFilter(e.target.value)}
+          className="form-input"
+        >
           <option value="">All conditions</option>
-          {CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+          {CONDITIONS.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
         </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="form-input">
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="form-input"
+        >
           <option value="">All statuses</option>
-          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -199,7 +229,8 @@ function ExportPage() {
           Clear Selection
         </button>
         <span className="text-muted-foreground ml-auto">
-          {selected.size} vehicle{selected.size === 1 ? "" : "s"} selected · {totalPhotos} total photos
+          {selected.size} vehicle{selected.size === 1 ? "" : "s"} selected · {totalPhotos} total
+          photos
         </span>
       </div>
 
@@ -274,10 +305,7 @@ function ExportPage() {
       </div>
 
       {customOpen && (
-        <CustomExportModal
-          vehicles={selectedVehicles}
-          onClose={() => setCustomOpen(false)}
-        />
+        <CustomExportModal vehicles={selectedVehicles} onClose={() => setCustomOpen(false)} />
       )}
     </main>
   );

@@ -166,7 +166,9 @@ function UsersPage() {
     <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-10">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">Users</h1>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
+            Users
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Manage user accounts and invitations across all dealerships
           </p>
@@ -181,7 +183,9 @@ function UsersPage() {
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
         <div className="flex items-center gap-2">
-          <label className="text-xs uppercase tracking-wide text-muted-foreground">Dealership</label>
+          <label className="text-xs uppercase tracking-wide text-muted-foreground">
+            Dealership
+          </label>
           <select
             value={filterDealership}
             onChange={(e) => setFilterDealership(e.target.value)}
@@ -189,7 +193,9 @@ function UsersPage() {
           >
             <option value="all">All dealerships</option>
             {dealerships.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
             ))}
           </select>
         </div>
@@ -210,7 +216,9 @@ function UsersPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">Loading…</div>
+        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
+          Loading…
+        </div>
       ) : tab === "active" ? (
         <ActiveUsersTab
           users={filteredUsers}
@@ -243,7 +251,10 @@ function UsersPage() {
           user={editTarget}
           dealerships={dealerships}
           onClose={() => setEditTarget(null)}
-          onSaved={() => { setEditTarget(null); void load(); }}
+          onSaved={() => {
+            setEditTarget(null);
+            void load();
+          }}
           isSelf={editTarget.id === user?.id}
         />
       )}
@@ -259,7 +270,13 @@ function UsersPage() {
 }
 
 function ActiveUsersTab({
-  users, dealershipById, currentUserId, onEdit, onToggleActive, onSendReset, onDelete,
+  users,
+  dealershipById,
+  currentUserId,
+  onEdit,
+  onToggleActive,
+  onSendReset,
+  onDelete,
 }: {
   users: UserRow[];
   dealershipById: Map<string, Dealership>;
@@ -270,7 +287,11 @@ function ActiveUsersTab({
   onDelete: (u: UserRow) => void;
 }) {
   if (users.length === 0) {
-    return <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">No users found.</div>;
+    return (
+      <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
+        No users found.
+      </div>
+    );
   }
 
   return (
@@ -298,21 +319,31 @@ function ActiveUsersTab({
                     <div className="flex items-center gap-2">
                       <span>{u.full_name || "—"}</span>
                       {u.status === "deactivated" && (
-                        <span className="text-[10px] uppercase tracking-wide rounded-full bg-destructive/15 text-destructive px-1.5 py-0.5">Deactivated</span>
+                        <span className="text-[10px] uppercase tracking-wide rounded-full bg-destructive/15 text-destructive px-1.5 py-0.5">
+                          Deactivated
+                        </span>
                       )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
-                  <td className="px-4 py-3"><RoleBadge role={u.role} /></td>
+                  <td className="px-4 py-3">
+                    <RoleBadge role={u.role} />
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {d ? (
                       <div className="flex items-center gap-2">
                         {d.logo_url ? (
-                          <img src={d.logo_url} alt="" className="h-5 w-5 rounded object-cover bg-secondary" />
+                          <img
+                            src={d.logo_url}
+                            alt=""
+                            className="h-5 w-5 rounded object-cover bg-secondary"
+                          />
                         ) : null}
                         <span>{d.name}</span>
                       </div>
-                    ) : "—"}
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
                     {u.last_sign_in_at ? relativeTime(u.last_sign_in_at) : "—"}
@@ -344,13 +375,17 @@ function ActiveUsersTab({
             <div key={u.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-medium text-card-foreground truncate">{u.full_name || u.email}</p>
+                  <p className="font-medium text-card-foreground truncate">
+                    {u.full_name || u.email}
+                  </p>
                   <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                   <div className="mt-1 flex items-center gap-2 flex-wrap">
                     <RoleBadge role={u.role} />
                     {d && <span className="text-[10px] text-muted-foreground">{d.name}</span>}
                     {u.status === "deactivated" && (
-                      <span className="text-[10px] uppercase tracking-wide rounded-full bg-destructive/15 text-destructive px-1.5 py-0.5">Deactivated</span>
+                      <span className="text-[10px] uppercase tracking-wide rounded-full bg-destructive/15 text-destructive px-1.5 py-0.5">
+                        Deactivated
+                      </span>
                     )}
                   </div>
                 </div>
@@ -359,7 +394,12 @@ function ActiveUsersTab({
                 Last sign-in: {u.last_sign_in_at ? relativeTime(u.last_sign_in_at) : "—"}
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <button onClick={() => onEdit(u)} className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground">Edit</button>
+                <button
+                  onClick={() => onEdit(u)}
+                  className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground"
+                >
+                  Edit
+                </button>
                 <button
                   disabled={isSelf}
                   onClick={() => onToggleActive(u)}
@@ -367,7 +407,12 @@ function ActiveUsersTab({
                 >
                   {u.status === "deactivated" ? "Reactivate" : "Deactivate"}
                 </button>
-                <button onClick={() => onSendReset(u)} className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground">Reset password</button>
+                <button
+                  onClick={() => onSendReset(u)}
+                  className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground"
+                >
+                  Reset password
+                </button>
                 <button
                   disabled={isSelf}
                   onClick={() => onDelete(u)}
@@ -385,7 +430,11 @@ function ActiveUsersTab({
 }
 
 function PendingInvitesTab({
-  invites, dealershipById, onResend, onCopy, onRevoke,
+  invites,
+  dealershipById,
+  onResend,
+  onCopy,
+  onRevoke,
 }: {
   invites: Invitation[];
   dealershipById: Map<string, Dealership>;
@@ -423,14 +472,35 @@ function PendingInvitesTab({
                 <tr key={i.id} className="border-t border-border hover:bg-secondary/20">
                   <td className="px-4 py-3 text-card-foreground">{i.email}</td>
                   <td className="px-4 py-3 text-muted-foreground">{i.full_name}</td>
-                  <td className="px-4 py-3"><RoleBadge role={i.role} /></td>
+                  <td className="px-4 py-3">
+                    <RoleBadge role={i.role} />
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">{d?.name ?? "—"}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{relativeTime(i.invited_at)}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{relativeTime(i.expires_at)}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">
+                    {relativeTime(i.invited_at)}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">
+                    {relativeTime(i.expires_at)}
+                  </td>
                   <td className="px-4 py-3 text-right text-xs space-x-3">
-                    <button onClick={() => onResend(i)} className="text-muted-foreground hover:text-foreground">Resend</button>
-                    <button onClick={() => onCopy(i)} className="text-muted-foreground hover:text-foreground">Copy link</button>
-                    <button onClick={() => onRevoke(i)} className="text-destructive hover:text-destructive/80">Revoke</button>
+                    <button
+                      onClick={() => onResend(i)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      Resend
+                    </button>
+                    <button
+                      onClick={() => onCopy(i)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      Copy link
+                    </button>
+                    <button
+                      onClick={() => onRevoke(i)}
+                      className="text-destructive hover:text-destructive/80"
+                    >
+                      Revoke
+                    </button>
                   </td>
                 </tr>
               );
@@ -453,9 +523,24 @@ function PendingInvitesTab({
                 Invited {relativeTime(i.invited_at)} · Expires {relativeTime(i.expires_at)}
               </p>
               <div className="mt-3 grid grid-cols-3 gap-2">
-                <button onClick={() => onResend(i)} className="rounded-md border border-border bg-secondary px-2 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground">Resend</button>
-                <button onClick={() => onCopy(i)} className="rounded-md border border-border bg-secondary px-2 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground">Copy link</button>
-                <button onClick={() => onRevoke(i)} className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-2 min-h-[44px] text-xs font-medium text-destructive">Revoke</button>
+                <button
+                  onClick={() => onResend(i)}
+                  className="rounded-md border border-border bg-secondary px-2 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground"
+                >
+                  Resend
+                </button>
+                <button
+                  onClick={() => onCopy(i)}
+                  className="rounded-md border border-border bg-secondary px-2 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground"
+                >
+                  Copy link
+                </button>
+                <button
+                  onClick={() => onRevoke(i)}
+                  className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-2 min-h-[44px] text-xs font-medium text-destructive"
+                >
+                  Revoke
+                </button>
               </div>
             </div>
           );
@@ -466,7 +551,13 @@ function PendingInvitesTab({
 }
 
 function RowMenu({
-  onEdit, onToggleActive, onSendReset, onDelete, status, disableDelete, disableToggle,
+  onEdit,
+  onToggleActive,
+  onSendReset,
+  onDelete,
+  status,
+  disableDelete,
+  disableToggle,
 }: {
   onEdit: () => void;
   onToggleActive: () => void;
@@ -478,7 +569,9 @@ function RowMenu({
 }) {
   return (
     <div className="inline-flex items-center gap-3 text-xs">
-      <button onClick={onEdit} className="text-muted-foreground hover:text-foreground">Edit</button>
+      <button onClick={onEdit} className="text-muted-foreground hover:text-foreground">
+        Edit
+      </button>
       <button
         disabled={disableToggle}
         onClick={onToggleActive}
@@ -486,7 +579,9 @@ function RowMenu({
       >
         {status === "deactivated" ? "Reactivate" : "Deactivate"}
       </button>
-      <button onClick={onSendReset} className="text-muted-foreground hover:text-foreground">Send reset</button>
+      <button onClick={onSendReset} className="text-muted-foreground hover:text-foreground">
+        Send reset
+      </button>
       <button
         disabled={disableDelete}
         onClick={onDelete}
@@ -504,17 +599,23 @@ function RoleBadge({ role }: { role: string }) {
     role === "owner"
       ? "bg-primary/15 text-primary border-primary/30"
       : role === "dealer_admin"
-      ? "bg-amber-400/15 text-amber-300 border-amber-400/30"
-      : "bg-secondary text-secondary-foreground border-border";
+        ? "bg-amber-400/15 text-amber-300 border-amber-400/30"
+        : "bg-secondary text-secondary-foreground border-border";
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}
+    >
       {label}
     </span>
   );
 }
 
 function EditUserModal({
-  user, dealerships, onClose, onSaved, isSelf,
+  user,
+  dealerships,
+  onClose,
+  onSaved,
+  isSelf,
 }: {
   user: UserRow;
   dealerships: Dealership[];
@@ -564,11 +665,15 @@ function EditUserModal({
       <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-card-foreground">Edit user</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">✕</button>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            ✕
+          </button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-card-foreground mb-1.5">Full name</label>
+            <label className="block text-xs font-medium text-card-foreground mb-1.5">
+              Full name
+            </label>
             <input
               required
               value={fullName}
@@ -578,7 +683,11 @@ function EditUserModal({
           </div>
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">Email</label>
-            <input value={user.email} disabled className="w-full rounded-md border border-input bg-background/60 px-3 py-2 text-sm text-muted-foreground" />
+            <input
+              value={user.email}
+              disabled
+              className="w-full rounded-md border border-input bg-background/60 px-3 py-2 text-sm text-muted-foreground"
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">Role</label>
@@ -599,7 +708,9 @@ function EditUserModal({
             )}
           </div>
           <div>
-            <label className="block text-xs font-medium text-card-foreground mb-1.5">Dealership</label>
+            <label className="block text-xs font-medium text-card-foreground mb-1.5">
+              Dealership
+            </label>
             <select
               value={dealershipId}
               disabled={isSelf || user.role === "owner"}
@@ -608,7 +719,9 @@ function EditUserModal({
             >
               <option value="">—</option>
               {dealerships.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
               ))}
             </select>
           </div>
@@ -618,7 +731,13 @@ function EditUserModal({
             </div>
           )}
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={saving}
@@ -634,24 +753,38 @@ function EditUserModal({
 }
 
 function ConfirmRemove({
-  user, onClose, onConfirm,
-}: { user: UserRow; onClose: () => void; onConfirm: () => void }) {
+  user,
+  onClose,
+  onConfirm,
+}: {
+  user: UserRow;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
   const [text, setText] = useState("");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
         <h2 className="text-lg font-semibold text-card-foreground mb-1">Remove user</h2>
         <p className="text-sm text-muted-foreground mb-4">
-          This permanently deletes <span className="text-foreground font-medium">{user.email}</span> and revokes their access. This cannot be undone.
+          This permanently deletes <span className="text-foreground font-medium">{user.email}</span>{" "}
+          and revokes their access. This cannot be undone.
         </p>
-        <p className="text-xs text-muted-foreground mb-2">Type <span className="font-mono text-foreground">REMOVE</span> to confirm.</p>
+        <p className="text-xs text-muted-foreground mb-2">
+          Type <span className="font-mono text-foreground">REMOVE</span> to confirm.
+        </p>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
         />
         <div className="flex justify-end gap-2 pt-4">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            Cancel
+          </button>
           <button
             disabled={text !== "REMOVE"}
             onClick={onConfirm}

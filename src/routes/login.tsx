@@ -53,7 +53,10 @@ function LoginPage() {
           <p className="text-sm text-muted-foreground mb-6">Access your dealership dashboard</p>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-card-foreground mb-1.5">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-card-foreground mb-1.5"
+              >
                 Email
               </label>
               <input
@@ -67,7 +70,10 @@ function LoginPage() {
               />
             </div>
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-card-foreground mb-1.5">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-card-foreground mb-1.5"
+              >
                 Password
               </label>
               <input
@@ -129,7 +135,9 @@ function ForgotPasswordDialog({ onClose }: { onClose: () => void }) {
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-lg font-semibold text-card-foreground">Reset password</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">✕</button>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            ✕
+          </button>
         </div>
         {sent ? (
           <>
@@ -159,7 +167,11 @@ function ForgotPasswordDialog({ onClose }: { onClose: () => void }) {
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+              >
                 Cancel
               </button>
               <button

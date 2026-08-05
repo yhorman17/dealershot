@@ -103,14 +103,22 @@ function carRect(
   return { x, y, w, h };
 }
 
-function findSilhouetteBounds(img: HTMLImageElement): { top: number; bottom: number; left: number; right: number } {
+function findSilhouetteBounds(img: HTMLImageElement): {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+} {
   const c = document.createElement("canvas");
   c.width = img.naturalWidth;
   c.height = img.naturalHeight;
   const ctx = c.getContext("2d", { willReadFrequently: true })!;
   ctx.drawImage(img, 0, 0);
   const { data, width, height } = ctx.getImageData(0, 0, c.width, c.height);
-  let top = height, bottom = 0, left = width, right = 0;
+  let top = height,
+    bottom = 0,
+    left = width,
+    right = 0;
   const threshold = 32;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -122,7 +130,12 @@ function findSilhouetteBounds(img: HTMLImageElement): { top: number; bottom: num
       }
     }
   }
-  if (bottom < top) { top = 0; bottom = height; left = 0; right = width; }
+  if (bottom < top) {
+    top = 0;
+    bottom = height;
+    left = 0;
+    right = width;
+  }
   return { top, bottom, left, right };
 }
 
@@ -241,8 +254,14 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
 
   if (o.reflectionEnabled && o.reflectionOpacity > 0) {
     const ref = buildReflectionCanvas(
-      o.cutout, o.bounds, targetW, targetH,
-      o.reflectionOpacity, o.reflectionX, o.reflectionY, o.reflectionScale,
+      o.cutout,
+      o.bounds,
+      targetW,
+      targetH,
+      o.reflectionOpacity,
+      o.reflectionX,
+      o.reflectionY,
+      o.reflectionScale,
       o.carOpts,
     );
     ctx.drawImage(ref, 0, 0);
@@ -250,8 +269,14 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
 
   if (o.shadowEnabled && o.shadowOpacity > 0) {
     const sh = buildOvalShadowCanvas(
-      o.cutout, o.bounds, targetW, targetH,
-      o.shadowOpacity, o.shadowScale, o.shadowX, o.shadowY,
+      o.cutout,
+      o.bounds,
+      targetW,
+      targetH,
+      o.shadowOpacity,
+      o.shadowScale,
+      o.shadowX,
+      o.shadowY,
       o.carOpts,
     );
     ctx.drawImage(sh, 0, 0);
@@ -261,7 +286,13 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
   ctx.drawImage(o.cutout, r.x, r.y, r.w, r.h);
 
   if (o.overlay) {
-    const dr = destRect(targetW, targetH, o.overlay.naturalWidth, o.overlay.naturalHeight, o.overlayPos);
+    const dr = destRect(
+      targetW,
+      targetH,
+      o.overlay.naturalWidth,
+      o.overlay.naturalHeight,
+      o.overlayPos,
+    );
     ctx.drawImage(o.overlay, dr.x, dr.y, dr.w, dr.h);
   }
 }
@@ -278,8 +309,7 @@ function buildProcessedDataURL(
   aspect: AspectKey,
   fit: FitMode,
 ): string | null {
-  const noop =
-    straighten === 0 && crop === null && fit === "none" && aspect === "free";
+  const noop = straighten === 0 && crop === null && fit === "none" && aspect === "free";
   if (noop) return null;
 
   const ow = original.naturalWidth;
@@ -460,19 +490,52 @@ export function BackgroundEditor({
 
   const bounds = useMemo(() => (cutoutImg ? findSilhouetteBounds(cutoutImg) : null), [cutoutImg]);
 
-  const snapshot = useCallback((): Snapshot => ({
-    backdropId, overlayId, overlayPos,
-    shadowEnabled, shadowOpacity, shadowScale, shadowX, shadowY,
-    reflectionEnabled, reflectionOpacity, reflectionScale, reflectionX, reflectionY,
-    carX, carY, carScale,
-    adjustStraighten, adjustAspect, adjustCrop, adjustFit,
-  }), [
-    backdropId, overlayId, overlayPos,
-    shadowEnabled, shadowOpacity, shadowScale, shadowX, shadowY,
-    reflectionEnabled, reflectionOpacity, reflectionScale, reflectionX, reflectionY,
-    carX, carY, carScale,
-    adjustStraighten, adjustAspect, adjustCrop, adjustFit,
-  ]);
+  const snapshot = useCallback(
+    (): Snapshot => ({
+      backdropId,
+      overlayId,
+      overlayPos,
+      shadowEnabled,
+      shadowOpacity,
+      shadowScale,
+      shadowX,
+      shadowY,
+      reflectionEnabled,
+      reflectionOpacity,
+      reflectionScale,
+      reflectionX,
+      reflectionY,
+      carX,
+      carY,
+      carScale,
+      adjustStraighten,
+      adjustAspect,
+      adjustCrop,
+      adjustFit,
+    }),
+    [
+      backdropId,
+      overlayId,
+      overlayPos,
+      shadowEnabled,
+      shadowOpacity,
+      shadowScale,
+      shadowX,
+      shadowY,
+      reflectionEnabled,
+      reflectionOpacity,
+      reflectionScale,
+      reflectionX,
+      reflectionY,
+      carX,
+      carY,
+      carScale,
+      adjustStraighten,
+      adjustAspect,
+      adjustCrop,
+      adjustFit,
+    ],
+  );
 
   const applySnapshot = (s: Snapshot) => {
     suppressHistoryRef.current = true;
@@ -496,7 +559,9 @@ export function BackgroundEditor({
     setAdjustAspect(s.adjustAspect);
     setAdjustCrop(s.adjustCrop);
     setAdjustFit(s.adjustFit);
-    setTimeout(() => { suppressHistoryRef.current = false; }, 0);
+    setTimeout(() => {
+      suppressHistoryRef.current = false;
+    }, 0);
   };
 
   const recordHistory = () => {
@@ -574,14 +639,26 @@ export function BackgroundEditor({
     else if (activeTab === "adjust") resetAdjust();
     else if (activeTab === "shadow") resetShadow();
     else if (activeTab === "reflection") resetReflection();
-    else if (activeTab === "overlay") { recordHistory(); setOverlayId(""); setOverlayPos("bottom"); }
+    else if (activeTab === "overlay") {
+      recordHistory();
+      setOverlayId("");
+      setOverlayPos("bottom");
+    }
   };
 
   useEffect(() => {
     void (async () => {
       const [{ data: bs }, { data: os }] = await Promise.all([
-        supabase.from("backdrops").select("id, name, image_url").eq("dealership_id", dealershipId).order("created_at", { ascending: false }),
-        supabase.from("overlay_templates").select("id, name, image_url, category").eq("dealership_id", dealershipId).order("created_at", { ascending: false }),
+        supabase
+          .from("backdrops")
+          .select("id, name, image_url")
+          .eq("dealership_id", dealershipId)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("overlay_templates")
+          .select("id, name, image_url, category")
+          .eq("dealership_id", dealershipId)
+          .order("created_at", { ascending: false }),
       ]);
       const bList = (bs as Backdrop[]) || [];
       const oList = (os as OverlayTemplate[]) || [];
@@ -591,7 +668,9 @@ export function BackgroundEditor({
         suppressHistoryRef.current = true;
         setBackdropId(bList[0].id);
         setDefaultBackdropId(bList[0].id);
-        setTimeout(() => { suppressHistoryRef.current = false; }, 0);
+        setTimeout(() => {
+          suppressHistoryRef.current = false;
+        }, 0);
       }
     })();
   }, [dealershipId]);
@@ -605,9 +684,10 @@ export function BackgroundEditor({
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, []);
-
 
   // Run background removal ONCE per photo. Adjust transforms (crop/straighten/fit)
   // operate on the cached cutout PNG below — they never re-invoke the model.
@@ -623,7 +703,10 @@ export function BackgroundEditor({
           setRawCutoutImg(base);
           return;
         }
-        const blob = await removeBackground(photo.image_url, { model: "isnet_quint8", debug: true });
+        const blob = await removeBackground(photo.image_url, {
+          model: "isnet_quint8",
+          debug: true,
+        });
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
         if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
@@ -632,16 +715,21 @@ export function BackgroundEditor({
         if (cancelled) return;
         setRawCutoutImg(img);
       } catch (err) {
-        if (!cancelled) setRemoveErr(err instanceof Error ? err.message : "Background removal failed");
+        if (!cancelled)
+          setRemoveErr(err instanceof Error ? err.message : "Background removal failed");
       } finally {
         if (!cancelled) setRemoving(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [photo.image_url, photo.is_cutout]);
 
   useEffect(() => {
-    return () => { if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current); };
+    return () => {
+      if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
+    };
   }, []);
 
   // Apply adjust transforms to the cached cutout (debounced).
@@ -651,44 +739,69 @@ export function BackgroundEditor({
     let cancelled = false;
     const t = setTimeout(() => {
       try {
-        const url = buildProcessedDataURL(rawCutoutImg, adjustStraighten, adjustCrop, adjustAspect, adjustFit);
+        const url = buildProcessedDataURL(
+          rawCutoutImg,
+          adjustStraighten,
+          adjustCrop,
+          adjustAspect,
+          adjustFit,
+        );
         if (url === null) {
           if (cancelled) return;
           setCutoutImg(rawCutoutImg);
           setBaseSize({ w: rawCutoutImg.naturalWidth, h: rawCutoutImg.naturalHeight });
           return;
         }
-        void loadImage(url).then((img) => {
-          if (cancelled) return;
-          setCutoutImg(img);
-          setBaseSize({ w: img.naturalWidth, h: img.naturalHeight });
-        }).catch((err) => {
-          // Don't tear down the editor on a bad transform — log and keep the last good cutout.
-          // eslint-disable-next-line no-console
-          console.warn("[bg-editor] adjust bake failed", err);
-        });
+        void loadImage(url)
+          .then((img) => {
+            if (cancelled) return;
+            setCutoutImg(img);
+            setBaseSize({ w: img.naturalWidth, h: img.naturalHeight });
+          })
+          .catch((err) => {
+            // Don't tear down the editor on a bad transform — log and keep the last good cutout.
+            // eslint-disable-next-line no-console
+            console.warn("[bg-editor] adjust bake failed", err);
+          });
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[bg-editor] adjust bake failed", err);
       }
     }, 150);
-    return () => { cancelled = true; clearTimeout(t); };
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [rawCutoutImg, adjustStraighten, adjustCrop, adjustAspect, adjustFit]);
 
   useEffect(() => {
     const sel = backdrops.find((b) => b.id === backdropId);
-    if (!sel) { setBackdropImg(null); return; }
+    if (!sel) {
+      setBackdropImg(null);
+      return;
+    }
     let cancelled = false;
-    void loadImage(sel.image_url).then((img) => { if (!cancelled) setBackdropImg(img); });
-    return () => { cancelled = true; };
+    void loadImage(sel.image_url).then((img) => {
+      if (!cancelled) setBackdropImg(img);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [backdropId, backdrops]);
 
   useEffect(() => {
     const sel = overlays.find((o) => o.id === overlayId);
-    if (!sel) { setOverlayImg(null); return; }
+    if (!sel) {
+      setOverlayImg(null);
+      return;
+    }
     let cancelled = false;
-    void loadImage(sel.image_url).then((img) => { if (!cancelled) setOverlayImg(img); });
-    return () => { cancelled = true; };
+    void loadImage(sel.image_url).then((img) => {
+      if (!cancelled) setOverlayImg(img);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [overlayId, overlays]);
 
   // Composite canvas render
@@ -700,17 +813,45 @@ export function BackgroundEditor({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     compose(ctx, {
-      cutout: cutoutImg, bounds, backdrop: backdropImg, overlay: overlayImg, overlayPos,
-      targetW: baseSize.w, targetH: baseSize.h,
-      shadowEnabled, shadowOpacity: shadowOpacity / 100, shadowScale, shadowX, shadowY,
-      reflectionEnabled, reflectionOpacity: reflectionOpacity / 100, reflectionScale, reflectionX, reflectionY,
+      cutout: cutoutImg,
+      bounds,
+      backdrop: backdropImg,
+      overlay: overlayImg,
+      overlayPos,
+      targetW: baseSize.w,
+      targetH: baseSize.h,
+      shadowEnabled,
+      shadowOpacity: shadowOpacity / 100,
+      shadowScale,
+      shadowX,
+      shadowY,
+      reflectionEnabled,
+      reflectionOpacity: reflectionOpacity / 100,
+      reflectionScale,
+      reflectionX,
+      reflectionY,
       carOpts: { offsetXPct: carX, offsetYPct: carY, scalePct: carScale },
     });
   }, [
-    cutoutImg, bounds, backdropImg, overlayImg, overlayPos, baseSize,
-    shadowEnabled, shadowOpacity, shadowScale, shadowX, shadowY,
-    reflectionEnabled, reflectionOpacity, reflectionScale, reflectionX, reflectionY,
-    carX, carY, carScale,
+    cutoutImg,
+    bounds,
+    backdropImg,
+    overlayImg,
+    overlayPos,
+    baseSize,
+    shadowEnabled,
+    shadowOpacity,
+    shadowScale,
+    shadowX,
+    shadowY,
+    reflectionEnabled,
+    reflectionOpacity,
+    reflectionScale,
+    reflectionX,
+    reflectionY,
+    carX,
+    carY,
+    carScale,
   ]);
 
   // Adjust-tab live preview render
@@ -750,7 +891,9 @@ export function BackgroundEditor({
   }, [activeTab, originalImg, adjustStraighten, adjustCrop]);
 
   // Crop drag interaction
-  const cropDragRef = useRef<{ startX: number; startY: number; aspect: number | null } | null>(null);
+  const cropDragRef = useRef<{ startX: number; startY: number; aspect: number | null } | null>(
+    null,
+  );
 
   const onCropPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (activeTab !== "adjust") return;
@@ -773,8 +916,8 @@ export function BackgroundEditor({
     let y = (e.clientY - rect.top) / rect.height;
     x = Math.max(0, Math.min(1, x));
     y = Math.max(0, Math.min(1, y));
-    let nx = Math.min(drag.startX, x);
-    let ny = Math.min(drag.startY, y);
+    const nx = Math.min(drag.startX, x);
+    const ny = Math.min(drag.startY, y);
     let nw = Math.abs(x - drag.startX);
     let nh = Math.abs(y - drag.startY);
     if (drag.aspect !== null && nw > 0 && nh > 0) {
@@ -810,7 +953,11 @@ export function BackgroundEditor({
     setError(null);
     try {
       const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Failed to render"))), "image/jpeg", 0.92);
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error("Failed to render"))),
+          "image/jpeg",
+          0.92,
+        );
       });
       const path = `${photo.vehicle_id}/${crypto.randomUUID()}.jpg`;
       const { error: upErr } = await supabase.storage
@@ -835,7 +982,9 @@ export function BackgroundEditor({
             const oldPath = url.pathname.slice(idx + "/vehicle-photos/".length);
             await supabase.storage.from("vehicle-photos").remove([oldPath]);
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         const { error: updErr } = await supabase
           .from("photos")
           .update({ image_url: pub.publicUrl })
@@ -874,386 +1023,495 @@ export function BackgroundEditor({
     <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-background/80 backdrop-blur-sm">
       <div className="min-h-full w-full flex items-stretch sm:items-start justify-center p-0 sm:p-4">
         <div className="w-full sm:max-w-3xl sm:rounded-xl border-0 sm:border border-border bg-card p-4 sm:p-6 shadow-2xl sm:my-8">
-
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-card-foreground">Change Background</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Remove the original background and composite onto a backdrop
-            </p>
-          </div>
-          <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground">✕</button>
-        </div>
-
-        {backdrops.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border p-8 text-sm text-muted-foreground text-center">
-            No backdrops available for this dealership. Create one on the Backdrops page first.
-          </div>
-        ) : (
-          <>
-            <div className="mb-4">
-              <label className="block text-xs font-medium text-card-foreground mb-1.5">Backdrop</label>
-              <select value={backdropId} onChange={(e) => track(setBackdropId)(e.target.value)} className="form-input">
-                {backdrops.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-card-foreground">Change Background</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Remove the original background and composite onto a backdrop
+              </p>
             </div>
-
-            <div
-              ref={previewWrapRef}
-              className="relative w-full rounded-lg overflow-hidden bg-background border border-border select-none"
-              style={{ aspectRatio: previewAspect }}
+            <button
+              onClick={onClose}
+              className="text-sm text-muted-foreground hover:text-foreground"
             >
-              {/* Composite canvas — visible on every tab except Adjust */}
-              <canvas
-                ref={canvasRef}
-                className="absolute inset-0 w-full h-full"
-                style={{ visibility: comparing || adjusting ? "hidden" : "visible" }}
-              />
+              ✕
+            </button>
+          </div>
 
-              {/* Adjust live preview canvas */}
-              <canvas
-                ref={adjustPreviewRef}
-                className="absolute inset-0 w-full h-full object-contain"
-                style={{ display: adjusting && !comparing ? "block" : "none" }}
-              />
-
-              {/* Straighten grid overlay */}
-              {adjusting && adjustStraighten !== 0 && (
-                <div
-                  aria-hidden
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(to right, rgba(255,255,255,0.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.18) 1px, transparent 1px)",
-                    backgroundSize: "10% 10%",
-                  }}
-                />
-              )}
-
-              {/* Crop drag layer */}
-              {adjusting && (
-                <div
-                  className="absolute inset-0 cursor-crosshair"
-                  onPointerDown={onCropPointerDown}
-                  onPointerMove={onCropPointerMove}
-                  onPointerUp={onCropPointerUp}
-                  onPointerCancel={onCropPointerUp}
-                >
-                  {overlayCrop && (
-                    <div
-                      className="absolute border-2 border-primary"
-                      style={{
-                        left: `${overlayCrop.x * 100}%`,
-                        top: `${overlayCrop.y * 100}%`,
-                        width: `${overlayCrop.w * 100}%`,
-                        height: `${overlayCrop.h * 100}%`,
-                        boxShadow: "0 0 0 9999px rgba(0,0,0,0.4)",
-                      }}
-                    />
-                  )}
-                </div>
-              )}
-
-              {comparing && originalImg && (
-                <img
-                  src={originalImg.src}
-                  alt="Original"
-                  className="absolute inset-0 w-full h-full object-contain"
-                />
-              )}
-
-              {ready && (
-                <button
-                  type="button"
-                  onMouseDown={() => setComparing(true)}
-                  onMouseUp={() => setComparing(false)}
-                  onMouseLeave={() => setComparing(false)}
-                  onTouchStart={(e) => { e.preventDefault(); setComparing(true); }}
-                  onTouchEnd={() => setComparing(false)}
-                  onTouchCancel={() => setComparing(false)}
-                  className="absolute top-2 right-2 select-none rounded-md bg-background/80 backdrop-blur px-2.5 py-1.5 text-[11px] font-medium text-foreground border border-border hover:bg-background"
-                  title="Hold to view original"
-                >
-                  {comparing ? "Showing original" : "Hold to compare"}
-                </button>
-              )}
-
-              {removing && (
-                <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
-                  <div className="text-center">
-                    <div className="h-8 w-8 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                    <p className="text-sm font-medium text-foreground">Cutting out the car…</p>
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      First use downloads a ~12MB model. This happens entirely in your browser.
-                    </p>
-
-                  </div>
-                </div>
-              )}
-              {removeErr && (
-                <div className="absolute inset-0 flex items-center justify-center bg-background/80 p-6">
-                  <p className="text-sm text-destructive text-center">{removeErr}</p>
-                </div>
-              )}
+          {backdrops.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border p-8 text-sm text-muted-foreground text-center">
+              No backdrops available for this dealership. Create one on the Backdrops page first.
             </div>
-
-            {/* Tab bar */}
-            <TabBar
-              tabs={TABS}
-              activeTab={activeTab}
-              onChange={setActiveTab}
-            />
-
-
-            {/* Tab content */}
-            <div className="mt-4">
-              <div className="flex items-center justify-end gap-3 mb-2">
-                <button
-                  type="button"
-                  onClick={undo}
-                  disabled={historyLen === 0}
-                  className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline disabled:opacity-40 disabled:hover:no-underline disabled:cursor-not-allowed"
+          ) : (
+            <>
+              <div className="mb-4">
+                <label className="block text-xs font-medium text-card-foreground mb-1.5">
+                  Backdrop
+                </label>
+                <select
+                  value={backdropId}
+                  onChange={(e) => track(setBackdropId)(e.target.value)}
+                  className="form-input"
                 >
-                  Undo{historyLen > 0 ? ` (${historyLen})` : ""}
-                </button>
-                <button
-                  type="button"
-                  onClick={resetCurrentTab}
-                  className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                >
-                  Reset to defaults
-                </button>
+                  {backdrops.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {activeTab === "background" && (
-                <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
-                  <p className="text-xs text-muted-foreground">
-                    Choose a backdrop above. The preview updates instantly.
-                  </p>
-                  <div className="rounded-md border border-border/60 bg-background/30">
-                    <button
-                      type="button"
-                      onClick={() => setCarPosOpen((v) => !v)}
-                      className="w-full flex items-center justify-between px-3 py-2 min-h-[44px] text-left"
-                    >
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Car Position
-                      </span>
-                      <span className="text-xs text-muted-foreground">{carPosOpen ? "−" : "+"}</span>
-                    </button>
-                    {carPosOpen && (
-                      <div className="px-3 pb-3 space-y-3">
-                        <SliderRow label="Position X" value={carX} min={-50} max={50} suffix="%" onChange={track(setCarX)} />
-                        <SliderRow label="Position Y" value={carY} min={-50} max={50} suffix="%" onChange={track(setCarY)} />
-                        <SliderRow label="Scale" value={carScale} min={50} max={150} suffix="%" onChange={track(setCarScale)} />
-                      </div>
+              <div
+                ref={previewWrapRef}
+                className="relative w-full rounded-lg overflow-hidden bg-background border border-border select-none"
+                style={{ aspectRatio: previewAspect }}
+              >
+                {/* Composite canvas — visible on every tab except Adjust */}
+                <canvas
+                  ref={canvasRef}
+                  className="absolute inset-0 w-full h-full"
+                  style={{ visibility: comparing || adjusting ? "hidden" : "visible" }}
+                />
+
+                {/* Adjust live preview canvas */}
+                <canvas
+                  ref={adjustPreviewRef}
+                  className="absolute inset-0 w-full h-full object-contain"
+                  style={{ display: adjusting && !comparing ? "block" : "none" }}
+                />
+
+                {/* Straighten grid overlay */}
+                {adjusting && adjustStraighten !== 0 && (
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(to right, rgba(255,255,255,0.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.18) 1px, transparent 1px)",
+                      backgroundSize: "10% 10%",
+                    }}
+                  />
+                )}
+
+                {/* Crop drag layer */}
+                {adjusting && (
+                  <div
+                    className="absolute inset-0 cursor-crosshair"
+                    onPointerDown={onCropPointerDown}
+                    onPointerMove={onCropPointerMove}
+                    onPointerUp={onCropPointerUp}
+                    onPointerCancel={onCropPointerUp}
+                  >
+                    {overlayCrop && (
+                      <div
+                        className="absolute border-2 border-primary"
+                        style={{
+                          left: `${overlayCrop.x * 100}%`,
+                          top: `${overlayCrop.y * 100}%`,
+                          width: `${overlayCrop.w * 100}%`,
+                          height: `${overlayCrop.h * 100}%`,
+                          boxShadow: "0 0 0 9999px rgba(0,0,0,0.4)",
+                        }}
+                      />
                     )}
                   </div>
-                </div>
-              )}
+                )}
 
-              {activeTab === "adjust" && (
-                <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Crop</label>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={applyCrop}
-                          disabled={!pendingCrop || pendingCrop.w < 0.02}
-                          className="text-[11px] rounded-md bg-primary px-2.5 py-1 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                        >
-                          Apply Crop
-                        </button>
-                        <button
-                          type="button"
-                          onClick={clearPending}
-                          disabled={!pendingCrop}
-                          className="text-[11px] rounded-md border border-border bg-background px-2.5 py-1 text-foreground hover:bg-secondary disabled:opacity-50"
-                        >
-                          Clear
-                        </button>
+                {comparing && originalImg && (
+                  <img
+                    src={originalImg.src}
+                    alt="Original"
+                    className="absolute inset-0 w-full h-full object-contain"
+                  />
+                )}
+
+                {ready && (
+                  <button
+                    type="button"
+                    onMouseDown={() => setComparing(true)}
+                    onMouseUp={() => setComparing(false)}
+                    onMouseLeave={() => setComparing(false)}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      setComparing(true);
+                    }}
+                    onTouchEnd={() => setComparing(false)}
+                    onTouchCancel={() => setComparing(false)}
+                    className="absolute top-2 right-2 select-none rounded-md bg-background/80 backdrop-blur px-2.5 py-1.5 text-[11px] font-medium text-foreground border border-border hover:bg-background"
+                    title="Hold to view original"
+                  >
+                    {comparing ? "Showing original" : "Hold to compare"}
+                  </button>
+                )}
+
+                {removing && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+                    <div className="text-center">
+                      <div className="h-8 w-8 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                      <p className="text-sm font-medium text-foreground">Cutting out the car…</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        First use downloads a ~12MB model. This happens entirely in your browser.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {removeErr && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/80 p-6">
+                    <p className="text-sm text-destructive text-center">{removeErr}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Tab bar */}
+              <TabBar tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+
+              {/* Tab content */}
+              <div className="mt-4">
+                <div className="flex items-center justify-end gap-3 mb-2">
+                  <button
+                    type="button"
+                    onClick={undo}
+                    disabled={historyLen === 0}
+                    className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline disabled:opacity-40 disabled:hover:no-underline disabled:cursor-not-allowed"
+                  >
+                    Undo{historyLen > 0 ? ` (${historyLen})` : ""}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetCurrentTab}
+                    className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                  >
+                    Reset to defaults
+                  </button>
+                </div>
+
+                {activeTab === "background" && (
+                  <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
+                    <p className="text-xs text-muted-foreground">
+                      Choose a backdrop above. The preview updates instantly.
+                    </p>
+                    <div className="rounded-md border border-border/60 bg-background/30">
+                      <button
+                        type="button"
+                        onClick={() => setCarPosOpen((v) => !v)}
+                        className="w-full flex items-center justify-between px-3 py-2 min-h-[44px] text-left"
+                      >
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Car Position
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {carPosOpen ? "−" : "+"}
+                        </span>
+                      </button>
+                      {carPosOpen && (
+                        <div className="px-3 pb-3 space-y-3">
+                          <SliderRow
+                            label="Position X"
+                            value={carX}
+                            min={-50}
+                            max={50}
+                            suffix="%"
+                            onChange={track(setCarX)}
+                          />
+                          <SliderRow
+                            label="Position Y"
+                            value={carY}
+                            min={-50}
+                            max={50}
+                            suffix="%"
+                            onChange={track(setCarY)}
+                          />
+                          <SliderRow
+                            label="Scale"
+                            value={carScale}
+                            min={50}
+                            max={150}
+                            suffix="%"
+                            onChange={track(setCarScale)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "adjust" && (
+                  <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Crop
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={applyCrop}
+                            disabled={!pendingCrop || pendingCrop.w < 0.02}
+                            className="text-[11px] rounded-md bg-primary px-2.5 py-1 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                          >
+                            Apply Crop
+                          </button>
+                          <button
+                            type="button"
+                            onClick={clearPending}
+                            disabled={!pendingCrop}
+                            className="text-[11px] rounded-md border border-border bg-background px-2.5 py-1 text-foreground hover:bg-secondary disabled:opacity-50"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mb-2">
+                        Drag on the preview to draw a selection.
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(Object.keys(ASPECT_VALUE) as AspectKey[]).map((a) => (
+                          <button
+                            key={a}
+                            type="button"
+                            onClick={() => track(setAdjustAspect)(a)}
+                            className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+                              adjustAspect === a
+                                ? "border-primary bg-primary/10 text-foreground"
+                                : "border-border bg-background text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {a === "free" ? "Free" : a}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                    <p className="text-[11px] text-muted-foreground mb-2">
-                      Drag on the preview to draw a selection.
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(Object.keys(ASPECT_VALUE) as AspectKey[]).map((a) => (
+
+                    <div className="rounded-md border border-border/60 bg-background/30 p-3">
+                      <SliderRow
+                        label="Straighten"
+                        value={adjustStraighten}
+                        min={-15}
+                        max={15}
+                        suffix="°"
+                        onChange={track(setAdjustStraighten)}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                        Fit / Expand
+                      </label>
+                      {[
+                        { key: "none" as FitMode, label: "None" },
+                        { key: "fit" as FitMode, label: "Fit (letterbox)" },
+                        { key: "fill" as FitMode, label: "Fill (crop)" },
+                        { key: "expand" as FitMode, label: "Expand canvas" },
+                      ].map(({ key, label }) => (
                         <button
-                          key={a}
+                          key={key}
                           type="button"
-                          onClick={() => track(setAdjustAspect)(a)}
-                          className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
-                            adjustAspect === a
+                          onClick={() => track(setAdjustFit)(key)}
+                          className={`mr-1.5 mb-1.5 text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+                            adjustFit === key
                               ? "border-primary bg-primary/10 text-foreground"
                               : "border-border bg-background text-muted-foreground hover:text-foreground"
                           }`}
                         >
-                          {a === "free" ? "Free" : a}
+                          {label}
                         </button>
                       ))}
+                      <p className="text-[11px] text-muted-foreground mt-1.5">
+                        Fit/Fill/Expand use the selected aspect ratio above.
+                      </p>
                     </div>
                   </div>
+                )}
 
-                  <div className="rounded-md border border-border/60 bg-background/30 p-3">
-                    <SliderRow
-                      label="Straighten"
-                      value={adjustStraighten}
-                      min={-15}
-                      max={15}
-                      suffix="°"
-                      onChange={track(setAdjustStraighten)}
-                    />
+                {activeTab === "shadow" && (
+                  <div className="rounded-lg border border-border bg-secondary/30 p-4">
+                    <div className="rounded-md border border-border/60 bg-background/30 p-3">
+                      <label className="flex items-center justify-between cursor-pointer min-h-[44px] mb-1">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Contact Shadow
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={shadowEnabled}
+                          onChange={(e) => track(setShadowEnabled)(e.target.checked)}
+                          className="h-4 w-4 accent-primary"
+                        />
+                      </label>
+                      <p className="text-[11px] text-muted-foreground mb-3">
+                        Soft oval contact shadow auto-placed under the car. Turn off for interiors
+                        or detail shots.
+                      </p>
+                      {shadowEnabled && (
+                        <div className="space-y-3">
+                          <SliderRow
+                            label="Opacity"
+                            value={shadowOpacity}
+                            min={0}
+                            max={100}
+                            suffix="%"
+                            onChange={track(setShadowOpacity)}
+                          />
+                          <SliderRow
+                            label="Size"
+                            value={shadowScale}
+                            min={40}
+                            max={180}
+                            suffix="%"
+                            onChange={track(setShadowScale)}
+                          />
+                          <SliderRow
+                            label="Position X"
+                            value={shadowX}
+                            min={-200}
+                            max={200}
+                            suffix="px"
+                            onChange={track(setShadowX)}
+                          />
+                          <SliderRow
+                            label="Position Y"
+                            value={shadowY}
+                            min={-100}
+                            max={100}
+                            suffix="px"
+                            onChange={track(setShadowY)}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
+                )}
 
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Fit / Expand</label>
-                    {[
-                      { key: "none" as FitMode, label: "None" },
-                      { key: "fit" as FitMode, label: "Fit (letterbox)" },
-                      { key: "fill" as FitMode, label: "Fill (crop)" },
-                      { key: "expand" as FitMode, label: "Expand canvas" },
-                    ].map(({ key, label }) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => track(setAdjustFit)(key)}
-                        className={`mr-1.5 mb-1.5 text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
-                          adjustFit === key
-                            ? "border-primary bg-primary/10 text-foreground"
-                            : "border-border bg-background text-muted-foreground hover:text-foreground"
-                        }`}
+                {activeTab === "reflection" && (
+                  <div className="rounded-lg border border-border bg-secondary/30 p-4">
+                    <div className="rounded-md border border-border/60 bg-background/30 p-3">
+                      <label className="flex items-center justify-between cursor-pointer min-h-[44px] mb-1">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Floor Reflection
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={reflectionEnabled}
+                          onChange={(e) => track(setReflectionEnabled)(e.target.checked)}
+                          className="h-4 w-4 accent-primary"
+                        />
+                      </label>
+                      <p className="text-[11px] text-muted-foreground mb-3">
+                        Mirror reflection under the car. Nudge to align if you move or resize it.
+                      </p>
+                      {reflectionEnabled && (
+                        <div className="space-y-3">
+                          <SliderRow
+                            label="Strength"
+                            value={reflectionOpacity}
+                            min={0}
+                            max={100}
+                            suffix="%"
+                            onChange={track(setReflectionOpacity)}
+                          />
+                          <SliderRow
+                            label="Size"
+                            value={reflectionScale}
+                            min={50}
+                            max={150}
+                            suffix="%"
+                            onChange={track(setReflectionScale)}
+                          />
+                          <SliderRow
+                            label="Position X"
+                            value={reflectionX}
+                            min={-200}
+                            max={200}
+                            suffix="px"
+                            onChange={track(setReflectionX)}
+                          />
+                          <SliderRow
+                            label="Position Y"
+                            value={reflectionY}
+                            min={-100}
+                            max={100}
+                            suffix="px"
+                            onChange={track(setReflectionY)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "overlay" && (
+                  <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-card-foreground mb-1.5">
+                        Overlay
+                      </label>
+                      <select
+                        value={overlayId}
+                        onChange={(e) => track(setOverlayId)(e.target.value)}
+                        className="form-input"
                       >
-                        {label}
-                      </button>
-                    ))}
-                    <p className="text-[11px] text-muted-foreground mt-1.5">
-                      Fit/Fill/Expand use the selected aspect ratio above.
-                    </p>
+                        <option value="">None</option>
+                        {overlays.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name}
+                            {o.category ? ` — ${o.category}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-card-foreground mb-1.5">
+                        Overlay position
+                      </label>
+                      <select
+                        value={overlayPos}
+                        onChange={(e) => track(setOverlayPos)(e.target.value as Position)}
+                        disabled={!overlayId}
+                        className="form-input disabled:opacity-50"
+                      >
+                        {POSITIONS.map((p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {activeTab === "shadow" && (
-                <div className="rounded-lg border border-border bg-secondary/30 p-4">
-                  <div className="rounded-md border border-border/60 bg-background/30 p-3">
-                    <label className="flex items-center justify-between cursor-pointer min-h-[44px] mb-1">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Contact Shadow</span>
-                      <input
-                        type="checkbox"
-                        checked={shadowEnabled}
-                        onChange={(e) => track(setShadowEnabled)(e.target.checked)}
-                        className="h-4 w-4 accent-primary"
-                      />
-                    </label>
-                    <p className="text-[11px] text-muted-foreground mb-3">
-                      Soft oval contact shadow auto-placed under the car. Turn off for interiors or detail shots.
-                    </p>
-                    {shadowEnabled && (
-                      <div className="space-y-3">
-                        <SliderRow label="Opacity" value={shadowOpacity} min={0} max={100} suffix="%" onChange={track(setShadowOpacity)} />
-                        <SliderRow label="Size" value={shadowScale} min={40} max={180} suffix="%" onChange={track(setShadowScale)} />
-                        <SliderRow label="Position X" value={shadowX} min={-200} max={200} suffix="px" onChange={track(setShadowX)} />
-                        <SliderRow label="Position Y" value={shadowY} min={-100} max={100} suffix="px" onChange={track(setShadowY)} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "reflection" && (
-                <div className="rounded-lg border border-border bg-secondary/30 p-4">
-                  <div className="rounded-md border border-border/60 bg-background/30 p-3">
-                    <label className="flex items-center justify-between cursor-pointer min-h-[44px] mb-1">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Floor Reflection</span>
-                      <input
-                        type="checkbox"
-                        checked={reflectionEnabled}
-                        onChange={(e) => track(setReflectionEnabled)(e.target.checked)}
-                        className="h-4 w-4 accent-primary"
-                      />
-                    </label>
-                    <p className="text-[11px] text-muted-foreground mb-3">
-                      Mirror reflection under the car. Nudge to align if you move or resize it.
-                    </p>
-                    {reflectionEnabled && (
-                      <div className="space-y-3">
-                        <SliderRow label="Strength" value={reflectionOpacity} min={0} max={100} suffix="%" onChange={track(setReflectionOpacity)} />
-                        <SliderRow label="Size" value={reflectionScale} min={50} max={150} suffix="%" onChange={track(setReflectionScale)} />
-                        <SliderRow label="Position X" value={reflectionX} min={-200} max={200} suffix="px" onChange={track(setReflectionX)} />
-                        <SliderRow label="Position Y" value={reflectionY} min={-100} max={100} suffix="px" onChange={track(setReflectionY)} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "overlay" && (
-                <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-card-foreground mb-1.5">Overlay</label>
-                    <select value={overlayId} onChange={(e) => track(setOverlayId)(e.target.value)} className="form-input">
-                      <option value="">None</option>
-                      {overlays.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.name}{o.category ? ` — ${o.category}` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-card-foreground mb-1.5">Overlay position</label>
-                    <select
-                      value={overlayPos}
-                      onChange={(e) => track(setOverlayPos)(e.target.value as Position)}
-                      disabled={!overlayId}
-                      className="form-input disabled:opacity-50"
-                    >
-                      {POSITIONS.map((p) => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {error && (
-              <div className="mt-4 rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
-                {error}
+                )}
               </div>
-            )}
 
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => void save("new")}
-                disabled={saving || !ready}
-                className="rounded-md border border-border bg-secondary px-4 py-2 text-sm text-secondary-foreground hover:bg-secondary/80 disabled:opacity-60"
-              >
-                {saving ? "Saving…" : "Save as new photo"}
-              </button>
-              <button
-                onClick={() => {
-                  if (confirm("Overwrite the original photo? This cannot be undone.")) void save("overwrite");
-                }}
-                disabled={saving || !ready}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-              >
-                {saving ? "Saving…" : "Overwrite original"}
-              </button>
-            </div>
-          </>
-        )}
+              {error && (
+                <div className="mt-4 rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void save("new")}
+                  disabled={saving || !ready}
+                  className="rounded-md border border-border bg-secondary px-4 py-2 text-sm text-secondary-foreground hover:bg-secondary/80 disabled:opacity-60"
+                >
+                  {saving ? "Saving…" : "Save as new photo"}
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm("Overwrite the original photo? This cannot be undone."))
+                      void save("overwrite");
+                  }}
+                  disabled={saving || !ready}
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {saving ? "Saving…" : "Overwrite original"}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -1351,7 +1609,6 @@ function TabBar<T extends string>({
         className="border-b border-border flex gap-1 overflow-x-auto overflow-y-hidden scrollbar-none -mx-1 px-1"
         style={{ scrollbarWidth: "none", touchAction: "pan-x", overscrollBehavior: "contain" }}
       >
-
         {tabs.map((t) => {
           const active = activeTab === t.key;
           return (
@@ -1381,4 +1638,3 @@ function TabBar<T extends string>({
     </div>
   );
 }
-

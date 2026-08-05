@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test:security": "node --test tests/user-account-policy.test.ts && powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-security-policies.ps1"
+    "typecheck": "tsc --noEmit",
+    "test:security": "node --test tests/user-account-policy.test.ts && powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-security-policies.ps1",
+    "verify": "npm run lint && npm run typecheck && npm run build && npm run test:security"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

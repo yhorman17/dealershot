@@ -6,7 +6,10 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "DealerShot" },
-      { name: "description", content: "Vehicle inventory and photo management for car dealerships." },
+      {
+        name: "description",
+        content: "Vehicle inventory and photo management for car dealerships.",
+      },
     ],
   }),
   component: Index,

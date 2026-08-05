@@ -26,7 +26,9 @@ function ResetPasswordPage() {
 
   useEffect(() => {
     // Supabase recovery links set the session via URL fragment automatically.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
         setValidSession(true);
         setReady(true);
@@ -72,7 +74,9 @@ function ResetPasswordPage() {
         </h1>
         <div className="rounded-xl border border-border bg-card p-8 shadow-xl">
           <h2 className="text-xl font-medium text-card-foreground mb-1">Set new password</h2>
-          <p className="text-sm text-muted-foreground mb-6">Choose a strong password to secure your account.</p>
+          <p className="text-sm text-muted-foreground mb-6">
+            Choose a strong password to secure your account.
+          </p>
           {!validSession ? (
             <>
               <p className="text-sm text-destructive">
@@ -87,7 +91,9 @@ function ResetPasswordPage() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-card-foreground mb-1.5">New password</label>
+                <label className="block text-sm font-medium text-card-foreground mb-1.5">
+                  New password
+                </label>
                 <input
                   type="password"
                   required
@@ -100,7 +106,9 @@ function ResetPasswordPage() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-card-foreground mb-1.5">Confirm password</label>
+                <label className="block text-sm font-medium text-card-foreground mb-1.5">
+                  Confirm password
+                </label>
                 <input
                   type="password"
                   required

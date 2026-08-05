@@ -61,13 +61,29 @@ function StaffDashboard({
       setTotalCount(list.length);
 
       const ids = list.map((v) => v.id);
-      const photosByVehicle = new Map<string, { image_url: string; is_main: boolean; shot_type: string | null; sort_order: number; created_at: string }[]>();
+      const photosByVehicle = new Map<
+        string,
+        {
+          image_url: string;
+          is_main: boolean;
+          shot_type: string | null;
+          sort_order: number;
+          created_at: string;
+        }[]
+      >();
       if (ids.length > 0) {
         const { data: photoRows } = await supabase
           .from("photos")
           .select("vehicle_id, image_url, is_main, shot_type, sort_order, created_at")
           .in("vehicle_id", ids);
-        for (const row of (photoRows as { vehicle_id: string; image_url: string; is_main: boolean; shot_type: string | null; sort_order: number; created_at: string }[]) || []) {
+        for (const row of (photoRows as {
+          vehicle_id: string;
+          image_url: string;
+          is_main: boolean;
+          shot_type: string | null;
+          sort_order: number;
+          created_at: string;
+        }[]) || []) {
           const arr = photosByVehicle.get(row.vehicle_id) || [];
           arr.push(row);
           photosByVehicle.set(row.vehicle_id, arr);
@@ -86,7 +102,9 @@ function StaffDashboard({
         const main = photos.find((p) => p.is_main);
         const front = photos.find((p) => (p.shot_type || "").toLowerCase() === "front");
         const first = [...photos].sort((a, b) =>
-          a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : a.created_at.localeCompare(b.created_at),
+          a.sort_order !== b.sort_order
+            ? a.sort_order - b.sort_order
+            : a.created_at.localeCompare(b.created_at),
         )[0];
         v.thumbnail_url = main?.image_url ?? front?.image_url ?? first?.image_url ?? null;
       }
@@ -108,7 +126,9 @@ function StaffDashboard({
       <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
           <p className="text-sm text-muted-foreground">Welcome back</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground mt-1">{displayName}</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground mt-1">
+            {displayName}
+          </h1>
           <div className="mt-2 inline-flex items-center rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
             {roleLabel}
           </div>
@@ -116,7 +136,7 @@ function StaffDashboard({
         <div className="flex items-center gap-2 flex-wrap">
           <Link
             to="/vehicles/new"
-            search={dealershipId ? { dealership: dealershipId } : undefined}
+            search={{ dealership: dealershipId ?? undefined }}
             className="rounded-md bg-primary px-4 py-2 min-h-[44px] inline-flex items-center text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             Add Vehicle
@@ -167,7 +187,7 @@ function StaffDashboard({
             <p className="text-sm text-muted-foreground mb-3">No vehicles yet.</p>
             <Link
               to="/vehicles/new"
-              search={dealershipId ? { dealership: dealershipId } : undefined}
+              search={{ dealership: dealershipId ?? undefined }}
               className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               Add your first vehicle
@@ -202,7 +222,9 @@ function StaffDashboard({
                       {formatPrice(v.price)}
                     </span>
                   </div>
-                  {v.trim && <p className="text-xs text-muted-foreground mt-0.5 truncate">{v.trim}</p>}
+                  {v.trim && (
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{v.trim}</p>
+                  )}
                 </div>
               </Link>
             ))}
@@ -215,9 +237,12 @@ function StaffDashboard({
         <section className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/5 p-6">
           <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
             <div>
-              <h2 className="text-sm font-semibold text-card-foreground">Vehicles missing photos</h2>
+              <h2 className="text-sm font-semibold text-card-foreground">
+                Vehicles missing photos
+              </h2>
               <p className="text-xs text-muted-foreground mt-1">
-                {needsPhotosCount} vehicle{needsPhotosCount === 1 ? "" : "s"} need a main or front exterior shot.
+                {needsPhotosCount} vehicle{needsPhotosCount === 1 ? "" : "s"} need a main or front
+                exterior shot.
               </p>
             </div>
             <Link
@@ -249,11 +274,15 @@ function StatCard({
   const inner = (
     <div
       className={`rounded-xl border bg-card p-6 h-full transition-colors ${
-        accent ? "border-amber-500/40 hover:border-amber-500/70" : "border-border hover:border-primary/60"
+        accent
+          ? "border-amber-500/40 hover:border-amber-500/70"
+          : "border-border hover:border-primary/60"
       }`}
     >
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={`mt-2 text-3xl font-semibold ${accent ? "text-amber-400" : "text-card-foreground"}`}>
+      <p
+        className={`mt-2 text-3xl font-semibold ${accent ? "text-amber-400" : "text-card-foreground"}`}
+      >
         {value}
       </p>
       {hint && <p className="text-xs text-muted-foreground mt-2">{hint}</p>}

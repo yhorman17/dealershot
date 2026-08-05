@@ -36,7 +36,9 @@ function NewVehiclePage() {
     return (
       <main className="mx-auto max-w-4xl px-6 py-10">
         <p className="text-sm text-muted-foreground">
-          {profile?.role === "owner" ? "Create a dealership first." : "No dealership assigned to your account."}
+          {profile?.role === "owner"
+            ? "Create a dealership first."
+            : "No dealership assigned to your account."}
         </p>
       </main>
     );
@@ -46,19 +48,25 @@ function NewVehiclePage() {
     <main className="mx-auto max-w-4xl px-6 py-10">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Add Vehicle</h1>
-        <p className="text-sm text-muted-foreground mt-1">Enter VIN to auto-fill specs, then review and save.</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Enter VIN to auto-fill specs, then review and save.
+        </p>
       </div>
 
       {profile?.role === "owner" && dealerships.length > 1 && (
         <div className="mb-6">
-          <label className="block text-xs font-medium text-card-foreground mb-1.5">Dealership</label>
+          <label className="block text-xs font-medium text-card-foreground mb-1.5">
+            Dealership
+          </label>
           <select
             value={dealershipId}
             onChange={(e) => setDealershipId(e.target.value)}
             className="form-input max-w-sm"
           >
             {dealerships.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
             ))}
           </select>
         </div>

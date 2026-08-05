@@ -55,19 +55,22 @@ export function VehicleExportModal({ vehicle, onClose }: Props) {
   const togglePhoto = (i: number) => {
     setSelected((prev) => {
       const n = new Set(prev);
-      n.has(i) ? n.delete(i) : n.add(i);
+      if (n.has(i)) n.delete(i);
+      else n.add(i);
       return n;
     });
   };
   const toggleDoc = (i: number) => {
     setSelectedDocs((prev) => {
       const n = new Set(prev);
-      n.has(i) ? n.delete(i) : n.add(i);
+      if (n.has(i)) n.delete(i);
+      else n.add(i);
       return n;
     });
   };
 
-  const allSelected = selected.size === photos.length && (!includeDocs || selectedDocs.size === documents.length);
+  const allSelected =
+    selected.size === photos.length && (!includeDocs || selectedDocs.size === documents.length);
   const toggleAll = () => {
     if (allSelected) {
       setSelected(new Set());
@@ -153,10 +156,7 @@ export function VehicleExportModal({ vehicle, onClose }: Props) {
           ) : (
             <>
               <div className="flex items-center justify-between">
-                <button
-                  onClick={toggleAll}
-                  className="text-xs text-primary hover:underline"
-                >
+                <button onClick={toggleAll} className="text-xs text-primary hover:underline">
                   {allSelected ? "Deselect All" : "Select All"}
                 </button>
                 <label className="flex items-center gap-2 text-xs text-muted-foreground">

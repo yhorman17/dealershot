@@ -56,7 +56,9 @@ function BackdropsPage() {
     setLoading(false);
   };
 
-  useEffect(() => { void load(); }, [selectedDealershipId]);
+  useEffect(() => {
+    void load();
+  }, [selectedDealershipId]);
 
   const handleDelete = async (b: Backdrop) => {
     if (!confirm(`Delete backdrop "${b.name}"?`)) return;
@@ -67,7 +69,9 @@ function BackdropsPage() {
         const path = url.pathname.slice(idx + "/backdrops/".length);
         await supabase.storage.from("backdrops").remove([path]);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     await supabase.from("backdrops").delete().eq("id", b.id);
     void load();
   };
@@ -89,7 +93,9 @@ function BackdropsPage() {
               className="form-input"
             >
               {dealerships.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
               ))}
             </select>
           )}
@@ -114,7 +120,11 @@ function BackdropsPage() {
           {items.map((b) => (
             <div key={b.id} className="rounded-xl border border-border bg-card overflow-hidden">
               <div className="aspect-[16/9] bg-secondary overflow-hidden">
-                <img src={b.image_url} alt={b.name} className="w-full h-full object-contain bg-background" />
+                <img
+                  src={b.image_url}
+                  alt={b.name}
+                  className="w-full h-full object-contain bg-background"
+                />
               </div>
               <div className="p-4">
                 <h3 className="font-medium text-card-foreground text-sm truncate">{b.name}</h3>
@@ -136,7 +146,10 @@ function BackdropsPage() {
         <BackdropForm
           dealershipId={selectedDealershipId}
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); void load(); }}
+          onSaved={() => {
+            setShowForm(false);
+            void load();
+          }}
         />
       )}
     </main>
@@ -160,7 +173,10 @@ function BackdropForm({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!file) { setError("Please select an image."); return; }
+    if (!file) {
+      setError("Please select an image.");
+      return;
+    }
     setSaving(true);
     try {
       const ext = file.name.split(".").pop() || "jpg";
@@ -194,7 +210,12 @@ function BackdropForm({
             <label className="block text-xs font-medium text-card-foreground mb-1.5">
               Name <span className="text-destructive">*</span>
             </label>
-            <input required value={name} onChange={(e) => setName(e.target.value)} className="form-input" />
+            <input
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="form-input"
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">
@@ -213,7 +234,11 @@ function BackdropForm({
             </div>
           )}
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+            >
               Cancel
             </button>
             <button

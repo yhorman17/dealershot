@@ -29,9 +29,7 @@ function DocumentThumb({ doc }: { doc: { id: string; image_url: string; name: st
       toast.error(`Couldn't load "${doc.name}": ${msg}`);
       return;
     }
-    const { data, error } = await supabase.storage
-      .from("documents")
-      .createSignedUrl(path, 3600);
+    const { data, error } = await supabase.storage.from("documents").createSignedUrl(path, 3600);
     if (error || !data?.signedUrl) {
       const msg = error?.message ?? "Could not generate signed URL";
       // eslint-disable-next-line no-console
@@ -49,7 +47,9 @@ function DocumentThumb({ doc }: { doc: { id: string; image_url: string; name: st
   }, [doc.image_url]);
 
   if (state.kind === "loading") {
-    return <div className="h-full w-full animate-pulse bg-secondary/60" aria-label="Loading preview" />;
+    return (
+      <div className="h-full w-full animate-pulse bg-secondary/60" aria-label="Loading preview" />
+    );
   }
   if (state.kind === "error") {
     return (
@@ -79,7 +79,6 @@ function DocumentThumb({ doc }: { doc: { id: string; image_url: string; name: st
     />
   );
 }
-
 
 export const Route = createFileRoute("/_authenticated/documents")({
   head: () => ({ meta: [{ title: "Documents — DealerShot" }] }),
@@ -138,7 +137,10 @@ function DocumentsPage() {
       const { data: links } = await supabase
         .from("vehicle_documents")
         .select("document_id")
-        .in("document_id", list.map((d) => d.id));
+        .in(
+          "document_id",
+          list.map((d) => d.id),
+        );
       const tally: Record<string, number> = {};
       ((links as { document_id: string }[]) || []).forEach((r) => {
         tally[r.document_id] = (tally[r.document_id] || 0) + 1;
@@ -155,7 +157,12 @@ function DocumentsPage() {
   }, [selectedDealershipId]);
 
   const handleDelete = async (d: DocumentRow) => {
-    if (!confirm(`Delete document "${d.name}"? This removes it from the library and detaches it from any vehicles.`)) return;
+    if (
+      !confirm(
+        `Delete document "${d.name}"? This removes it from the library and detaches it from any vehicles.`,
+      )
+    )
+      return;
     try {
       const url = new URL(d.image_url);
       const idx = url.pathname.indexOf("/documents/");
@@ -163,7 +170,9 @@ function DocumentsPage() {
         const path = url.pathname.slice(idx + "/documents/".length);
         await supabase.storage.from("documents").remove([path]);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     await supabase.from("documents").delete().eq("id", d.id);
     void load();
   };
@@ -185,7 +194,9 @@ function DocumentsPage() {
               className="form-input"
             >
               {dealerships.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
               ))}
             </select>
           )}
@@ -208,7 +219,10 @@ function DocumentsPage() {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {documents.map((d) => (
-            <div key={d.id} className="rounded-xl border border-border bg-card overflow-hidden flex flex-col">
+            <div
+              key={d.id}
+              className="rounded-xl border border-border bg-card overflow-hidden flex flex-col"
+            >
               <div className="aspect-[16/9] bg-secondary flex items-center justify-center overflow-hidden">
                 <DocumentThumb doc={d} />
               </div>
@@ -248,14 +262,20 @@ function DocumentsPage() {
         <DocumentForm
           dealershipId={selectedDealershipId}
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); void load(); }}
+          onSaved={() => {
+            setShowForm(false);
+            void load();
+          }}
         />
       )}
       {editing && (
         <RenameDocumentForm
           doc={editing}
           onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); void load(); }}
+          onSaved={() => {
+            setEditing(null);
+            void load();
+          }}
         />
       )}
       {attachingDoc && (
@@ -263,7 +283,10 @@ function DocumentsPage() {
           doc={attachingDoc}
           dealershipId={attachingDoc.dealership_id}
           onClose={() => setAttachingDoc(null)}
-          onDone={() => { setAttachingDoc(null); void load(); }}
+          onDone={() => {
+            setAttachingDoc(null);
+            void load();
+          }}
         />
       )}
     </main>
@@ -287,7 +310,10 @@ function DocumentForm({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!file) { setError("Please select an image."); return; }
+    if (!file) {
+      setError("Please select an image.");
+      return;
+    }
     if (!["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
       setError("Only PNG or JPG images are supported.");
       return;
@@ -322,7 +348,12 @@ function DocumentForm({
           <label className="block text-xs font-medium text-card-foreground mb-1.5">
             Name <span className="text-destructive">*</span>
           </label>
-          <input required value={name} onChange={(e) => setName(e.target.value)} className="form-input" />
+          <input
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="form-input"
+          />
         </div>
         <div>
           <label className="block text-xs font-medium text-card-foreground mb-1.5">
@@ -358,9 +389,15 @@ function RenameDocumentForm({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const { error: updErr } = await supabase.from("documents").update({ name: name.trim() }).eq("id", doc.id);
+    const { error: updErr } = await supabase
+      .from("documents")
+      .update({ name: name.trim() })
+      .eq("id", doc.id);
     setSaving(false);
-    if (updErr) { setError(updErr.message); return; }
+    if (updErr) {
+      setError(updErr.message);
+      return;
+    }
     onSaved();
   };
 
@@ -369,7 +406,12 @@ function RenameDocumentForm({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-medium text-card-foreground mb-1.5">Name</label>
-          <input required value={name} onChange={(e) => setName(e.target.value)} className="form-input" />
+          <input
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="form-input"
+          />
         </div>
         {error && <ErrorBox>{error}</ErrorBox>}
         <ModalFooter onClose={onClose} saving={saving} label="Save" savingLabel="Saving…" />
@@ -420,7 +462,9 @@ function BulkAttachModal({
         supabase.from("vehicle_documents").select("vehicle_id").eq("document_id", doc.id),
       ]);
       setVehicles((vs as VehicleLite[]) || []);
-      setAlreadyAttached(new Set(((links as { vehicle_id: string }[]) || []).map((l) => l.vehicle_id)));
+      setAlreadyAttached(
+        new Set(((links as { vehicle_id: string }[]) || []).map((l) => l.vehicle_id)),
+      );
       setLoading(false);
     })();
   }, [dealershipId, doc.id]);
@@ -431,7 +475,8 @@ function BulkAttachModal({
       if (condition && v.condition !== condition) return false;
       if (status && v.status !== status) return false;
       if (q) {
-        const hay = `${v.year || ""} ${v.make || ""} ${v.model || ""} ${v.trim || ""}`.toLowerCase();
+        const hay =
+          `${v.year || ""} ${v.make || ""} ${v.model || ""} ${v.trim || ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -441,7 +486,8 @@ function BulkAttachModal({
   const toggle = (id: string) => {
     setChecked((s) => {
       const n = new Set(s);
-      if (n.has(id)) n.delete(id); else n.add(id);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
       return n;
     });
   };
@@ -458,7 +504,10 @@ function BulkAttachModal({
 
   const handleConfirm = async () => {
     const targets = Array.from(checked).filter((id) => !alreadyAttached.has(id));
-    if (targets.length === 0) { onClose(); return; }
+    if (targets.length === 0) {
+      onClose();
+      return;
+    }
     setSaving(true);
     const rows = targets.map((vehicle_id) => ({
       vehicle_id,
@@ -467,7 +516,10 @@ function BulkAttachModal({
     }));
     const { error } = await supabase.from("vehicle_documents").insert(rows);
     setSaving(false);
-    if (error) { alert(error.message); return; }
+    if (error) {
+      alert(error.message);
+      return;
+    }
     onDone();
   };
 
@@ -481,20 +533,38 @@ function BulkAttachModal({
             onChange={(e) => setSearch(e.target.value)}
             className="form-input"
           />
-          <select value={condition} onChange={(e) => setCondition(e.target.value)} className="form-input">
+          <select
+            value={condition}
+            onChange={(e) => setCondition(e.target.value)}
+            className="form-input"
+          >
             <option value="">All conditions</option>
-            {CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+            {CONDITIONS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
           </select>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="form-input">
             <option value="">All statuses</option>
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
         </div>
         <div className="flex items-center gap-2 text-xs">
-          <button onClick={selectAllFiltered} className="rounded border border-border bg-secondary px-3 py-1.5 text-secondary-foreground hover:bg-secondary/80">
+          <button
+            onClick={selectAllFiltered}
+            className="rounded border border-border bg-secondary px-3 py-1.5 text-secondary-foreground hover:bg-secondary/80"
+          >
             Select All Filtered ({filtered.length})
           </button>
-          <button onClick={clearAll} className="rounded border border-border bg-secondary px-3 py-1.5 text-secondary-foreground hover:bg-secondary/80">
+          <button
+            onClick={clearAll}
+            className="rounded border border-border bg-secondary px-3 py-1.5 text-secondary-foreground hover:bg-secondary/80"
+          >
             Clear
           </button>
           <span className="ml-auto text-muted-foreground">{checked.size} selected</span>
@@ -510,7 +580,10 @@ function BulkAttachModal({
               const isAttached = alreadyAttached.has(v.id);
               const isChecked = checked.has(v.id) || isAttached;
               return (
-                <label key={v.id} className={`flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/40 cursor-pointer ${isAttached ? "opacity-60" : ""}`}>
+                <label
+                  key={v.id}
+                  className={`flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/40 cursor-pointer ${isAttached ? "opacity-60" : ""}`}
+                >
                   <input
                     type="checkbox"
                     checked={isChecked}
@@ -519,7 +592,8 @@ function BulkAttachModal({
                     className="accent-primary h-4 w-4"
                   />
                   <span className="text-sm text-foreground">
-                    {v.year || "—"} {v.make || ""} {v.model || ""} {v.trim && <span className="text-muted-foreground">{v.trim}</span>}
+                    {v.year || "—"} {v.make || ""} {v.model || ""}{" "}
+                    {v.trim && <span className="text-muted-foreground">{v.trim}</span>}
                   </span>
                   <span className="ml-auto text-xs text-muted-foreground">
                     {isAttached ? "Already attached" : `${v.condition || "—"} · ${v.status || "—"}`}
@@ -531,7 +605,10 @@ function BulkAttachModal({
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+          >
             Cancel
           </button>
           <button
@@ -547,11 +624,24 @@ function BulkAttachModal({
   );
 }
 
-function Modal({ children, onClose, title, subtitle, wide }: {
-  children: React.ReactNode; onClose: () => void; title: string; subtitle?: string; wide?: boolean;
+function Modal({
+  children,
+  onClose,
+  title,
+  subtitle,
+  wide,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+  title: string;
+  subtitle?: string;
+  wide?: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
       <div
         className={`w-full ${wide ? "max-w-3xl" : "max-w-lg"} rounded-xl border border-border bg-card p-6 shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
@@ -564,12 +654,24 @@ function Modal({ children, onClose, title, subtitle, wide }: {
   );
 }
 
-function ModalFooter({ onClose, saving, label, savingLabel }: {
-  onClose: () => void; saving: boolean; label: string; savingLabel: string;
+function ModalFooter({
+  onClose,
+  saving,
+  label,
+  savingLabel,
+}: {
+  onClose: () => void;
+  saving: boolean;
+  label: string;
+  savingLabel: string;
 }) {
   return (
     <div className="flex justify-end gap-2 pt-2">
-      <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
+      <button
+        type="button"
+        onClick={onClose}
+        className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+      >
         Cancel
       </button>
       <button

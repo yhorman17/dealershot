@@ -57,7 +57,10 @@ async function runJob(job: Job) {
   notify();
   try {
     const blob = await removeBackground(job.imageUrl, { model: "isnet_quint8", debug: true });
-    const pngBlob = blob.type === "image/png" ? blob : new Blob([await blob.arrayBuffer()], { type: "image/png" });
+    const pngBlob =
+      blob.type === "image/png"
+        ? blob
+        : new Blob([await blob.arrayBuffer()], { type: "image/png" });
 
     // Upload cutout to new path
     const oldPath = storagePathFromUrl(job.imageUrl);
@@ -91,11 +94,10 @@ async function runJob(job: Job) {
     // eslint-disable-next-line no-console
     console.error("[cutout] failed for photo", job.photoId, e);
     try {
-      await supabase
-        .from("photos")
-        .update({ cutout_status: "failed" })
-        .eq("id", job.photoId);
-    } catch { /* ignore */ }
+      await supabase.from("photos").update({ cutout_status: "failed" }).eq("id", job.photoId);
+    } catch {
+      /* ignore */
+    }
     job.onDone({ ok: false, error: e instanceof Error ? e.message : "Cutout failed" });
   } finally {
     inflight.delete(job.photoId);

@@ -96,7 +96,9 @@ export function VinScannerModal({
         if (srcObj instanceof MediaStream) {
           streamRef.current = srcObj;
           const track = srcObj.getVideoTracks()[0];
-          const caps = (track?.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
+          const caps = (track?.getCapabilities?.() ?? {}) as MediaTrackCapabilities & {
+            torch?: boolean;
+          };
           if (caps.torch) setTorchSupported(true);
         }
       } catch (e) {
@@ -104,7 +106,9 @@ export function VinScannerModal({
         console.error("[VIN scanner] start failed:", e);
         const err = e as DOMException;
         if (err?.name === "NotAllowedError" || err?.name === "SecurityError") {
-          setError("Camera access is needed to scan VINs. Please enable camera permissions in your browser settings.");
+          setError(
+            "Camera access is needed to scan VINs. Please enable camera permissions in your browser settings.",
+          );
         } else if (err?.name === "NotFoundError" || err?.name === "OverconstrainedError") {
           setError("No camera detected on this device.");
         } else {
@@ -139,7 +143,9 @@ export function VinScannerModal({
     if (videoRef.current) {
       try {
         videoRef.current.srcObject = null;
-      } catch { /* noop */ }
+      } catch {
+        /* noop */
+      }
     }
   }
 
@@ -154,7 +160,9 @@ export function VinScannerModal({
     if (!track) return;
     try {
       const next = !torchOn;
-      await track.applyConstraints({ advanced: [{ torch: next } as unknown as MediaTrackConstraintSet] });
+      await track.applyConstraints({
+        advanced: [{ torch: next } as unknown as MediaTrackConstraintSet],
+      });
       setTorchOn(next);
     } catch {
       setTorchSupported(false);
@@ -206,7 +214,10 @@ export function VinScannerModal({
         {error ? (
           <div className="bg-card text-card-foreground rounded-lg p-5 max-w-sm text-sm space-y-3">
             <p>{error}</p>
-            <button onClick={handleClose} className="rounded-md bg-primary text-primary-foreground px-3 py-2 text-sm w-full">
+            <button
+              onClick={handleClose}
+              className="rounded-md bg-primary text-primary-foreground px-3 py-2 text-sm w-full"
+            >
               Close
             </button>
           </div>
@@ -221,8 +232,14 @@ export function VinScannerModal({
             </p>
             {hint && (
               <div className="mt-4 bg-card text-card-foreground rounded-lg p-4 max-w-sm text-xs space-y-3">
-                <p>Trouble scanning? Try better lighting or hold the phone closer. You can also type the VIN manually below.</p>
-                <button onClick={handleClose} className="rounded-md border border-border bg-secondary text-secondary-foreground px-3 py-2 text-sm w-full">
+                <p>
+                  Trouble scanning? Try better lighting or hold the phone closer. You can also type
+                  the VIN manually below.
+                </p>
+                <button
+                  onClick={handleClose}
+                  className="rounded-md border border-border bg-secondary text-secondary-foreground px-3 py-2 text-sm w-full"
+                >
                   Cancel
                 </button>
               </div>

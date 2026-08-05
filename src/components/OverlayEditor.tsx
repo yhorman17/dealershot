@@ -63,11 +63,7 @@ function destRect(
   return { x, y, w, h };
 }
 
-async function compositeToBlob(
-  photoUrl: string,
-  overlayUrl: string,
-  pos: Position,
-): Promise<Blob> {
+async function compositeToBlob(photoUrl: string, overlayUrl: string, pos: Position): Promise<Blob> {
   const [base, overlay] = await Promise.all([loadImage(photoUrl), loadImage(overlayUrl)]);
   const canvas = document.createElement("canvas");
   canvas.width = base.naturalWidth;
@@ -78,7 +74,11 @@ async function compositeToBlob(
   const r = destRect(canvas.width, canvas.height, overlay.naturalWidth, overlay.naturalHeight, pos);
   ctx.drawImage(overlay, r.x, r.y, r.w, r.h);
   return await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Failed to render"))), "image/jpeg", 0.92);
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Failed to render"))),
+      "image/jpeg",
+      0.92,
+    );
   });
 }
 
@@ -181,14 +181,9 @@ export function OverlayEditor({
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold text-card-foreground">Add Overlay</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Compose a banner onto this photo
-            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">Compose a banner onto this photo</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
+          <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground">
             ✕
           </button>
         </div>
@@ -201,7 +196,9 @@ export function OverlayEditor({
           <>
             <div className="grid sm:grid-cols-2 gap-3 mb-4">
               <div>
-                <label className="block text-xs font-medium text-card-foreground mb-1.5">Overlay</label>
+                <label className="block text-xs font-medium text-card-foreground mb-1.5">
+                  Overlay
+                </label>
                 <select
                   value={overlayId}
                   onChange={(e) => setOverlayId(e.target.value)}
@@ -209,16 +206,25 @@ export function OverlayEditor({
                 >
                   {overlays.map((o) => (
                     <option key={o.id} value={o.id}>
-                      {o.name}{o.category ? ` — ${o.category}` : ""}
+                      {o.name}
+                      {o.category ? ` — ${o.category}` : ""}
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-card-foreground mb-1.5">Position</label>
-                <select value={pos} onChange={(e) => setPos(e.target.value as Position)} className="form-input">
+                <label className="block text-xs font-medium text-card-foreground mb-1.5">
+                  Position
+                </label>
+                <select
+                  value={pos}
+                  onChange={(e) => setPos(e.target.value as Position)}
+                  className="form-input"
+                >
                   {POSITIONS.map((p) => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -261,7 +267,8 @@ export function OverlayEditor({
               </button>
               <button
                 onClick={() => {
-                  if (confirm("Overwrite the original photo? This cannot be undone.")) void save("overwrite");
+                  if (confirm("Overwrite the original photo? This cannot be undone."))
+                    void save("overwrite");
                 }}
                 disabled={saving || !selected}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"

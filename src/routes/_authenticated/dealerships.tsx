@@ -63,7 +63,10 @@ function DealershipsPage() {
           <p className="text-sm text-muted-foreground mt-1">Manage all dealership accounts</p>
         </div>
         <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
+          onClick={() => {
+            setEditing(null);
+            setShowForm(true);
+          }}
           className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
           Add Dealership
@@ -71,9 +74,13 @@ function DealershipsPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">Loading…</div>
+        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
+          Loading…
+        </div>
       ) : dealerships.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">No dealerships yet.</div>
+        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
+          No dealerships yet.
+        </div>
       ) : (
         <>
           {/* Mobile: card stack */}
@@ -82,7 +89,11 @@ function DealershipsPage() {
               <div key={d.id} className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center gap-3">
                   {d.logo_url ? (
-                    <img src={d.logo_url} alt="" className="h-10 w-10 rounded object-cover bg-secondary" />
+                    <img
+                      src={d.logo_url}
+                      alt=""
+                      className="h-10 w-10 rounded object-cover bg-secondary"
+                    />
                   ) : (
                     <div className="h-10 w-10 rounded bg-secondary flex items-center justify-center text-sm text-muted-foreground">
                       {d.name.charAt(0).toUpperCase()}
@@ -97,7 +108,9 @@ function DealershipsPage() {
                 </div>
                 <dl className="mt-3 space-y-1.5 text-sm">
                   <div className="flex justify-between gap-3">
-                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Address</dt>
+                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Address
+                    </dt>
                     <dd className="text-card-foreground text-right truncate">{d.address || "—"}</dd>
                   </div>
                   <div className="flex justify-between gap-3">
@@ -107,7 +120,10 @@ function DealershipsPage() {
                 </dl>
                 <div className="mt-3 flex gap-2">
                   <button
-                    onClick={() => { setEditing(d); setShowForm(true); }}
+                    onClick={() => {
+                      setEditing(d);
+                      setShowForm(true);
+                    }}
                     className="flex-1 rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground hover:bg-secondary/80"
                   >
                     Edit
@@ -141,7 +157,11 @@ function DealershipsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {d.logo_url ? (
-                          <img src={d.logo_url} alt="" className="h-8 w-8 rounded object-cover bg-secondary" />
+                          <img
+                            src={d.logo_url}
+                            alt=""
+                            className="h-8 w-8 rounded object-cover bg-secondary"
+                          />
                         ) : (
                           <div className="h-8 w-8 rounded bg-secondary flex items-center justify-center text-xs text-muted-foreground">
                             {d.name.charAt(0).toUpperCase()}
@@ -159,7 +179,10 @@ function DealershipsPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
-                        onClick={() => { setEditing(d); setShowForm(true); }}
+                        onClick={() => {
+                          setEditing(d);
+                          setShowForm(true);
+                        }}
                         className="text-xs text-muted-foreground hover:text-foreground mr-3"
                       >
                         Edit
@@ -183,7 +206,10 @@ function DealershipsPage() {
         <DealershipForm
           dealership={editing}
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); void load(); }}
+          onSaved={() => {
+            setShowForm(false);
+            void load();
+          }}
         />
       )}
     </main>
@@ -232,7 +258,10 @@ function DealershipForm({
       };
 
       if (dealership) {
-        const { error: upErr } = await supabase.from("dealerships").update(payload).eq("id", dealership.id);
+        const { error: upErr } = await supabase
+          .from("dealerships")
+          .update(payload)
+          .eq("id", dealership.id);
         if (upErr) throw upErr;
       } else {
         const { error: insErr } = await supabase.from("dealerships").insert(payload);
@@ -263,10 +292,18 @@ function DealershipForm({
             />
           </Field>
           <Field label="Address">
-            <input value={address} onChange={(e) => setAddress(e.target.value)} className="form-input" />
+            <input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              className="form-input"
+            />
           </Field>
           <Field label="Phone">
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="form-input" />
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="form-input"
+            />
           </Field>
           <Field label="Logo">
             <div className="flex items-center gap-3">
@@ -287,7 +324,11 @@ function DealershipForm({
             </div>
           )}
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+            >
               Cancel
             </button>
             <button
@@ -304,11 +345,20 @@ function DealershipForm({
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <label className="block text-xs font-medium text-card-foreground mb-1.5">
-        {label}{required && <span className="text-destructive ml-0.5">*</span>}
+        {label}
+        {required && <span className="text-destructive ml-0.5">*</span>}
       </label>
       {children}
     </div>

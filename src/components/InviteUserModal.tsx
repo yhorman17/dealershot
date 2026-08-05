@@ -66,7 +66,9 @@ export function InviteUserModal({
       <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-lg font-semibold text-card-foreground">Invite user</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">✕</button>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            ✕
+          </button>
         </div>
         <p className="text-xs text-muted-foreground mb-5">
           They'll receive an email with a link to create their password.
@@ -83,7 +85,9 @@ export function InviteUserModal({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-card-foreground mb-1.5">Full name</label>
+            <label className="block text-xs font-medium text-card-foreground mb-1.5">
+              Full name
+            </label>
             <input
               required
               value={fullName}
@@ -103,16 +107,22 @@ export function InviteUserModal({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-card-foreground mb-1.5">Dealership</label>
+            <label className="block text-xs font-medium text-card-foreground mb-1.5">
+              Dealership
+            </label>
             <select
               required
               value={dealershipId}
               onChange={(e) => setDealershipId(e.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
-              <option value="" disabled>Select dealership…</option>
+              <option value="" disabled>
+                Select dealership…
+              </option>
               {dealerships.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
               ))}
             </select>
           </div>
@@ -122,7 +132,11 @@ export function InviteUserModal({
             </div>
           )}
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+            >
               Cancel
             </button>
             <button

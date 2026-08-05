@@ -23,18 +23,32 @@ function EditVehiclePage() {
       setDealershipId(v.dealership_id as string);
       setInitial({
         ...emptyVehicleValues,
-        vin: s("vin"), year: s("year"), make: s("make"), model: s("model"), trim: s("trim"),
-        body_class: s("body_class"), engine: s("engine"), cylinders: s("cylinders"),
-        transmission: s("transmission"), drivetrain: s("drivetrain"), fuel_type: s("fuel_type"),
-        exterior_color: s("exterior_color"), interior_color: s("interior_color"),
-        odometer: s("odometer"), price: s("price"), stock_number: s("stock_number"),
-        condition: s("condition") || "Used", status: s("status") || "Available",
+        vin: s("vin"),
+        year: s("year"),
+        make: s("make"),
+        model: s("model"),
+        trim: s("trim"),
+        body_class: s("body_class"),
+        engine: s("engine"),
+        cylinders: s("cylinders"),
+        transmission: s("transmission"),
+        drivetrain: s("drivetrain"),
+        fuel_type: s("fuel_type"),
+        exterior_color: s("exterior_color"),
+        interior_color: s("interior_color"),
+        odometer: s("odometer"),
+        price: s("price"),
+        stock_number: s("stock_number"),
+        condition: s("condition") || "Used",
+        status: s("status") || "Available",
       });
     })();
   }, [id]);
 
   if (!initial || !dealershipId) {
-    return <main className="mx-auto max-w-4xl px-6 py-10 text-sm text-muted-foreground">Loading…</main>;
+    return (
+      <main className="mx-auto max-w-4xl px-6 py-10 text-sm text-muted-foreground">Loading…</main>
+    );
   }
 
   return (
