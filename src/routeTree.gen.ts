@@ -9,31 +9,30 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
-import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
-import { Route as AuthenticatedOverlaysRouteImport } from './routes/_authenticated/overlays'
-import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
-import { Route as AuthenticatedExportRouteImport } from './routes/_authenticated/export'
-import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authenticated/documents'
-import { Route as AuthenticatedDealershipsRouteImport } from './routes/_authenticated/dealerships'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthenticatedBackdropsRouteImport } from './routes/_authenticated/backdrops'
-import { Route as AuthenticatedVehiclesNewRouteImport } from './routes/_authenticated/vehicles.new'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedDealershipsRouteImport } from './routes/_authenticated/dealerships'
+import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authenticated/documents'
+import { Route as AuthenticatedExportRouteImport } from './routes/_authenticated/export'
+import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
+import { Route as AuthenticatedOverlaysRouteImport } from './routes/_authenticated/overlays'
+import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedVehiclesIdRouteImport } from './routes/_authenticated/vehicles.$id'
+import { Route as AuthenticatedVehiclesNewRouteImport } from './routes/_authenticated/vehicles.new'
 import { Route as AuthenticatedVehiclesIdEditRouteImport } from './routes/_authenticated/vehicles.$id.edit'
 
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AcceptInviteRoute = AcceptInviteRouteImport.update({
@@ -41,38 +40,24 @@ const AcceptInviteRoute = AcceptInviteRouteImport.update({
   path: '/accept-invite',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRoute = AuthenticatedRouteImport.update({
-  id: '/_authenticated',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
-  id: '/users',
-  path: '/users',
+const AuthenticatedBackdropsRoute = AuthenticatedBackdropsRouteImport.update({
+  id: '/backdrops',
+  path: '/backdrops',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedOverlaysRoute = AuthenticatedOverlaysRouteImport.update({
-  id: '/overlays',
-  path: '/overlays',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedInventoryRoute = AuthenticatedInventoryRouteImport.update({
-  id: '/inventory',
-  path: '/inventory',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedExportRoute = AuthenticatedExportRouteImport.update({
-  id: '/export',
-  path: '/export',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedDocumentsRoute = AuthenticatedDocumentsRouteImport.update({
-  id: '/documents',
-  path: '/documents',
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedDealershipsRoute =
@@ -81,14 +66,34 @@ const AuthenticatedDealershipsRoute =
     path: '/dealerships',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const AuthenticatedDocumentsRoute = AuthenticatedDocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedBackdropsRoute = AuthenticatedBackdropsRouteImport.update({
-  id: '/backdrops',
-  path: '/backdrops',
+const AuthenticatedExportRoute = AuthenticatedExportRouteImport.update({
+  id: '/export',
+  path: '/export',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedInventoryRoute = AuthenticatedInventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedOverlaysRoute = AuthenticatedOverlaysRouteImport.update({
+  id: '/overlays',
+  path: '/overlays',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedVehiclesIdRoute = AuthenticatedVehiclesIdRouteImport.update({
+  id: '/vehicles/$id',
+  path: '/vehicles/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedVehiclesNewRoute =
@@ -97,11 +102,6 @@ const AuthenticatedVehiclesNewRoute =
     path: '/vehicles/new',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedVehiclesIdRoute = AuthenticatedVehiclesIdRouteImport.update({
-  id: '/vehicles/$id',
-  path: '/vehicles/$id',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedVehiclesIdEditRoute =
   AuthenticatedVehiclesIdEditRouteImport.update({
     id: '/edit',
@@ -227,25 +227,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/accept-invite': {
-      id: '/accept-invite'
-      path: '/accept-invite'
-      fullPath: '/accept-invite'
-      preLoaderRoute: typeof AcceptInviteRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -255,53 +241,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/accept-invite': {
+      id: '/accept-invite'
+      path: '/accept-invite'
+      fullPath: '/accept-invite'
+      preLoaderRoute: typeof AcceptInviteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/users': {
-      id: '/_authenticated/users'
-      path: '/users'
-      fullPath: '/users'
-      preLoaderRoute: typeof AuthenticatedUsersRouteImport
-      parentRoute: typeof AuthenticatedRoute
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/overlays': {
-      id: '/_authenticated/overlays'
-      path: '/overlays'
-      fullPath: '/overlays'
-      preLoaderRoute: typeof AuthenticatedOverlaysRouteImport
-      parentRoute: typeof AuthenticatedRoute
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/inventory': {
-      id: '/_authenticated/inventory'
-      path: '/inventory'
-      fullPath: '/inventory'
-      preLoaderRoute: typeof AuthenticatedInventoryRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/export': {
-      id: '/_authenticated/export'
-      path: '/export'
-      fullPath: '/export'
-      preLoaderRoute: typeof AuthenticatedExportRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/documents': {
-      id: '/_authenticated/documents'
-      path: '/documents'
-      fullPath: '/documents'
-      preLoaderRoute: typeof AuthenticatedDocumentsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/dealerships': {
-      id: '/_authenticated/dealerships'
-      path: '/dealerships'
-      fullPath: '/dealerships'
-      preLoaderRoute: typeof AuthenticatedDealershipsRouteImport
+    '/_authenticated/backdrops': {
+      id: '/_authenticated/backdrops'
+      path: '/backdrops'
+      fullPath: '/backdrops'
+      preLoaderRoute: typeof AuthenticatedBackdropsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/dashboard': {
@@ -311,18 +276,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/backdrops': {
-      id: '/_authenticated/backdrops'
-      path: '/backdrops'
-      fullPath: '/backdrops'
-      preLoaderRoute: typeof AuthenticatedBackdropsRouteImport
+    '/_authenticated/dealerships': {
+      id: '/_authenticated/dealerships'
+      path: '/dealerships'
+      fullPath: '/dealerships'
+      preLoaderRoute: typeof AuthenticatedDealershipsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/vehicles/new': {
-      id: '/_authenticated/vehicles/new'
-      path: '/vehicles/new'
-      fullPath: '/vehicles/new'
-      preLoaderRoute: typeof AuthenticatedVehiclesNewRouteImport
+    '/_authenticated/documents': {
+      id: '/_authenticated/documents'
+      path: '/documents'
+      fullPath: '/documents'
+      preLoaderRoute: typeof AuthenticatedDocumentsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/export': {
+      id: '/_authenticated/export'
+      path: '/export'
+      fullPath: '/export'
+      preLoaderRoute: typeof AuthenticatedExportRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory': {
+      id: '/_authenticated/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof AuthenticatedInventoryRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/overlays': {
+      id: '/_authenticated/overlays'
+      path: '/overlays'
+      fullPath: '/overlays'
+      preLoaderRoute: typeof AuthenticatedOverlaysRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/users': {
+      id: '/_authenticated/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof AuthenticatedUsersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/vehicles/$id': {
@@ -330,6 +323,13 @@ declare module '@tanstack/react-router' {
       path: '/vehicles/$id'
       fullPath: '/vehicles/$id'
       preLoaderRoute: typeof AuthenticatedVehiclesIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/vehicles/new': {
+      id: '/_authenticated/vehicles/new'
+      path: '/vehicles/new'
+      fullPath: '/vehicles/new'
+      preLoaderRoute: typeof AuthenticatedVehiclesNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/vehicles/$id/edit': {
