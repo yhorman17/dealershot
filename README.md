@@ -2,7 +2,11 @@
 
 DealerShot is a TanStack Start and Supabase application for dealership inventory, vehicle media, exports, and owner administration.
 
-**Live app:** https://dealershot.lovable.app
+**Durable deployment target:** https://dealershot.studiogecko.dev
+
+The existing Lovable preview remains available at https://dealershot.lovable.app until the
+independent DigitalOcean deployment and custom domain have been verified. See
+[the deployment runbook](docs/DEALERSHOT_DEPLOYMENT.md).
 
 ## Local development
 
@@ -15,7 +19,7 @@ Requirements:
 Never place a Supabase service-role key in a `VITE_*` variable or browser code.
 
 ```sh
-npm install
+npx bun@1.2.22 install --frozen-lockfile
 npm run dev
 ```
 
