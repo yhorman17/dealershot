@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
+import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { CONDITIONS, STATUSES, formatPrice, formatMiles } from "@/lib/vehicle-options";
 import { CarFront, Plus, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,14 +43,10 @@ type Vehicle = {
   thumbnail_url?: string | null;
 };
 
-type Dealership = { id: string; name: string };
-
 function InventoryPage() {
-  const { profile } = useAuth();
-  const isOwner = profile?.role === "owner";
+  const { dealerships, selectedDealershipId, setSelectedDealershipId, canSwitchDealerships } =
+    useAccessibleDealerships();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [dealerships, setDealerships] = useState<Dealership[]>([]);
-  const [selectedDealershipId, setSelectedDealershipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [yearFilter, setYearFilter] = useState("");
@@ -59,20 +55,6 @@ function InventoryPage() {
   const [sort, setSort] = useState("newest");
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    if (isOwner) {
-      void (async () => {
-        const { data } = await supabase.from("dealerships").select("id, name").order("name");
-        setDealerships((data as Dealership[]) || []);
-        if (data && data.length > 0 && !selectedDealershipId) {
-          setSelectedDealershipId(data[0].id);
-        }
-      })();
-    } else if (profile?.dealership_id) {
-      setSelectedDealershipId(profile.dealership_id);
-    }
-  }, [isOwner, profile?.dealership_id]);
 
   useEffect(() => {
     if (!selectedDealershipId) {
@@ -195,7 +177,7 @@ function InventoryPage() {
             className="min-w-0 flex-1"
           />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:flex">
-            {isOwner && (
+            {canSwitchDealerships && (
               <Select
                 value={selectedDealershipId || ""}
                 onValueChange={(value) => setSelectedDealershipId(value || null)}

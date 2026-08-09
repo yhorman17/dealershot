@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
-import { Aperture, Plus } from "lucide-react";
+import { Aperture, Eye, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState, PageHeader, ProductSelect } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
+import { MediaPreviewDialog, RenameMediaDialog } from "@/components/MediaAssetDialogs";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,34 +35,21 @@ type Backdrop = {
   created_at: string;
 };
 
-type Dealership = { id: string; name: string };
-
 function BackdropsPage() {
-  const { profile } = useAuth();
   const { dealership } = Route.useSearch();
-  const isOwner = profile?.role === "owner";
+  const {
+    dealerships,
+    selectedDealershipId,
+    setSelectedDealershipId,
+    loadingDealerships,
+    canSwitchDealerships,
+  } = useAccessibleDealerships(dealership);
   const [items, setItems] = useState<Backdrop[]>([]);
-  const [dealerships, setDealerships] = useState<Dealership[]>([]);
-  const [selectedDealershipId, setSelectedDealershipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Backdrop | null>(null);
-
-  useEffect(() => {
-    if (isOwner) {
-      void (async () => {
-        const { data } = await supabase.from("dealerships").select("id, name").order("name");
-        const list = (data as Dealership[]) || [];
-        setDealerships(list);
-        setSelectedDealershipId((current) => {
-          const requested = dealership && list.some((item) => item.id === dealership);
-          return requested ? dealership : (current ?? list[0]?.id ?? null);
-        });
-      })();
-    } else if (profile?.dealership_id) {
-      setSelectedDealershipId(profile.dealership_id);
-    }
-  }, [isOwner, profile?.dealership_id, dealership]);
+  const [previewTarget, setPreviewTarget] = useState<Backdrop | null>(null);
+  const [editTarget, setEditTarget] = useState<Backdrop | null>(null);
 
   const load = async () => {
     if (!selectedDealershipId) {
@@ -97,6 +86,18 @@ function BackdropsPage() {
     void load();
   };
 
+  const handleRename = async (name: string) => {
+    if (!editTarget || !selectedDealershipId) return;
+    const { error } = await supabase
+      .from("backdrops")
+      .update({ name })
+      .eq("id", editTarget.id)
+      .eq("dealership_id", selectedDealershipId);
+    if (error) throw error;
+    toast.success("Backdrop renamed");
+    await load();
+  };
+
   return (
     <main className="ds-page-gutter">
       <PageHeader
@@ -105,7 +106,7 @@ function BackdropsPage() {
         description="Manage approved showroom and lot backgrounds for processed vehicle photos."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {isOwner && (
+            {canSwitchDealerships && (
               <ProductSelect
                 value={selectedDealershipId || ""}
                 onValueChange={(value) => setSelectedDealershipId(value || null)}
@@ -125,7 +126,7 @@ function BackdropsPage() {
         }
       />
 
-      {loading ? (
+      {loading || loadingDealerships ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-busy="true">
           {Array.from({ length: 4 }).map((_, index) => (
             <div className="ds-surface overflow-hidden" key={index}>
@@ -163,13 +164,29 @@ function BackdropsPage() {
               </div>
               <div className="p-4">
                 <h3 className="font-medium text-card-foreground text-sm truncate">{b.name}</h3>
-                <div className="mt-3 flex justify-end">
-                  <button
+                <div className="mt-3 flex flex-wrap justify-end gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPreviewTarget(b)}
+                  >
+                    <Eye aria-hidden className="size-3.5" />
+                    View
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setEditTarget(b)}>
+                    <Pencil aria-hidden className="size-3.5" />
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setDeleteTarget(b)}
-                    className="text-xs text-destructive hover:text-destructive/80"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                   >
                     Delete
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -187,6 +204,17 @@ function BackdropsPage() {
           }}
         />
       )}
+      <MediaPreviewDialog
+        asset={previewTarget}
+        kind="backdrop"
+        onClose={() => setPreviewTarget(null)}
+      />
+      <RenameMediaDialog
+        asset={editTarget}
+        kind="backdrop"
+        onClose={() => setEditTarget(null)}
+        onSave={handleRename}
+      />
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

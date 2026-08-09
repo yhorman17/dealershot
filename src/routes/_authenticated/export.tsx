@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
+import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { CONDITIONS, STATUSES } from "@/lib/vehicle-options";
 import {
   type ExportVehicle,
@@ -25,14 +25,10 @@ type Vehicle = ExportVehicle & {
   photo_count?: number;
 };
 
-type Dealership = { id: string; name: string };
-
 function ExportPage() {
-  const { profile } = useAuth();
-  const isOwner = profile?.role === "owner";
+  const { dealerships, selectedDealershipId, setSelectedDealershipId, canSwitchDealerships } =
+    useAccessibleDealerships();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [dealerships, setDealerships] = useState<Dealership[]>([]);
-  const [selectedDealershipId, setSelectedDealershipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [yearFilter, setYearFilter] = useState("");
@@ -41,18 +37,6 @@ function ExportPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customOpen, setCustomOpen] = useState(false);
   const [progress, setProgress] = useState<{ cur: number; total: number } | null>(null);
-
-  useEffect(() => {
-    if (isOwner) {
-      void (async () => {
-        const { data } = await supabase.from("dealerships").select("id, name").order("name");
-        setDealerships((data as Dealership[]) || []);
-        if (data && data.length > 0 && !selectedDealershipId) setSelectedDealershipId(data[0].id);
-      })();
-    } else if (profile?.dealership_id) {
-      setSelectedDealershipId(profile.dealership_id);
-    }
-  }, [isOwner, profile?.dealership_id]);
 
   useEffect(() => {
     if (!selectedDealershipId) {
@@ -161,7 +145,7 @@ function ExportPage() {
         title="Photo exports"
         description="Select retail-ready vehicles and package their ordered photo sets into a ZIP archive."
         actions={
-          isOwner ? (
+          canSwitchDealerships ? (
             <ProductSelect
               value={selectedDealershipId || ""}
               onValueChange={(value) => setSelectedDealershipId(value || null)}

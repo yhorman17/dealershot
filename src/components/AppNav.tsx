@@ -56,12 +56,10 @@ export function AppNav({ children }: { children: ReactNode }) {
     { to: "/backdrops", label: "Backdrops", icon: Aperture },
     { to: "/documents", label: "Documents", icon: FileImage },
     { to: "/export", label: "Exports", icon: FileOutput },
-    ...(isOwner
-      ? [
-          { to: "/dealerships", label: "Dealerships", icon: Building2 },
-          { to: "/users", label: "Users & access", icon: Users },
-        ]
+    ...(isOwner || profile?.role === "dealer_admin"
+      ? [{ to: "/dealerships", label: "Dealerships", icon: Building2 }]
       : []),
+    ...(isOwner ? [{ to: "/users", label: "Users & access", icon: Users }] : []),
   ];
 
   const title = pageTitle(pathname);
@@ -291,7 +289,6 @@ export function AppNav({ children }: { children: ReactNode }) {
 function pageTitle(pathname: string) {
   if (pathname.startsWith("/vehicles/new")) return "Add vehicle";
   if (pathname.startsWith("/vehicles/")) return "Vehicle workspace";
-  if (pathname.startsWith("/dealerships/")) return "Dealership workspace";
   const labels: Record<string, string> = {
     "/dashboard": "Overview",
     "/inventory": "Inventory",

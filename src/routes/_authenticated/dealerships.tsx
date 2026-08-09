@@ -1,8 +1,8 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowRight, Building2, Plus } from "lucide-react";
+import { Building2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,6 +35,8 @@ type Dealership = {
 
 function DealershipsPage() {
   const { profile, loading: authLoading } = useAuth();
+  const isOwner = profile?.role === "owner";
+  const canViewDealerships = isOwner || profile?.role === "dealer_admin";
   const navigate = useNavigate();
   const [dealerships, setDealerships] = useState<Dealership[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,10 +45,10 @@ function DealershipsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Dealership | null>(null);
 
   useEffect(() => {
-    if (!authLoading && profile && profile.role !== "owner") {
+    if (!authLoading && profile && !canViewDealerships) {
       navigate({ to: "/dashboard", replace: true });
     }
-  }, [profile, authLoading, navigate]);
+  }, [profile, authLoading, navigate, canViewDealerships]);
 
   const load = async () => {
     setLoading(true);
@@ -59,8 +61,8 @@ function DealershipsPage() {
   };
 
   useEffect(() => {
-    if (profile?.role === "owner") void load();
-  }, [profile?.role]);
+    if (canViewDealerships) void load();
+  }, [canViewDealerships]);
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("dealerships").delete().eq("id", id);
@@ -70,24 +72,30 @@ function DealershipsPage() {
     void load();
   };
 
-  if (profile?.role !== "owner") return null;
+  if (!canViewDealerships) return null;
 
   return (
     <main className="ds-page-gutter">
       <PageHeader
-        eyebrow="Platform administration"
+        eyebrow={isOwner ? "Platform administration" : "Assigned access"}
         title="Dealerships"
-        description="Create and manage dealership tenant accounts, subscriptions, and contact details."
+        description={
+          isOwner
+            ? "Create and manage dealership tenant accounts, subscriptions, and contact details."
+            : "Review every active dealership workspace assigned to your administrator account."
+        }
         actions={
-          <Button
-            onClick={() => {
-              setEditing(null);
-              setShowForm(true);
-            }}
-          >
-            <Plus className="size-4" />
-            Add dealership
-          </Button>
+          isOwner ? (
+            <Button
+              onClick={() => {
+                setEditing(null);
+                setShowForm(true);
+              }}
+            >
+              <Plus className="size-4" />
+              Add dealership
+            </Button>
+          ) : undefined
         }
       />
 
@@ -114,15 +122,17 @@ function DealershipsPage() {
             title="No dealerships yet"
             description="Create the first dealership tenant before inviting staff or adding inventory."
             action={
-              <Button
-                onClick={() => {
-                  setEditing(null);
-                  setShowForm(true);
-                }}
-              >
-                <Plus className="size-4" />
-                Create dealership
-              </Button>
+              isOwner ? (
+                <Button
+                  onClick={() => {
+                    setEditing(null);
+                    setShowForm(true);
+                  }}
+                >
+                  <Plus className="size-4" />
+                  Create dealership
+                </Button>
+              ) : undefined
             }
           />
         </div>
@@ -163,29 +173,25 @@ function DealershipsPage() {
                     <dd className="text-card-foreground text-right">{d.phone || "—"}</dd>
                   </div>
                 </dl>
-                <Button asChild variant="secondary" className="mt-3 w-full justify-between">
-                  <Link to="/dealerships/$dealershipId" params={{ dealershipId: d.id }}>
-                    View dealership
-                    <ArrowRight aria-hidden />
-                  </Link>
-                </Button>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => {
-                      setEditing(d);
-                      setShowForm(true);
-                    }}
-                    className="flex-1 rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground hover:bg-secondary/80"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(d)}
-                    className="flex-1 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 min-h-[44px] text-xs font-medium text-destructive hover:bg-destructive/20"
-                  >
-                    Delete
-                  </button>
-                </div>
+                {isOwner && (
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={() => {
+                        setEditing(d);
+                        setShowForm(true);
+                      }}
+                      className="flex-1 rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground hover:bg-secondary/80"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(d)}
+                      className="flex-1 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 min-h-[44px] text-xs font-medium text-destructive hover:bg-destructive/20"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -199,7 +205,7 @@ function DealershipsPage() {
                   <th className="px-4 py-3 font-medium">Address</th>
                   <th className="px-4 py-3 font-medium">Phone</th>
                   <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="w-48 px-4 py-3 text-right font-medium">Actions</th>
+                  {isOwner && <th className="w-36 px-4 py-3 text-right font-medium">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -230,30 +236,25 @@ function DealershipsPage() {
                         {d.subscription_status}
                       </StatusBadge>
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        to="/dealerships/$dealershipId"
-                        params={{ dealershipId: d.id }}
-                        className="mr-3 text-xs font-medium text-primary hover:text-primary/80"
-                      >
-                        View
-                      </Link>
-                      <button
-                        onClick={() => {
-                          setEditing(d);
-                          setShowForm(true);
-                        }}
-                        className="text-xs text-muted-foreground hover:text-foreground mr-3"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(d)}
-                        className="text-xs text-destructive hover:text-destructive/80"
-                      >
-                        Delete
-                      </button>
-                    </td>
+                    {isOwner && (
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => {
+                            setEditing(d);
+                            setShowForm(true);
+                          }}
+                          className="text-xs text-muted-foreground hover:text-foreground mr-3"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(d)}
+                          className="text-xs text-destructive hover:text-destructive/80"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -262,7 +263,7 @@ function DealershipsPage() {
         </>
       )}
 
-      {showForm && (
+      {isOwner && showForm && (
         <DealershipForm
           dealership={editing}
           onClose={() => setShowForm(false)}

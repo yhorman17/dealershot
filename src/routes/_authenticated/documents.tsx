@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
+import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { CONDITIONS, STATUSES } from "@/lib/vehicle-options";
 import { FileImage, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -109,7 +109,6 @@ export const Route = createFileRoute("/_authenticated/documents")({
   component: DocumentsPage,
 });
 
-type Dealership = { id: string; name: string };
 type DocumentRow = {
   id: string;
   name: string;
@@ -119,11 +118,14 @@ type DocumentRow = {
 };
 
 function DocumentsPage() {
-  const { profile } = useAuth();
   const { dealership } = Route.useSearch();
-  const isOwner = profile?.role === "owner";
-  const [dealerships, setDealerships] = useState<Dealership[]>([]);
-  const [selectedDealershipId, setSelectedDealershipId] = useState<string | null>(null);
+  const {
+    dealerships,
+    selectedDealershipId,
+    setSelectedDealershipId,
+    loadingDealerships,
+    canSwitchDealerships,
+  } = useAccessibleDealerships(dealership);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -131,22 +133,6 @@ function DocumentsPage() {
   const [editing, setEditing] = useState<DocumentRow | null>(null);
   const [attachingDoc, setAttachingDoc] = useState<DocumentRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
-
-  useEffect(() => {
-    if (isOwner) {
-      void (async () => {
-        const { data } = await supabase.from("dealerships").select("id, name").order("name");
-        const list = (data as Dealership[]) || [];
-        setDealerships(list);
-        setSelectedDealershipId((current) => {
-          const requested = dealership && list.some((item) => item.id === dealership);
-          return requested ? dealership : (current ?? list[0]?.id ?? null);
-        });
-      })();
-    } else if (profile?.dealership_id) {
-      setSelectedDealershipId(profile.dealership_id);
-    }
-  }, [isOwner, profile?.dealership_id, dealership]);
 
   const load = async () => {
     if (!selectedDealershipId) {
@@ -208,7 +194,7 @@ function DocumentsPage() {
         description="Maintain reusable window stickers, disclosures, and supporting images, then attach them to inventory."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {isOwner && (
+            {canSwitchDealerships && (
               <ProductSelect
                 value={selectedDealershipId || ""}
                 onValueChange={(value) => setSelectedDealershipId(value || null)}
@@ -228,7 +214,7 @@ function DocumentsPage() {
         }
       />
 
-      {loading ? (
+      {loading || loadingDealerships ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-busy="true">
           {Array.from({ length: 4 }).map((_, index) => (
             <div className="ds-surface overflow-hidden" key={index}>

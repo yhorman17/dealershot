@@ -40,6 +40,7 @@ type UserRow = {
   full_name: string | null;
   role: string;
   dealership_id: string | null;
+  dealership_ids: string[];
   status: string;
   created_at: string;
   last_sign_in_at: string | null;
@@ -106,7 +107,7 @@ function UsersPage() {
 
   const filteredUsers = useMemo(() => {
     if (filterDealership === "all") return users;
-    return users.filter((u) => u.dealership_id === filterDealership);
+    return users.filter((u) => u.dealership_ids.includes(filterDealership));
   }, [users, filterDealership]);
 
   const pendingInvites = useMemo(() => {
@@ -361,6 +362,7 @@ function ActiveUsersTab({
           <tbody>
             {users.map((u) => {
               const d = u.dealership_id ? dealershipById.get(u.dealership_id) : null;
+              const additionalDealershipCount = Math.max(0, u.dealership_ids.length - 1);
               const isSelf = u.id === currentUserId;
               return (
                 <tr key={u.id} className="motion-row border-t border-border hover:bg-secondary/20">
@@ -389,6 +391,11 @@ function ActiveUsersTab({
                           />
                         ) : null}
                         <span>{d.name}</span>
+                        {additionalDealershipCount > 0 && (
+                          <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
+                            +{additionalDealershipCount}
+                          </span>
+                        )}
                       </div>
                     ) : (
                       "—"
@@ -419,6 +426,7 @@ function ActiveUsersTab({
       <div className="md:hidden divide-y divide-border">
         {users.map((u) => {
           const d = u.dealership_id ? dealershipById.get(u.dealership_id) : null;
+          const additionalDealershipCount = Math.max(0, u.dealership_ids.length - 1);
           const isSelf = u.id === currentUserId;
           return (
             <div key={u.id} className="motion-row p-4">
@@ -431,6 +439,11 @@ function ActiveUsersTab({
                   <div className="mt-1 flex items-center gap-2 flex-wrap">
                     <RoleBadge role={u.role} />
                     {d && <span className="text-[10px] text-muted-foreground">{d.name}</span>}
+                    {additionalDealershipCount > 0 && (
+                      <span className="text-[10px] text-muted-foreground">
+                        +{additionalDealershipCount} more
+                      </span>
+                    )}
                     {u.status === "deactivated" && (
                       <span className="motion-status text-[10px] uppercase tracking-wide rounded-full bg-destructive/15 text-destructive px-1.5 py-0.5">
                         Deactivated
@@ -675,7 +688,13 @@ function EditUserModal({
   const callUpdateUser = useServerFn(updateUserAccount);
   const [fullName, setFullName] = useState(user.full_name ?? "");
   const [role, setRole] = useState(user.role);
-  const [dealershipId, setDealershipId] = useState(user.dealership_id ?? "");
+  const [dealershipIds, setDealershipIds] = useState<string[]>(
+    user.dealership_ids.length > 0
+      ? user.dealership_ids
+      : user.dealership_id
+        ? [user.dealership_id]
+        : [],
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -696,7 +715,7 @@ function EditUserModal({
             user_id: user.id,
             full_name: fullName.trim(),
             role: user.role === "owner" ? undefined : (role as "dealer_admin" | "staff"),
-            dealership_id: user.role === "owner" ? null : dealershipId || null,
+            dealership_ids: user.role === "owner" ? [] : dealershipIds,
           },
         });
       }
@@ -748,7 +767,12 @@ function EditUserModal({
             <ProductSelect
               value={role}
               disabled={isSelf || user.role === "owner"}
-              onValueChange={setRole}
+              onValueChange={(nextRole) => {
+                setRole(nextRole);
+                if (nextRole === "staff" && dealershipIds.length > 1) {
+                  setDealershipIds([dealershipIds[0]]);
+                }
+              }}
               ariaLabel="Role"
               options={[
                 { value: "staff", label: "Staff" },
@@ -764,12 +788,20 @@ function EditUserModal({
           </div>
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">
-              Dealership
+              Primary dealership
             </label>
             <ProductSelect
-              value={dealershipId}
+              value={dealershipIds[0] ?? ""}
               disabled={isSelf || user.role === "owner"}
-              onValueChange={setDealershipId}
+              onValueChange={(value) =>
+                setDealershipIds((current) =>
+                  role === "dealer_admin"
+                    ? [value, ...current.filter((id) => id !== value)]
+                    : value
+                      ? [value]
+                      : [],
+                )
+              }
               ariaLabel="Dealership"
               emptyLabel="—"
               options={dealerships.map((dealership) => ({
@@ -777,6 +809,44 @@ function EditUserModal({
                 label: dealership.name,
               }))}
             />
+            {role === "dealer_admin" && user.role !== "owner" && (
+              <div className="mt-3">
+                <p className="mb-1.5 text-xs font-medium text-card-foreground">
+                  Additional dealership access
+                </p>
+                <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border bg-background p-2">
+                  {dealerships
+                    .filter((dealership) => dealership.id !== dealershipIds[0])
+                    .map((dealership) => {
+                      const selected = dealershipIds.includes(dealership.id);
+                      return (
+                        <label
+                          key={dealership.id}
+                          className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-secondary/60"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            disabled={isSelf}
+                            onChange={(event) =>
+                              setDealershipIds((current) =>
+                                event.target.checked
+                                  ? [...current, dealership.id]
+                                  : current.filter((id) => id !== dealership.id),
+                              )
+                            }
+                            className="size-4 accent-primary"
+                          />
+                          <span>{dealership.name}</span>
+                        </label>
+                      );
+                    })}
+                </div>
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  This administrator can switch between every selected dealership.
+                </p>
+              </div>
+            )}
           </div>
           {error && (
             <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
@@ -793,7 +863,7 @@ function EditUserModal({
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || (user.role !== "owner" && dealershipIds.length === 0)}
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
             >
               {saving ? "Saving…" : "Save changes"}

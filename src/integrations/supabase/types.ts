@@ -244,6 +244,39 @@ export type Database = {
           },
         ];
       };
+      profile_dealerships: {
+        Row: {
+          created_at: string;
+          dealership_id: string;
+          profile_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          dealership_id: string;
+          profile_id: string;
+        };
+        Update: {
+          created_at?: string;
+          dealership_id?: string;
+          profile_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "profile_dealerships_dealership_id_fkey";
+            columns: ["dealership_id"];
+            isOneToOne: false;
+            referencedRelation: "dealerships";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "profile_dealerships_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       user_invitations: {
         Row: {
           accepted_at: string | null;
@@ -422,6 +455,16 @@ export type Database = {
     };
     Functions: {
       accept_invitation: { Args: { _token: string }; Returns: Json };
+      admin_update_user_account_access: {
+        Args: {
+          _actor_user_id: string;
+          _dealership_ids: string[];
+          _full_name: string;
+          _role: Database["public"]["Enums"]["app_role"];
+          _target_user_id: string;
+        };
+        Returns: undefined;
+      };
       check_invitation_account_exists: {
         Args: { _token: string };
         Returns: boolean;

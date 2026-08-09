@@ -58,17 +58,10 @@ async function verifyAuthorization(userId: string): Promise<AuthorizationResult<
   }
 
   if (nextProfile.role !== "owner") {
-    if (!nextProfile.dealership_id) {
-      return {
-        kind: "denied",
-        message: "Your account is not assigned to a dealership. Contact support.",
-      };
-    }
-
     const { data: dealership, error: dealershipError } = await supabase
       .from("dealerships")
-      .select("status, subscription_status")
-      .eq("id", nextProfile.dealership_id)
+      .select("id")
+      .limit(1)
       .maybeSingle();
 
     if (dealershipError) {
@@ -77,11 +70,7 @@ async function verifyAuthorization(userId: string): Promise<AuthorizationResult<
         message: "We couldn't verify your dealership access. Check your connection and retry.",
       };
     }
-    if (
-      !dealership ||
-      !["active", "trial"].includes(dealership.status) ||
-      dealership.subscription_status !== "active"
-    ) {
+    if (!dealership) {
       return {
         kind: "denied",
         message: "Your dealership account is not active. Contact support.",

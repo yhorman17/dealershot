@@ -40,7 +40,7 @@ export function InviteUserModal({
       .then(({ data }) => {
         const list = (data as Dealership[]) ?? [];
         setDealerships(list);
-        if (!dealershipId && list.length) setDealershipId(list[0].id);
+        setDealershipId((current) => current || list[0]?.id || "");
       });
   }, []);
 
@@ -114,7 +114,7 @@ export function InviteUserModal({
           </div>
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">
-              Dealership
+              {role === "dealer_admin" ? "Primary dealership" : "Dealership"}
             </label>
             <ProductSelect
               value={dealershipId}
@@ -126,6 +126,11 @@ export function InviteUserModal({
                 label: dealership.name,
               }))}
             />
+            {role === "dealer_admin" && (
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                After they accept, use Edit user to assign additional dealerships.
+              </p>
+            )}
           </div>
           {error && (
             <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">

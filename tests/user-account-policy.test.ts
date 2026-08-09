@@ -8,7 +8,7 @@ test("browser input cannot promote a dealer user to owner", () => {
       resolveUserAccountUpdate({
         targetRole: "staff",
         requestedRole: "owner" as never,
-        requestedDealershipId: "dealership-a",
+        requestedDealershipIds: ["dealership-a"],
       }),
     /Select a dealer role/,
   );
@@ -18,9 +18,9 @@ test("existing owner updates preserve owner and clear dealership assignment", ()
   assert.deepEqual(
     resolveUserAccountUpdate({
       targetRole: "owner",
-      requestedDealershipId: "unexpected-dealership",
+      requestedDealershipIds: ["unexpected-dealership"],
     }),
-    { role: "owner", dealershipId: null },
+    { role: "owner", dealershipId: null, dealershipIds: [] },
   );
 });
 
@@ -30,7 +30,7 @@ test("browser input cannot change an existing owner role", () => {
       resolveUserAccountUpdate({
         targetRole: "owner",
         requestedRole: "staff",
-        requestedDealershipId: "dealership-a",
+        requestedDealershipIds: ["dealership-a"],
       }),
     /Owner roles cannot be changed/,
   );
@@ -41,7 +41,7 @@ test("dealer updates require a permitted role and dealership", () => {
     () =>
       resolveUserAccountUpdate({
         targetRole: "staff",
-        requestedDealershipId: "dealership-a",
+        requestedDealershipIds: ["dealership-a"],
       }),
     /Select a dealer role/,
   );
@@ -50,7 +50,7 @@ test("dealer updates require a permitted role and dealership", () => {
       resolveUserAccountUpdate({
         targetRole: "staff",
         requestedRole: "dealer_admin",
-        requestedDealershipId: null,
+        requestedDealershipIds: [],
       }),
     /active dealership/,
   );
@@ -58,8 +58,24 @@ test("dealer updates require a permitted role and dealership", () => {
     resolveUserAccountUpdate({
       targetRole: "staff",
       requestedRole: "dealer_admin",
-      requestedDealershipId: "dealership-a",
+      requestedDealershipIds: ["dealership-a", "dealership-b", "dealership-a"],
     }),
-    { role: "dealer_admin", dealershipId: "dealership-a" },
+    {
+      role: "dealer_admin",
+      dealershipId: "dealership-a",
+      dealershipIds: ["dealership-a", "dealership-b"],
+    },
+  );
+});
+
+test("staff accounts cannot receive multiple dealership assignments", () => {
+  assert.throws(
+    () =>
+      resolveUserAccountUpdate({
+        targetRole: "dealer_admin",
+        requestedRole: "staff",
+        requestedDealershipIds: ["dealership-a", "dealership-b"],
+      }),
+    /exactly one dealership/,
   );
 });

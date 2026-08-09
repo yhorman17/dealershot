@@ -22,7 +22,6 @@ import { Route as AuthenticatedExportRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
 import { Route as AuthenticatedOverlaysRouteImport } from './routes/_authenticated/overlays'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
-import { Route as AuthenticatedDealershipsDealershipIdRouteImport } from './routes/_authenticated/dealerships.$dealershipId'
 import { Route as AuthenticatedVehiclesIdRouteImport } from './routes/_authenticated/vehicles.$id'
 import { Route as AuthenticatedVehiclesNewRouteImport } from './routes/_authenticated/vehicles.new'
 import { Route as AuthenticatedVehiclesIdEditRouteImport } from './routes/_authenticated/vehicles.$id.edit'
@@ -92,12 +91,6 @@ const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedDealershipsDealershipIdRoute =
-  AuthenticatedDealershipsDealershipIdRouteImport.update({
-    id: '/$dealershipId',
-    path: '/$dealershipId',
-    getParentRoute: () => AuthenticatedDealershipsRoute,
-  } as any)
 const AuthenticatedVehiclesIdRoute = AuthenticatedVehiclesIdRouteImport.update({
   id: '/vehicles/$id',
   path: '/vehicles/$id',
@@ -123,13 +116,12 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/backdrops': typeof AuthenticatedBackdropsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/dealerships': typeof AuthenticatedDealershipsRouteWithChildren
+  '/dealerships': typeof AuthenticatedDealershipsRoute
   '/documents': typeof AuthenticatedDocumentsRoute
   '/export': typeof AuthenticatedExportRoute
   '/inventory': typeof AuthenticatedInventoryRoute
   '/overlays': typeof AuthenticatedOverlaysRoute
   '/users': typeof AuthenticatedUsersRoute
-  '/dealerships/$dealershipId': typeof AuthenticatedDealershipsDealershipIdRoute
   '/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
@@ -141,13 +133,12 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/backdrops': typeof AuthenticatedBackdropsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/dealerships': typeof AuthenticatedDealershipsRouteWithChildren
+  '/dealerships': typeof AuthenticatedDealershipsRoute
   '/documents': typeof AuthenticatedDocumentsRoute
   '/export': typeof AuthenticatedExportRoute
   '/inventory': typeof AuthenticatedInventoryRoute
   '/overlays': typeof AuthenticatedOverlaysRoute
   '/users': typeof AuthenticatedUsersRoute
-  '/dealerships/$dealershipId': typeof AuthenticatedDealershipsDealershipIdRoute
   '/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
@@ -161,13 +152,12 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/backdrops': typeof AuthenticatedBackdropsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
-  '/_authenticated/dealerships': typeof AuthenticatedDealershipsRouteWithChildren
+  '/_authenticated/dealerships': typeof AuthenticatedDealershipsRoute
   '/_authenticated/documents': typeof AuthenticatedDocumentsRoute
   '/_authenticated/export': typeof AuthenticatedExportRoute
   '/_authenticated/inventory': typeof AuthenticatedInventoryRoute
   '/_authenticated/overlays': typeof AuthenticatedOverlaysRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
-  '/_authenticated/dealerships/$dealershipId': typeof AuthenticatedDealershipsDealershipIdRoute
   '/_authenticated/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/_authenticated/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/_authenticated/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
@@ -187,7 +177,6 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/overlays'
     | '/users'
-    | '/dealerships/$dealershipId'
     | '/vehicles/$id'
     | '/vehicles/new'
     | '/vehicles/$id/edit'
@@ -205,7 +194,6 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/overlays'
     | '/users'
-    | '/dealerships/$dealershipId'
     | '/vehicles/$id'
     | '/vehicles/new'
     | '/vehicles/$id/edit'
@@ -224,7 +212,6 @@ export interface FileRouteTypes {
     | '/_authenticated/inventory'
     | '/_authenticated/overlays'
     | '/_authenticated/users'
-    | '/_authenticated/dealerships/$dealershipId'
     | '/_authenticated/vehicles/$id'
     | '/_authenticated/vehicles/new'
     | '/_authenticated/vehicles/$id/edit'
@@ -331,13 +318,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/dealerships/$dealershipId': {
-      id: '/_authenticated/dealerships/$dealershipId'
-      path: '/$dealershipId'
-      fullPath: '/dealerships/$dealershipId'
-      preLoaderRoute: typeof AuthenticatedDealershipsDealershipIdRouteImport
-      parentRoute: typeof AuthenticatedDealershipsRoute
-    }
     '/_authenticated/vehicles/$id': {
       id: '/_authenticated/vehicles/$id'
       path: '/vehicles/$id'
@@ -362,21 +342,6 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AuthenticatedDealershipsRouteChildren {
-  AuthenticatedDealershipsDealershipIdRoute: typeof AuthenticatedDealershipsDealershipIdRoute
-}
-
-const AuthenticatedDealershipsRouteChildren: AuthenticatedDealershipsRouteChildren =
-  {
-    AuthenticatedDealershipsDealershipIdRoute:
-      AuthenticatedDealershipsDealershipIdRoute,
-  }
-
-const AuthenticatedDealershipsRouteWithChildren =
-  AuthenticatedDealershipsRoute._addFileChildren(
-    AuthenticatedDealershipsRouteChildren,
-  )
-
 interface AuthenticatedVehiclesIdRouteChildren {
   AuthenticatedVehiclesIdEditRoute: typeof AuthenticatedVehiclesIdEditRoute
 }
@@ -394,7 +359,7 @@ const AuthenticatedVehiclesIdRouteWithChildren =
 interface AuthenticatedRouteChildren {
   AuthenticatedBackdropsRoute: typeof AuthenticatedBackdropsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
-  AuthenticatedDealershipsRoute: typeof AuthenticatedDealershipsRouteWithChildren
+  AuthenticatedDealershipsRoute: typeof AuthenticatedDealershipsRoute
   AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRoute
   AuthenticatedExportRoute: typeof AuthenticatedExportRoute
   AuthenticatedInventoryRoute: typeof AuthenticatedInventoryRoute
@@ -407,7 +372,7 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedBackdropsRoute: AuthenticatedBackdropsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
-  AuthenticatedDealershipsRoute: AuthenticatedDealershipsRouteWithChildren,
+  AuthenticatedDealershipsRoute: AuthenticatedDealershipsRoute,
   AuthenticatedDocumentsRoute: AuthenticatedDocumentsRoute,
   AuthenticatedExportRoute: AuthenticatedExportRoute,
   AuthenticatedInventoryRoute: AuthenticatedInventoryRoute,

@@ -103,6 +103,13 @@ WHERE id = '00000000-0000-0000-0000-000000000005';
 UPDATE public.profiles SET role = 'owner', status = 'deactivated'
 WHERE id = '00000000-0000-0000-0000-000000000011';
 
+-- Dealer Admin A is explicitly assigned to two active dealerships. An extra
+-- fixture row for Staff A proves that staff remain limited to their primary
+-- dealership even if assignment data drifts.
+INSERT INTO public.profile_dealerships (profile_id, dealership_id) VALUES
+  ('00000000-0000-0000-0000-000000000002', 'bbbbbbbb-0000-0000-0000-000000000001'),
+  ('00000000-0000-0000-0000-000000000003', 'bbbbbbbb-0000-0000-0000-000000000001');
+
 INSERT INTO public.vehicles (id, dealership_id, vin, make, model) VALUES
   ('10000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'VIN-A', 'Test', 'A'),
   ('10000000-0000-0000-0000-000000000002', 'bbbbbbbb-0000-0000-0000-000000000001', 'VIN-B', 'Test', 'B'),
@@ -136,7 +143,7 @@ SELECT test.assert_true(
       AND c.relname IN (
         'profiles', 'dealerships', 'vehicles', 'photos', 'overlay_templates',
         'documents', 'vehicle_documents', 'backdrops', 'impersonation_logs',
-        'user_invitations', 'objects'
+        'user_invitations', 'profile_dealerships', 'objects'
       )
       AND r.rolname = 'authenticated'
   ),
@@ -144,14 +151,14 @@ SELECT test.assert_true(
 );
 SELECT test.assert_true(
   (
-    SELECT count(*) = 11
+    SELECT count(*) = 12
     FROM pg_class AS c
     JOIN pg_namespace AS n ON n.oid = c.relnamespace
     WHERE n.nspname IN ('public', 'storage')
       AND c.relname IN (
         'profiles', 'dealerships', 'vehicles', 'photos', 'overlay_templates',
         'documents', 'vehicle_documents', 'backdrops', 'impersonation_logs',
-        'user_invitations', 'objects'
+        'user_invitations', 'profile_dealerships', 'objects'
       )
       AND c.relrowsecurity
   ),
@@ -182,6 +189,15 @@ SELECT test.expect_sqlstate(
   'staff cannot change their own dealership'
 );
 SELECT test.assert_true((SELECT count(*) = 1 FROM public.vehicles), 'staff A sees only dealer A vehicles');
+SELECT test.assert_true(
+  (SELECT count(*) = 1 FROM public.dealerships),
+  'staff A cannot use an extra assignment outside their primary dealership'
+);
+SELECT test.expect_sqlstate(
+  $$INSERT INTO public.profile_dealerships (profile_id, dealership_id) VALUES ('00000000-0000-0000-0000-000000000003', 'cccccccc-0000-0000-0000-000000000001')$$,
+  '42501',
+  'staff cannot assign themselves to another dealership'
+);
 SELECT test.expect_sqlstate(
   $$INSERT INTO public.vehicles (dealership_id, make) VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'Cross tenant')$$,
   '42501',
@@ -282,6 +298,14 @@ RESET ROLE;
 -- Dealer administrator A cannot mutate protected profile columns directly.
 SET ROLE authenticated;
 SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT test.assert_true(
+  (SELECT count(*) = 2 FROM public.dealerships),
+  'dealer administrator sees every active assigned dealership'
+);
+SELECT test.assert_true(
+  (SELECT count(*) = 2 FROM public.vehicles),
+  'dealer administrator sees tenant data across assigned dealerships'
+);
 SELECT test.expect_sqlstate(
   $$UPDATE public.profiles SET role = 'owner' WHERE id = '00000000-0000-0000-0000-000000000002'$$,
   '42501',
@@ -306,6 +330,31 @@ SELECT test.assert_row_count(
   $$DELETE FROM public.vehicles WHERE id = '10000000-0000-0000-0000-000000000010'$$,
   1,
   'dealer administrator can delete a vehicle in their dealership'
+);
+SELECT test.assert_row_count(
+  $$INSERT INTO public.vehicles (id, dealership_id, make) VALUES ('10000000-0000-0000-0000-000000000011', 'bbbbbbbb-0000-0000-0000-000000000001', 'Second assigned dealer')$$,
+  1,
+  'dealer administrator can create tenant data in a second assigned dealership'
+);
+SELECT test.assert_row_count(
+  $$DELETE FROM public.vehicles WHERE id = '10000000-0000-0000-0000-000000000011'$$,
+  1,
+  'dealer administrator can administer a second assigned dealership'
+);
+SELECT test.assert_row_count(
+  $$INSERT INTO storage.objects (bucket_id, name) VALUES ('overlays', 'bbbbbbbb-0000-0000-0000-000000000001/admin-b.png')$$,
+  1,
+  'dealer administrator can upload to a second assigned dealership path'
+);
+SELECT test.expect_sqlstate(
+  $$INSERT INTO storage.objects (bucket_id, name) VALUES ('overlays', 'cccccccc-0000-0000-0000-000000000001/admin-suspended.png')$$,
+  '42501',
+  'dealer administrator cannot use an unassigned or suspended dealership path'
+);
+SELECT test.expect_sqlstate(
+  $$INSERT INTO public.profile_dealerships (profile_id, dealership_id) VALUES ('00000000-0000-0000-0000-000000000002', 'cccccccc-0000-0000-0000-000000000001')$$,
+  '42501',
+  'dealer administrator cannot expand their own assignments'
 );
 RESET ROLE;
 
@@ -401,6 +450,45 @@ RESET ROLE;
 
 -- The server-only service role remains the authorized profile administration path.
 SET ROLE service_role;
+UPDATE public.profiles
+SET dealership_id = NULL
+WHERE id = '00000000-0000-0000-0000-000000000002';
+SELECT test.assert_true(
+  (
+    SELECT count(*) = 2
+    FROM public.profile_dealerships
+    WHERE profile_id = '00000000-0000-0000-0000-000000000002'
+  ),
+  'clearing an administrator primary preserves their remaining assignments'
+);
+UPDATE public.profiles
+SET dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+WHERE id = '00000000-0000-0000-0000-000000000002';
+SELECT public.admin_update_user_account_access(
+  '00000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000003',
+  'Staff A',
+  'dealer_admin'::public.app_role,
+  ARRAY[
+    'aaaaaaaa-0000-0000-0000-000000000001'::uuid,
+    'bbbbbbbb-0000-0000-0000-000000000001'::uuid
+  ]
+);
+SELECT test.assert_true(
+  (
+    SELECT count(*) = 2
+    FROM public.profile_dealerships
+    WHERE profile_id = '00000000-0000-0000-0000-000000000003'
+  ),
+  'server-only account administration replaces dealership assignments atomically'
+);
+SELECT public.admin_update_user_account_access(
+  '00000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000003',
+  'Staff A',
+  'staff'::public.app_role,
+  ARRAY['aaaaaaaa-0000-0000-0000-000000000001'::uuid]
+);
 SELECT test.assert_row_count(
   $$UPDATE public.profiles SET role = 'dealer_admin' WHERE id = '00000000-0000-0000-0000-000000000003'$$,
   1,
@@ -432,6 +520,15 @@ SELECT test.assert_true(
   (SELECT dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001' AND role = 'staff'
    FROM public.profiles WHERE id = '00000000-0000-0000-0000-000000000007'),
   'valid invitation stores the approved role and dealership'
+);
+SELECT test.assert_true(
+  (
+    SELECT count(*) = 1
+    FROM public.profile_dealerships
+    WHERE profile_id = '00000000-0000-0000-0000-000000000007'
+      AND dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+  ),
+  'invitation acceptance creates the initial normalized dealership assignment'
 );
 
 SET ROLE authenticated;
@@ -482,6 +579,26 @@ SELECT test.assert_true(
   'authenticated has no direct profile INSERT or DELETE privilege'
 );
 SELECT test.assert_true(
+  NOT has_table_privilege('authenticated', 'public.profile_dealerships', 'SELECT')
+    AND NOT has_table_privilege('authenticated', 'public.profile_dealerships', 'INSERT')
+    AND NOT has_table_privilege('authenticated', 'public.profile_dealerships', 'UPDATE')
+    AND NOT has_table_privilege('authenticated', 'public.profile_dealerships', 'DELETE'),
+  'authenticated has no direct dealership-assignment privileges'
+);
+SELECT test.assert_true(
+  NOT has_function_privilege(
+    'authenticated',
+    'public.admin_update_user_account_access(uuid,uuid,text,public.app_role,uuid[])',
+    'EXECUTE'
+  )
+    AND has_function_privilege(
+      'service_role',
+      'public.admin_update_user_account_access(uuid,uuid,text,public.app_role,uuid[])',
+      'EXECUTE'
+    ),
+  'only service_role can execute the atomic account-assignment function'
+);
+SELECT test.assert_true(
   NOT has_table_privilege('anon', 'public.profiles', 'SELECT')
     AND NOT has_table_privilege('anon', 'public.vehicles', 'SELECT'),
   'anonymous users have no public-table access'
@@ -501,7 +618,8 @@ SELECT test.assert_true(
          n.nspname = 'public'
          AND p.proname IN (
            'handle_new_user', 'get_invitation_details',
-           'check_invitation_account_exists', 'accept_invitation'
+            'check_invitation_account_exists', 'accept_invitation',
+            'admin_update_user_account_access'
          )
        )
   ),

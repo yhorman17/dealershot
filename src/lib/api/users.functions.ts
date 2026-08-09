@@ -34,6 +34,30 @@ async function assertActiveDealership(dealershipId: string) {
   }
 }
 
+async function assertActiveDealerships(dealershipIds: string[]) {
+  const uniqueIds = [...new Set(dealershipIds)];
+  if (uniqueIds.length !== dealershipIds.length) {
+    throw new Error("Duplicate dealership assignments are not allowed.");
+  }
+  const { data, error } = await supabaseAdmin
+    .from("dealerships")
+    .select("id, status, subscription_status")
+    .in("id", uniqueIds);
+  if (error) throw new Error(error.message);
+  const activeIds = new Set(
+    (data ?? [])
+      .filter(
+        (dealership) =>
+          ["active", "trial"].includes(dealership.status) &&
+          dealership.subscription_status === "active",
+      )
+      .map((dealership) => dealership.id),
+  );
+  if (uniqueIds.length === 0 || uniqueIds.some((id) => !activeIds.has(id))) {
+    throw new Error("Every assigned dealership must be active.");
+  }
+}
+
 async function assertTargetProfile(userId: string) {
   const { data, error } = await supabaseAdmin
     .from("profiles")
@@ -45,13 +69,46 @@ async function assertTargetProfile(userId: string) {
   return data;
 }
 
+async function assertProfileHasActiveDealership(
+  userId: string,
+  role: string,
+  primaryDealershipId: string | null,
+) {
+  let dealershipIds = primaryDealershipId ? [primaryDealershipId] : [];
+  if (role === "dealer_admin") {
+    const { data, error } = await supabaseAdmin
+      .from("profile_dealerships")
+      .select("dealership_id")
+      .eq("profile_id", userId);
+    if (error) throw new Error(error.message);
+    dealershipIds = (data ?? []).map((assignment) => assignment.dealership_id);
+  }
+  if (dealershipIds.length === 0) {
+    throw new Error("Assign an active dealership before reactivating this user.");
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("dealerships")
+    .select("id")
+    .in("id", dealershipIds)
+    .in("status", ["active", "trial"])
+    .eq("subscription_status", "active")
+    .limit(1);
+  if (error) throw new Error(error.message);
+  if (!data?.length) {
+    throw new Error("Assign an active dealership before reactivating this user.");
+  }
+}
+
 export const listUsersWithAuth = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertActiveOwner(context.userId);
     const { data: profiles, error: profileError } = await supabaseAdmin
       .from("profiles")
-      .select("id, email, full_name, role, dealership_id, status, created_at")
+      .select(
+        "id, email, full_name, role, dealership_id, status, created_at, profile_dealerships(dealership_id)",
+      )
       .order("created_at", { ascending: false });
     if (profileError) throw new Error(profileError.message);
 
@@ -71,10 +128,18 @@ export const listUsersWithAuth = createServerFn({ method: "GET" })
       if (page > 25) break;
     }
 
-    return (profiles ?? []).map((profile) => ({
-      ...profile,
-      last_sign_in_at: authMap.get(profile.id) ?? null,
-    }));
+    return (profiles ?? []).map((profile) => {
+      const { profile_dealerships: assignments, ...userProfile } = profile;
+      const assignedIds = assignments.map((assignment) => assignment.dealership_id);
+      const dealershipIds = profile.dealership_id
+        ? [profile.dealership_id, ...assignedIds.filter((id) => id !== profile.dealership_id)]
+        : assignedIds;
+      return {
+        ...userProfile,
+        dealership_ids: dealershipIds,
+        last_sign_in_at: authMap.get(profile.id) ?? null,
+      };
+    });
   });
 
 export const inviteUser = createServerFn({ method: "POST" })
@@ -210,7 +275,7 @@ export const updateUserAccount = createServerFn({ method: "POST" })
         user_id: z.string().uuid(),
         full_name: z.string().trim().min(1).max(120),
         role: z.enum(["dealer_admin", "staff"]).optional(),
-        dealership_id: z.string().uuid().nullable(),
+        dealership_ids: z.array(z.string().uuid()).min(1).max(100),
       })
       .parse(input),
   )
@@ -223,20 +288,17 @@ export const updateUserAccount = createServerFn({ method: "POST" })
     const accountUpdate = resolveUserAccountUpdate({
       targetRole: target.role,
       requestedRole: data.role,
-      requestedDealershipId: data.dealership_id,
+      requestedDealershipIds: data.dealership_ids,
     });
-    if (accountUpdate.dealershipId) {
-      await assertActiveDealership(accountUpdate.dealershipId);
-    }
+    await assertActiveDealerships(accountUpdate.dealershipIds);
 
-    const { error } = await supabaseAdmin
-      .from("profiles")
-      .update({
-        full_name: data.full_name,
-        role: accountUpdate.role,
-        dealership_id: accountUpdate.dealershipId,
-      })
-      .eq("id", data.user_id);
+    const { error } = await supabaseAdmin.rpc("admin_update_user_account_access", {
+      _actor_user_id: context.userId,
+      _target_user_id: data.user_id,
+      _full_name: data.full_name,
+      _role: accountUpdate.role,
+      _dealership_ids: accountUpdate.dealershipIds,
+    });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -258,10 +320,7 @@ export const setUserActivation = createServerFn({ method: "POST" })
     }
     const target = await assertTargetProfile(data.user_id);
     if (data.status === "active" && target.role !== "owner") {
-      if (!target.dealership_id) {
-        throw new Error("Assign an active dealership before reactivating this user.");
-      }
-      await assertActiveDealership(target.dealership_id);
+      await assertProfileHasActiveDealership(data.user_id, target.role, target.dealership_id);
     }
 
     const { error } = await supabaseAdmin
