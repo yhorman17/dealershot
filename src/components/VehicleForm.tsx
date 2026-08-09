@@ -1,8 +1,11 @@
-import { useState, useRef, useEffect, type FormEvent } from "react";
+import { lazy, Suspense, useState, useRef, useEffect, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CONDITIONS, STATUSES } from "@/lib/vehicle-options";
-import { VinScannerModal } from "@/components/VinScannerModal";
 import { toast } from "sonner";
+
+const VinScannerModal = lazy(() =>
+  import("@/components/VinScannerModal").then((module) => ({ default: module.VinScannerModal })),
+);
 
 export type VehicleFormValues = {
   vin: string;
@@ -169,7 +172,10 @@ export function VehicleForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <Section title="Vehicle identification">
+      <Section
+        title="Vehicle identification"
+        description="Start with the VIN and dealership stock reference."
+      >
         <div className="sm:col-span-2">
           <label className="block text-xs font-medium text-card-foreground mb-1.5">VIN</label>
           <div className="flex flex-col sm:flex-row gap-2">
@@ -230,18 +236,29 @@ export function VehicleForm({
       </Section>
 
       {scannerOpen && (
-        <VinScannerModal
-          onClose={() => setScannerOpen(false)}
-          onDetected={(vin) => {
-            set("vin", vin);
-            setScannerOpen(false);
-            setVinPulse(true);
-            setTimeout(() => vinInputRef.current?.focus(), 0);
-          }}
-        />
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-50 grid place-items-center bg-background/80">
+              <div className="ds-surface p-4 text-sm font-medium">Opening VIN scanner…</div>
+            </div>
+          }
+        >
+          <VinScannerModal
+            onClose={() => setScannerOpen(false)}
+            onDetected={(vin) => {
+              set("vin", vin);
+              setScannerOpen(false);
+              setVinPulse(true);
+              setTimeout(() => vinInputRef.current?.focus(), 0);
+            }}
+          />
+        </Suspense>
       )}
 
-      <Section title="Specs">
+      <Section
+        title="Specifications"
+        description="Review decoded details and fill in any gaps before saving."
+      >
         <Input label="Year" type="number" value={values.year} onChange={(v) => set("year", v)} />
         <Input label="Make" value={values.make} onChange={(v) => set("make", v)} />
         <Input label="Model" value={values.model} onChange={(v) => set("model", v)} />
@@ -295,7 +312,10 @@ export function VehicleForm({
         />
       </Section>
 
-      <Section title="Status">
+      <Section
+        title="Retail status"
+        description="Set the sales condition and current inventory state."
+      >
         <div>
           <label className="block text-xs font-medium text-card-foreground mb-1.5">Condition</label>
           <select
@@ -352,12 +372,23 @@ export function VehicleForm({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div>
-      <h3 className="text-xs uppercase tracking-wide text-muted-foreground mb-3">{title}</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>
-    </div>
+    <fieldset className="rounded-lg border border-border bg-secondary/20 p-4 sm:p-5">
+      <legend className="px-1 text-sm font-semibold tracking-[-0.01em] text-foreground">
+        {title}
+      </legend>
+      {description && <p className="mb-4 text-xs leading-5 text-muted-foreground">{description}</p>}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+    </fieldset>
   );
 }
 
@@ -374,16 +405,26 @@ function Input({
   type?: string;
   error?: string;
 }) {
+  const id = `vehicle-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
     <div>
-      <label className="block text-xs font-medium text-card-foreground mb-1.5">{label}</label>
+      <label htmlFor={id} className="block text-xs font-semibold text-card-foreground mb-1.5">
+        {label}
+      </label>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`form-input ${error ? "border-destructive" : ""}`}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${id}-error` : undefined}
+        className={`form-input bg-card ${error ? "border-destructive" : ""}`}
       />
-      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      {error && (
+        <p id={`${id}-error`} className="mt-1 text-xs text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

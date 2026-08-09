@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { VehicleForm, type VehicleFormValues, emptyVehicleValues } from "@/components/VehicleForm";
+import { PageHeader, PageSkeleton } from "@/components/product-ui";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id/edit")({
   head: () => ({ meta: [{ title: "Edit Vehicle — DealerShot" }] }),
@@ -46,17 +47,17 @@ function EditVehiclePage() {
   }, [id]);
 
   if (!initial || !dealershipId) {
-    return (
-      <main className="mx-auto max-w-4xl px-6 py-10 text-sm text-muted-foreground">Loading…</main>
-    );
+    return <PageSkeleton cards={0} rows={7} />;
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Edit Vehicle</h1>
-      </div>
-      <div className="rounded-xl border border-border bg-card p-6">
+    <main className="ds-page-gutter max-w-6xl">
+      <PageHeader
+        eyebrow="Vehicle details"
+        title="Edit vehicle"
+        description="Update retail and specification details without changing the vehicle’s identity."
+      />
+      <div className="ds-surface p-4 sm:p-6">
         <VehicleForm
           initial={initial}
           dealershipId={dealershipId}

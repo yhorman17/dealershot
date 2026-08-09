@@ -7,6 +7,21 @@ import { VehiclePhotos } from "@/components/VehiclePhotos";
 import { VehicleExportModal } from "@/components/VehicleExportModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { VehicleForm, type VehicleFormValues, emptyVehicleValues } from "@/components/VehicleForm";
+import { ArrowLeft, Camera, CarFront, FileOutput, Gauge, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { EmptyState, PageHeader, PageSkeleton, StatusBadge } from "@/components/product-ui";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id")({
   head: () => ({ meta: [{ title: "Vehicle — DealerShot" }] }),
@@ -25,6 +40,7 @@ function VehicleDetailPage() {
   const [loading, setLoading] = useState(true);
   const [exportOpen, setExportOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,26 +97,36 @@ function VehicleDetailPage() {
   }, [load]);
 
   const handleDelete = async () => {
-    if (!confirm("Delete this vehicle? This cannot be undone.")) return;
     const { error } = await supabase.from("vehicles").delete().eq("id", id);
-    if (error) return alert(error.message);
+    if (error) {
+      toast.error("Vehicle could not be deleted", { description: error.message });
+      return;
+    }
+    toast.success("Vehicle deleted");
     navigate({ to: "/inventory" });
   };
 
   if (loading) {
-    return (
-      <main className="motion-content mx-auto max-w-5xl px-6 py-10 text-sm text-muted-foreground">
-        Loading…
-      </main>
-    );
+    return <PageSkeleton cards={3} rows={6} />;
   }
   if (!vehicle) {
     return (
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <p className="text-sm text-muted-foreground">Vehicle not found.</p>
-        <Link to="/inventory" className="text-sm text-primary mt-2 inline-block">
-          Back to inventory
-        </Link>
+      <main className="ds-page-gutter">
+        <div className="ds-surface">
+          <EmptyState
+            icon={<CarFront className="size-5" />}
+            title="Vehicle not found"
+            description="This vehicle may have been removed or you may not have access to it."
+            action={
+              <Button asChild variant="outline">
+                <Link to="/inventory">
+                  <ArrowLeft className="size-4" />
+                  Back to inventory
+                </Link>
+              </Button>
+            }
+          />
+        </div>
       </main>
     );
   }
@@ -126,70 +152,136 @@ function VehicleDetailPage() {
   ];
 
   return (
-    <main className="mx-auto max-w-5xl px-4 sm:px-6 py-6 sm:py-10">
-      <Link to="/inventory" className="text-xs text-muted-foreground hover:text-foreground">
-        ← Back to inventory
+    <main className="ds-page-gutter">
+      <Link
+        to="/inventory"
+        className="mb-4 inline-flex min-h-9 items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft aria-hidden className="size-3.5" />
+        Inventory
       </Link>
-
-      <div className="mt-4 flex flex-wrap items-start justify-between gap-3 sm:gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground break-words">
-            {vehicle.year} {vehicle.make} {vehicle.model}
-          </h1>
-          {vehicle.trim && <p className="text-sm text-muted-foreground mt-1">{vehicle.trim}</p>}
-          <p className="text-xl sm:text-2xl font-semibold text-primary mt-3">
-            {formatPrice(Number(vehicle.price))}
-          </p>
+      <PageHeader
+        eyebrow={vehicle.stock_number ? `Stock ${vehicle.stock_number}` : "Vehicle workspace"}
+        title={`${vehicle.year ?? ""} ${vehicle.make ?? ""} ${vehicle.model ?? ""}`.trim()}
+        description={[vehicle.trim, vehicle.vin ? `VIN ${vehicle.vin}` : null]
+          .filter(Boolean)
+          .join(" · ")}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setEditOpen(true)}>
+              <Pencil className="size-4" />
+              Edit details
+            </Button>
+            <Button onClick={() => setExportOpen(true)}>
+              <FileOutput className="size-4" />
+              Export photos
+            </Button>
+            {canDelete && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+                aria-label="Delete vehicle"
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            )}
+          </>
+        }
+      >
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <StatusBadge
+            tone={String(vehicle.status).toLowerCase() === "available" ? "success" : "neutral"}
+          >
+            {vehicle.status || "Unspecified"}
+          </StatusBadge>
+          {vehicle.condition && <StatusBadge dot={false}>{vehicle.condition}</StatusBadge>}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setEditOpen(true)}
-            className="rounded-md border border-border bg-secondary px-4 py-2 min-h-[44px] inline-flex items-center text-sm text-secondary-foreground hover:bg-secondary/80"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => setExportOpen(true)}
-            className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Export Photos
-          </button>
-          {canDelete && (
-            <button
-              onClick={() => void handleDelete()}
-              className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 min-h-[44px] text-sm text-destructive hover:bg-destructive/20"
-            >
-              Delete
-            </button>
+      </PageHeader>
+
+      <section className="mb-5 grid overflow-hidden rounded-lg border border-border bg-card lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
+        <div className="relative min-h-64 bg-[color:oklch(0.22_0.025_252)] sm:min-h-96">
+          {heroUrl ? (
+            <img
+              src={heroUrl}
+              alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+          ) : (
+            <div className="ds-grid-lines flex h-full min-h-64 flex-col items-center justify-center gap-3 text-white/45 sm:min-h-96">
+              <Camera className="size-8" />
+              <p className="text-sm font-medium">No lead photo selected</p>
+            </div>
           )}
         </div>
-      </div>
-
-      {heroUrl && (
-        <div className="motion-content mt-6 aspect-[16/9] rounded-xl overflow-hidden bg-background border border-border">
-          <img
-            src={heroUrl}
-            alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-            className="w-full h-full object-contain"
-          />
-        </div>
-      )}
-
-      <div className="mt-6">
-        <VehiclePhotos vehicleId={id} />
-      </div>
-
-      <div className="mt-6 rounded-xl border border-border bg-card p-6">
-        <h2 className="text-sm font-semibold text-card-foreground mb-4">Specifications</h2>
-        <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-3">
-          {specs.map(([label, value]) => (
-            <div key={label} className="flex justify-between gap-4 border-b border-border/50 pb-2">
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
-              <dd className="text-sm text-card-foreground text-right">{value ?? "—"}</dd>
+        <div className="flex flex-col justify-between p-5 sm:p-6">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Retail snapshot
+            </p>
+            <p className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-foreground">
+              {formatPrice(Number(vehicle.price))}
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-4">
+              <Snapshot
+                label="Mileage"
+                value={vehicle.odometer ? formatMiles(Number(vehicle.odometer)) : "—"}
+                icon={<Gauge />}
+              />
+              <Snapshot
+                label="Exterior"
+                value={String(vehicle.exterior_color || "—")}
+                icon={<CarFront />}
+              />
+              <Snapshot label="Stock" value={String(vehicle.stock_number || "—")} />
+              <Snapshot label="Drivetrain" value={String(vehicle.drivetrain || "—")} />
             </div>
-          ))}
-        </dl>
-      </div>
+          </div>
+          <p className="mt-6 border-t border-border pt-4 text-xs leading-5 text-muted-foreground">
+            Use the photo workspace below to capture, organize, process, and prepare this vehicle
+            for export.
+          </p>
+        </div>
+      </section>
+
+      <Tabs defaultValue="photos" className="space-y-4">
+        <TabsList className="h-11 w-full justify-start overflow-x-auto rounded-lg border border-border bg-card p-1 sm:w-auto">
+          <TabsTrigger value="photos" className="min-h-9 gap-2">
+            <Camera className="size-4" />
+            Photos & processing
+          </TabsTrigger>
+          <TabsTrigger value="specifications" className="min-h-9 gap-2">
+            <CarFront className="size-4" />
+            Specifications
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="photos" className="motion-tab-panel mt-0">
+          <VehiclePhotos vehicleId={id} />
+        </TabsContent>
+        <TabsContent value="specifications" className="motion-tab-panel mt-0">
+          <section className="ds-surface overflow-hidden">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="text-sm font-semibold text-card-foreground">Vehicle specifications</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Identity, drivetrain, colors, and sales details.
+              </p>
+            </div>
+            <dl className="grid sm:grid-cols-2 lg:grid-cols-3">
+              {specs.map(([label, value]) => (
+                <div key={label} className="min-w-0 border-b border-border p-4 sm:border-r sm:p-5">
+                  <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    {label}
+                  </dt>
+                  <dd className="mt-1.5 break-words text-sm font-medium text-card-foreground">
+                    {value ?? "—"}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        </TabsContent>
+      </Tabs>
 
       {exportOpen && (
         <VehicleExportModal
@@ -222,7 +314,47 @@ function VehicleDetailPage() {
           />
         </DialogContent>
       </Dialog>
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this vehicle?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes {vehicle.year} {vehicle.make} {vehicle.model} and its related
+              workspace data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep vehicle</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleDelete()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete vehicle
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
+  );
+}
+
+function Snapshot({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        {icon && <span className="[&>svg]:size-3">{icon}</span>}
+        {label}
+      </div>
+      <p className="mt-1 truncate text-sm font-semibold text-foreground">{value}</p>
+    </div>
   );
 }
 
