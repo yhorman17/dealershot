@@ -2,7 +2,19 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { toast } from "sonner";
+import { AlertCircle, ArrowRight, Mail } from "lucide-react";
+import { AuthFrame, InlineLoading, SuccessNotice } from "@/components/product-ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -43,91 +55,81 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md">
-        <h1 className="text-center text-3xl font-semibold tracking-tight text-foreground mb-8">
-          DealerShot
-        </h1>
-        <div className="rounded-xl border border-border bg-card p-8 shadow-xl">
-          <h2 className="text-xl font-medium text-card-foreground mb-1">Sign in</h2>
-          <p className="text-sm text-muted-foreground mb-6">Access your dealership dashboard</p>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-card-foreground mb-1.5"
-              >
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="motion-control w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="you@dealership.com"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-card-foreground mb-1.5"
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="motion-control w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="••••••••"
-              />
-            </div>
-            {error && (
-              <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
-                {error}
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={submitting}
-              className="motion-button w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-            >
-              {submitting ? "Signing in…" : "Sign in"}
-            </button>
-            <div className="pt-1 text-center">
-              <button
-                type="button"
-                onClick={() => setForgotOpen(true)}
-                className="motion-button text-xs text-muted-foreground hover:text-foreground"
-              >
-                Forgot password?
-              </button>
-            </div>
-          </form>
+    <AuthFrame
+      title="Welcome back"
+      description="Sign in to continue managing dealership inventory and photo operations."
+      footer="DealerShot access is limited to active, authorized dealership users."
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-2">
+          <Label htmlFor="email">Work email</Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="h-11 bg-card"
+            placeholder="you@dealership.com"
+          />
         </div>
-      </div>
-      {forgotOpen && <ForgotPasswordDialog onClose={() => setForgotOpen(false)} />}
-    </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="password">Password</Label>
+            <button
+              type="button"
+              onClick={() => setForgotOpen(true)}
+              className="text-xs font-medium text-primary hover:text-primary/80"
+            >
+              Forgot password?
+            </button>
+          </div>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="h-11 bg-card"
+            placeholder="••••••••"
+          />
+        </div>
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+          >
+            <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
+            {error}
+          </div>
+        )}
+        <Button type="submit" disabled={submitting} className="h-11 w-full">
+          {submitting ? (
+            <InlineLoading label="Signing in…" />
+          ) : (
+            <>
+              Sign in <ArrowRight aria-hidden className="size-4" />
+            </>
+          )}
+        </Button>
+      </form>
+      <ForgotPasswordDialog open={forgotOpen} onOpenChange={setForgotOpen} />
+    </AuthFrame>
   );
 }
 
-function ForgotPasswordDialog({ onClose }: { onClose: () => void }) {
+function ForgotPasswordDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
-
-  useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [onClose]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -140,71 +142,54 @@ function ForgotPasswordDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="reset-password-title"
-        className="motion-panel-static w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
-      >
-        <div className="flex items-center justify-between mb-1">
-          <h2 id="reset-password-title" className="text-lg font-semibold text-card-foreground">
-            Reset password
-          </h2>
-          <button
-            onClick={onClose}
-            aria-label="Close password reset dialog"
-            className="motion-icon-button text-muted-foreground hover:text-foreground"
-          >
-            ✕
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Reset password</DialogTitle>
+          <DialogDescription>
+            Enter your work email and we’ll send a secure reset link.
+          </DialogDescription>
+        </DialogHeader>
         {sent ? (
           <>
-            <p className="text-sm text-muted-foreground mt-4">
-              If an account exists for that email, a reset link has been sent. Check your inbox.
-            </p>
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={onClose}
-                className="motion-button rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                Done
-              </button>
-            </div>
+            <SuccessNotice>
+              If an account exists for that email, a reset link is on its way. Check your inbox.
+            </SuccessNotice>
+            <DialogFooter>
+              <Button onClick={() => onOpenChange(false)}>Done</Button>
+            </DialogFooter>
           </>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 mt-3">
-            <p className="text-sm text-muted-foreground">
-              Enter your email and we'll send a link to reset your password.
-            </p>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@dealership.com"
-              className="motion-control w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={onClose}
-                className="motion-button px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="motion-button rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-              >
-                {submitting ? "Sending…" : "Send reset link"}
-              </button>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reset-email">Work email</Label>
+              <div className="relative">
+                <Mail
+                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden
+                />
+                <Input
+                  id="reset-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@dealership.com"
+                  className="h-11 pl-9"
+                />
+              </div>
             </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? <InlineLoading label="Sending…" /> : "Send reset link"}
+              </Button>
+            </DialogFooter>
           </form>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

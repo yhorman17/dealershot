@@ -2,6 +2,8 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { AuthFrame } from "@/components/product-ui";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/accept-invite")({
   head: () => ({ meta: [{ title: "Accept invitation — DealerShot" }] }),
@@ -118,111 +120,111 @@ function AcceptInvitePage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md">
-        <h1 className="text-center text-3xl font-semibold tracking-tight text-foreground mb-8">
-          DealerShot
-        </h1>
-        <div className="rounded-xl border border-border bg-card p-8 shadow-xl">
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Loading invitation…</p>
-          ) : emailHasAccount ? (
-            <>
-              <h2 className="text-xl font-medium text-card-foreground mb-2">
-                Account already exists
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                This email already has an account on DealerShot. Please sign in instead.
-              </p>
-              <div className="mt-6">
-                <Link
-                  to="/login"
-                  className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                >
-                  Go to sign in
-                </Link>
-              </div>
-            </>
-          ) : loadError || !details ? (
-            <>
-              <h2 className="text-xl font-medium text-card-foreground mb-2">
-                Invitation unavailable
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {loadError ??
-                  "This invitation has expired or is no longer valid. Please contact your dealership admin."}
-              </p>
-              <div className="mt-6">
-                <Link to="/login" className="text-sm text-foreground hover:underline">
-                  Back to sign in
-                </Link>
-              </div>
-            </>
-          ) : (
-            <>
-              <h2 className="text-xl font-medium text-card-foreground mb-1">
-                Welcome to DealerShot
-              </h2>
-              <p className="text-sm text-muted-foreground mb-5">
-                You've been invited to join {details.dealership_name ?? "DealerShot"}.
-              </p>
-              <div className="space-y-2 rounded-md bg-secondary/40 p-3 mb-5 text-sm">
-                <Row label="Email" value={details.email} />
-                <Row label="Name" value={details.full_name} />
-                <Row label="Role" value={roleLabel(details.role)} />
-                {details.dealership_name && (
-                  <Row label="Dealership" value={details.dealership_name} />
+    <AuthFrame
+      title="Join your dealership"
+      description="Review your invitation and secure your new DealerShot account."
+    >
+      <div className="ds-surface p-5 sm:p-6">
+        {loading ? (
+          <div className="space-y-3" aria-busy="true">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+        ) : emailHasAccount ? (
+          <>
+            <h2 className="text-xl font-medium text-card-foreground mb-2">
+              Account already exists
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              This email already has an account on DealerShot. Please sign in instead.
+            </p>
+            <div className="mt-6">
+              <Link
+                to="/login"
+                className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Go to sign in
+              </Link>
+            </div>
+          </>
+        ) : loadError || !details ? (
+          <>
+            <h2 className="text-xl font-medium text-card-foreground mb-2">
+              Invitation unavailable
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {loadError ??
+                "This invitation has expired or is no longer valid. Please contact your dealership admin."}
+            </p>
+            <div className="mt-6">
+              <Link to="/login" className="text-sm text-foreground hover:underline">
+                Back to sign in
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2 className="text-xl font-medium text-card-foreground mb-1">Welcome to DealerShot</h2>
+            <p className="text-sm text-muted-foreground mb-5">
+              You've been invited to join {details.dealership_name ?? "DealerShot"}.
+            </p>
+            <div className="space-y-2 rounded-md bg-secondary/40 p-3 mb-5 text-sm">
+              <Row label="Email" value={details.email} />
+              <Row label="Name" value={details.full_name} />
+              <Row label="Role" value={roleLabel(details.role)} />
+              {details.dealership_name && (
+                <Row label="Dealership" value={details.dealership_name} />
+              )}
+            </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-card-foreground mb-1.5">
+                  Set password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {password.length > 0 && !pwCheck.ok && (
+                  <p className="mt-1 text-xs text-destructive">{pwCheck.msg}</p>
                 )}
               </div>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-card-foreground mb-1.5">
-                    Set password
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  {password.length > 0 && !pwCheck.ok && (
-                    <p className="mt-1 text-xs text-destructive">{pwCheck.msg}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-card-foreground mb-1.5">
-                    Confirm password
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={confirm}
-                    onChange={(e) => setConfirm(e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  {confirm.length > 0 && !matches && (
-                    <p className="mt-1 text-xs text-destructive">Passwords do not match</p>
-                  )}
-                </div>
-                {error && (
-                  <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
-                    {error}
-                  </div>
+              <div>
+                <label className="block text-sm font-medium text-card-foreground mb-1.5">
+                  Confirm password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {confirm.length > 0 && !matches && (
+                  <p className="mt-1 text-xs text-destructive">Passwords do not match</p>
                 )}
-                <button
-                  type="submit"
-                  disabled={submitting || !pwCheck.ok || !matches}
-                  className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                >
-                  {submitting ? "Accepting…" : "Accept invitation"}
-                </button>
-              </form>
-            </>
-          )}
-        </div>
+              </div>
+              {error && (
+                <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={submitting || !pwCheck.ok || !matches}
+                className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              >
+                {submitting ? "Accepting…" : "Accept invitation"}
+              </button>
+            </form>
+          </>
+        )}
       </div>
-    </div>
+    </AuthFrame>
   );
 }
 

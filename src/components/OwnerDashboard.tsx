@@ -4,6 +4,28 @@ import { useAuth } from "@/hooks/use-auth";
 import { useImpersonation } from "@/hooks/use-impersonation";
 import { relativeTime } from "@/lib/relative-time";
 import { InviteUserModal } from "@/components/InviteUserModal";
+import { Building2, Camera, CarFront, Plus, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { MetricCard, PageHeader, SectionHeader } from "@/components/product-ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Dealership = {
   id: string;
@@ -43,8 +65,8 @@ type ActivityEvent = {
 
 const STATUS_STYLES: Record<string, string> = {
   active: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  trial: "bg-amber-400/15 text-amber-300 border-amber-400/30",
-  suspended: "bg-red-500/15 text-red-400 border-red-500/30",
+  trial: "border-warning/35 bg-warning/15 text-warning-foreground",
+  suspended: "border-destructive/30 bg-destructive/10 text-destructive",
 };
 
 export function OwnerDashboard() {
@@ -62,6 +84,7 @@ export function OwnerDashboard() {
   const [showInvite, setShowInvite] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Dealership | null>(null);
   const [impersonateTarget, setImpersonateTarget] = useState<Dealership | null>(null);
+  const [suspendTarget, setSuspendTarget] = useState<Dealership | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -181,17 +204,19 @@ export function OwnerDashboard() {
 
   const handleToggleStatus = async (d: Dealership) => {
     const newStatus = d.status === "suspended" ? "active" : "suspended";
-    if (
-      newStatus === "suspended" &&
-      !confirm(`Suspend ${d.name}? Users from this dealership will be unable to sign in.`)
-    )
-      return;
     const { error } = await supabase
       .from("dealerships")
       .update({ status: newStatus })
       .eq("id", d.id);
-    if (error) return alert(error.message);
+    if (error)
+      return toast.error("Dealership status could not be updated", { description: error.message });
+    toast.success(newStatus === "suspended" ? "Dealership suspended" : "Dealership reactivated");
     void load();
+  };
+
+  const requestToggleStatus = (d: Dealership) => {
+    if (d.status === "suspended") void handleToggleStatus(d);
+    else setSuspendTarget(d);
   };
 
   const handleImpersonate = async (d: Dealership) => {
@@ -200,31 +225,76 @@ export function OwnerDashboard() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-10">
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
-          Owner Dashboard
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Command center for all dealerships</p>
-      </div>
+    <main className="ds-page-gutter">
+      <PageHeader
+        eyebrow="Platform administration"
+        title="Owner overview"
+        description="Monitor dealership activity and manage tenant access from one protected workspace."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setShowInvite(true)}>
+              <Users className="size-4" />
+              Invite user
+            </Button>
+            <Button
+              onClick={() => {
+                setEditing(null);
+                setShowCreate(true);
+              }}
+            >
+              <Plus className="size-4" />
+              Create dealership
+            </Button>
+          </>
+        }
+      />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
-        <Kpi label="Dealerships" value={totalDealerships} loading={loading} />
-        <Kpi label="Users" value={totalUsers} loading={loading} />
-        <Kpi label="Vehicles" value={totalVehicles} loading={loading} />
-        <Kpi label="Photos" value={totalPhotos} loading={loading} />
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard
+          label="Dealerships"
+          value={loading ? <Skeleton className="h-9 w-12" /> : totalDealerships}
+          icon={<Building2 className="size-4" />}
+          detail="Tenant accounts"
+        />
+        <MetricCard
+          label="Users"
+          value={loading ? <Skeleton className="h-9 w-12" /> : totalUsers}
+          icon={<Users className="size-4" />}
+          detail="Provisioned profiles"
+        />
+        <MetricCard
+          label="Vehicles"
+          value={loading ? <Skeleton className="h-9 w-12" /> : totalVehicles}
+          icon={<CarFront className="size-4" />}
+          detail="Across all inventory"
+        />
+        <MetricCard
+          label="Photos"
+          value={loading ? <Skeleton className="h-9 w-12" /> : totalPhotos}
+          icon={<Camera className="size-4" />}
+          detail="Managed assets"
+        />
       </div>
 
       {/* Activity Feed */}
-      <div className="rounded-xl border border-border bg-card mb-8">
-        <div className="px-5 py-4 border-b border-border">
-          <h2 className="text-sm font-semibold text-card-foreground">Recent activity</h2>
-        </div>
+      <div className="ds-surface mb-5 overflow-hidden">
+        <SectionHeader title="Recent activity" description="Latest cross-dealership changes" />
         <div className="max-h-96 overflow-y-auto divide-y divide-border">
           {loading ? (
-            <div className="motion-content px-5 py-8 text-sm text-muted-foreground text-center">
-              Loading…
+            <div className="space-y-0" aria-busy="true">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-3 border-b border-border px-5 py-4 last:border-0"
+                >
+                  <Skeleton className="size-8" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3 w-2/3" />
+                    <Skeleton className="h-3 w-1/3" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : events.length === 0 ? (
             <div className="px-5 py-8 text-sm text-muted-foreground text-center">
@@ -237,39 +307,44 @@ export function OwnerDashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
-        <button
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:gap-3">
+        <Button
+          variant="outline"
           onClick={() => {
             setEditing(null);
             setShowCreate(true);
           }}
-          className="rounded-md bg-primary px-4 py-2.5 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
-          + Create new dealership
-        </button>
-        <button
-          onClick={() => setShowSubs(true)}
-          className="rounded-md border border-border bg-secondary px-4 py-2.5 min-h-[44px] text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
-        >
+          <Plus className="size-4" />
+          Create new dealership
+        </Button>
+        <Button variant="outline" onClick={() => setShowSubs(true)}>
           Manage subscriptions
-        </button>
-        <button
-          onClick={() => setShowInvite(true)}
-          className="rounded-md border border-border bg-secondary px-4 py-2.5 min-h-[44px] text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
-        >
+        </Button>
+        <Button variant="outline" onClick={() => setShowInvite(true)}>
           Invite user
-        </button>
+        </Button>
       </div>
 
       {/* Breakdown */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-border">
-          <h2 className="text-sm font-semibold text-card-foreground">All dealerships</h2>
-        </div>
+      <div className="ds-surface overflow-hidden">
+        <SectionHeader title="All dealerships" description="Status, usage, and platform controls" />
 
         {loading ? (
-          <div className="motion-content p-8 text-sm text-muted-foreground text-center">
-            Loading…
+          <div aria-busy="true">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-3 border-b border-border p-4 last:border-0"
+              >
+                <Skeleton className="size-8" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="h-6 w-20" />
+              </div>
+            ))}
           </div>
         ) : dealerships.length === 0 ? (
           <div className="motion-empty p-8 text-sm text-muted-foreground text-center">
@@ -331,7 +406,7 @@ export function OwnerDashboard() {
                               setEditing(d);
                               setShowCreate(true);
                             }}
-                            onToggle={() => void handleToggleStatus(d)}
+                            onToggle={() => requestToggleStatus(d)}
                             onImpersonate={() => setImpersonateTarget(d)}
                             onDelete={() => setDeleteTarget(d)}
                           />
@@ -387,14 +462,14 @@ export function OwnerDashboard() {
                         Edit
                       </button>
                       <button
-                        onClick={() => void handleToggleStatus(d)}
+                        onClick={() => requestToggleStatus(d)}
                         className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground hover:bg-secondary/80"
                       >
                         {d.status === "suspended" ? "Reactivate" : "Suspend"}
                       </button>
                       <button
                         onClick={() => setImpersonateTarget(d)}
-                        className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 min-h-[44px] text-xs font-medium text-amber-300 hover:bg-amber-500/20"
+                        className="min-h-[44px] rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs font-medium text-warning-foreground hover:bg-warning/20"
                       >
                         Impersonate
                       </button>
@@ -444,6 +519,29 @@ export function OwnerDashboard() {
           onConfirm={() => void handleImpersonate(impersonateTarget)}
         />
       )}
+      <AlertDialog open={!!suspendTarget} onOpenChange={(open) => !open && setSuspendTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Suspend this dealership?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Users from “{suspendTarget?.name}” will lose access immediately, including sessions
+              that are already active.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep active</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (suspendTarget) void handleToggleStatus(suspendTarget);
+                setSuspendTarget(null);
+              }}
+            >
+              Suspend dealership
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }
@@ -532,7 +630,7 @@ function RowActions({
         {d.status === "suspended" ? "Reactivate" : "Suspend"}
       </button>
       <span className="text-border">·</span>
-      <button onClick={onImpersonate} className="text-amber-400 hover:text-amber-300">
+      <button onClick={onImpersonate} className="text-warning-foreground hover:opacity-80">
         Impersonate
       </button>
       <span className="text-border">·</span>
@@ -776,7 +874,7 @@ function ImpersonateModal({
         </button>
         <button
           onClick={onConfirm}
-          className="rounded-md bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950 hover:bg-amber-400"
+          className="rounded-md bg-warning px-4 py-2 text-sm font-medium text-warning-foreground hover:opacity-90"
         >
           Start impersonating
         </button>
@@ -795,21 +893,17 @@ function Modal({
   onClose: () => void;
 }) {
   return (
-    <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
-        <div className="flex items-start justify-between mb-4">
-          <h2 className="text-lg font-semibold text-card-foreground">{title}</h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="text-muted-foreground hover:text-foreground"
-          >
-            ✕
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Manage this DealerShot platform setting.
+          </DialogDescription>
+        </DialogHeader>
         {children}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -6,6 +6,7 @@ import {
   type AuthLifecycleController,
   type AuthorizationResult,
 } from "@/hooks/auth-lifecycle";
+import { toast } from "sonner";
 
 type Profile = {
   id: string;
@@ -105,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unexpectedVerificationErrorMessage:
         "We couldn't verify your account. Check your connection and retry.",
       signOut: () => supabase.auth.signOut().then(() => undefined),
-      onDenied: (message) => window.alert(message),
+      onDenied: (message) => toast.error("Access unavailable", { description: message }),
       onChange: (next) => {
         setSession(next.session);
         setProfile(next.profile);

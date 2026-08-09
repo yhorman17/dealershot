@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { PageSkeleton } from "@/components/product-ui";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -24,9 +25,5 @@ function Index() {
     navigate({ to: session ? "/dashboard" : "/login", replace: true });
   }, [session, loading, navigate]);
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-muted-foreground text-sm">Loading…</div>
-    </div>
-  );
+  return <PageSkeleton cards={3} rows={4} />;
 }

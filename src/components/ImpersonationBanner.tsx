@@ -5,7 +5,7 @@ export function ImpersonationBanner() {
   if (!impersonation) return null;
 
   return (
-    <div className="sticky top-0 z-30 w-full bg-amber-400 text-amber-950 border-b border-amber-600 shadow-md">
+    <div className="sticky top-0 z-30 w-full border-b border-warning bg-warning text-warning-foreground shadow-sm">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
         <p className="text-xs sm:text-sm font-semibold tracking-tight truncate">
           <span className="uppercase">Viewing as:</span>{" "}
@@ -14,7 +14,7 @@ export function ImpersonationBanner() {
         <button
           type="button"
           onClick={() => void end()}
-          className="shrink-0 inline-flex items-center rounded-md bg-amber-950 px-3 py-1.5 text-xs sm:text-sm font-medium text-amber-50 hover:bg-amber-900 transition-colors"
+          className="inline-flex min-h-9 shrink-0 items-center rounded-md bg-warning-foreground px-3 py-1.5 text-xs font-medium text-warning hover:opacity-90 sm:text-sm"
         >
           Exit impersonation
         </button>

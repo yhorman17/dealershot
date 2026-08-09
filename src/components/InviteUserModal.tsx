@@ -3,6 +3,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { inviteUser } from "@/lib/api/users.functions";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Dealership = { id: string; name: string };
 
@@ -62,17 +69,14 @@ export function InviteUserModal({
   };
 
   return (
-    <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="text-lg font-semibold text-card-foreground">Invite user</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            ✕
-          </button>
-        </div>
-        <p className="text-xs text-muted-foreground mb-5">
-          They'll receive an email with a link to create their password.
-        </p>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Invite user</DialogTitle>
+          <DialogDescription>
+            They'll receive an email with a link to create their password.
+          </DialogDescription>
+        </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">Email</label>
@@ -148,7 +152,7 @@ export function InviteUserModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

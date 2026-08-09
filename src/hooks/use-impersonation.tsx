@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { toast } from "sonner";
 
 const STORAGE_KEY = "dealershot:impersonation";
 
@@ -50,7 +51,7 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
         .select("id")
         .single();
       if (error) {
-        alert("Failed to start impersonation: " + error.message);
+        toast.error("Could not open dealership view", { description: error.message });
         return;
       }
       const state: ImpersonationState = {
