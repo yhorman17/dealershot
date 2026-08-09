@@ -57,6 +57,8 @@ Authorization helpers live in a non-exposed `private` database schema, derive id
 
 See [the authorization model and disposable validation checklist](docs/DEALERSHOT_AUTHORIZATION.md), [the baseline audit](docs/DEALERSHOT_BASELINE_AUDIT.md), and [controlled roadmap](docs/DEALERSHOT_ROADMAP.md).
 
+The [Phase 1 expansion foundation](docs/DEALERSHOT_EXPANSION_PHASE_1.md) documents admin-provisioned accounts, forced password onboarding, scoped settings, append-only audit, durable jobs, worker operations, and the native staging release gate.
+
 ## Database changes
 
 Database changes are version-controlled under `supabase/migrations`. Review and validate migrations in a disposable environment before applying them through the normal Supabase deployment workflow. Do not edit production data manually.
