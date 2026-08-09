@@ -4,6 +4,27 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { CONDITIONS, STATUSES } from "@/lib/vehicle-options";
+import { FileImage, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { EmptyState, PageHeader } from "@/components/product-ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 function pathFromDocumentUrl(url: string): string | null {
   try {
@@ -105,6 +126,7 @@ function DocumentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<DocumentRow | null>(null);
   const [attachingDoc, setAttachingDoc] = useState<DocumentRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
 
   useEffect(() => {
     if (isOwner) {
@@ -157,12 +179,6 @@ function DocumentsPage() {
   }, [selectedDealershipId]);
 
   const handleDelete = async (d: DocumentRow) => {
-    if (
-      !confirm(
-        `Delete document "${d.name}"? This removes it from the library and detaches it from any vehicles.`,
-      )
-    )
-      return;
     try {
       const url = new URL(d.image_url);
       const idx = url.pathname.indexOf("/documents/");
@@ -178,53 +194,64 @@ function DocumentsPage() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Documents</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Reusable images you can attach to any vehicle (window stickers, disclosures, etc.)
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-          {isOwner && (
-            <select
-              value={selectedDealershipId || ""}
-              onChange={(e) => setSelectedDealershipId(e.target.value || null)}
-              className="form-input"
-            >
-              {dealerships.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          )}
-          <button
-            onClick={() => setShowForm(true)}
-            disabled={!selectedDealershipId}
-            className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-          >
-            Add Document
-          </button>
-        </div>
-      </div>
+    <main className="ds-page-gutter">
+      <PageHeader
+        eyebrow="Vehicle resources"
+        title="Documents"
+        description="Maintain reusable window stickers, disclosures, and supporting images, then attach them to inventory."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {isOwner && (
+              <select
+                value={selectedDealershipId || ""}
+                onChange={(e) => setSelectedDealershipId(e.target.value || null)}
+                className="form-input"
+              >
+                {dealerships.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Button onClick={() => setShowForm(true)} disabled={!selectedDealershipId}>
+              <Plus className="size-4" />
+              Add document
+            </Button>
+          </div>
+        }
+      />
 
       {loading ? (
-        <div className="motion-content text-sm text-muted-foreground text-center py-16">
-          Loading…
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-busy="true">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div className="ds-surface overflow-hidden" key={index}>
+              <Skeleton className="aspect-video w-full rounded-none" />
+              <div className="space-y-2 p-4">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/2" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : documents.length === 0 ? (
-        <div className="motion-empty text-sm text-muted-foreground text-center py-16 rounded-xl border border-dashed border-border">
-          No documents yet. Upload one to get started.
+        <div className="ds-surface">
+          <EmptyState
+            icon={<FileImage className="size-5" />}
+            title="No documents yet"
+            description="Upload a window sticker, disclosure, or other reusable vehicle image."
+            action={
+              <Button onClick={() => setShowForm(true)} disabled={!selectedDealershipId}>
+                <Plus className="size-4" />
+                Add document
+              </Button>
+            }
+          />
         </div>
       ) : (
         <div className="motion-content grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {documents.map((d) => (
-            <div
-              key={d.id}
-              className="motion-card rounded-xl border border-border bg-card overflow-hidden flex flex-col"
-            >
+            <div key={d.id} className="motion-card ds-surface flex flex-col overflow-hidden">
               <div className="aspect-[16/9] bg-secondary flex items-center justify-center overflow-hidden">
                 <DocumentThumb doc={d} />
               </div>
@@ -248,7 +275,7 @@ function DocumentsPage() {
                     Edit
                   </button>
                   <button
-                    onClick={() => void handleDelete(d)}
+                    onClick={() => setDeleteTarget(d)}
                     className="text-xs text-destructive hover:text-destructive/80 ml-auto"
                   >
                     Delete
@@ -291,6 +318,29 @@ function DocumentsPage() {
           }}
         />
       )}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{deleteTarget?.name}” will be removed from the library and detached from every
+              vehicle. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep document</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget) void handleDelete(deleteTarget);
+                setDeleteTarget(null);
+              }}
+            >
+              Delete document
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }
@@ -519,7 +569,7 @@ function BulkAttachModal({
     const { error } = await supabase.from("vehicle_documents").insert(rows);
     setSaving(false);
     if (error) {
-      alert(error.message);
+      toast.error("Documents could not be attached", { description: error.message });
       return;
     }
     onDone();
@@ -574,8 +624,19 @@ function BulkAttachModal({
 
         <div className="max-h-[50vh] overflow-y-auto rounded-md border border-border divide-y divide-border">
           {loading ? (
-            <div className="motion-content p-6 text-sm text-muted-foreground text-center">
-              Loading…
+            <div className="space-y-0" aria-busy="true">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-3 border-b border-border p-3 last:border-0"
+                >
+                  <Skeleton className="size-4" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : filtered.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground text-center">No vehicles match.</div>
@@ -642,19 +703,17 @@ function Modal({
   wide?: boolean;
 }) {
   return (
-    <div
-      className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className={`motion-panel-static w-full ${wide ? "max-w-3xl" : "max-w-lg"} rounded-xl border border-border bg-card p-6 shadow-2xl`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-lg font-semibold text-card-foreground mb-1">{title}</h2>
-        {subtitle && <p className="text-xs text-muted-foreground mb-5">{subtitle}</p>}
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className={wide ? "max-h-[90vh] max-w-3xl overflow-y-auto" : "max-w-lg"}>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className={subtitle ? undefined : "sr-only"}>
+            {subtitle ?? "Manage this DealerShot document."}
+          </DialogDescription>
+        </DialogHeader>
         {children}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

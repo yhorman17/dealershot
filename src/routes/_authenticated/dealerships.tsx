@@ -2,6 +2,21 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { Building2, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { EmptyState, PageHeader, StatusBadge } from "@/components/product-ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/dealerships")({
   head: () => ({ meta: [{ title: "Dealerships — DealerShot" }] }),
@@ -25,6 +40,7 @@ function DealershipsPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Dealership | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Dealership | null>(null);
 
   useEffect(() => {
     if (!authLoading && profile && profile.role !== "owner") {
@@ -47,39 +63,68 @@ function DealershipsPage() {
   }, [profile?.role]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this dealership? This cannot be undone.")) return;
     const { error } = await supabase.from("dealerships").delete().eq("id", id);
-    if (error) return alert(error.message);
+    if (error)
+      return toast.error("Dealership could not be deleted", { description: error.message });
+    toast.success("Dealership deleted");
     void load();
   };
 
   if (profile?.role !== "owner") return null;
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dealerships</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage all dealership accounts</p>
-        </div>
-        <button
-          onClick={() => {
-            setEditing(null);
-            setShowForm(true);
-          }}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          Add Dealership
-        </button>
-      </div>
+    <main className="ds-page-gutter">
+      <PageHeader
+        eyebrow="Platform administration"
+        title="Dealerships"
+        description="Create and manage dealership tenant accounts, subscriptions, and contact details."
+        actions={
+          <Button
+            onClick={() => {
+              setEditing(null);
+              setShowForm(true);
+            }}
+          >
+            <Plus className="size-4" />
+            Add dealership
+          </Button>
+        }
+      />
 
       {loading ? (
-        <div className="motion-content rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
-          Loading…
+        <div className="ds-surface overflow-hidden" aria-busy="true">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={index}
+              className="flex items-center gap-3 border-b border-border p-4 last:border-0"
+            >
+              <Skeleton className="size-9" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-56" />
+              </div>
+              <Skeleton className="h-6 w-20" />
+            </div>
+          ))}
         </div>
       ) : dealerships.length === 0 ? (
-        <div className="motion-empty rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
-          No dealerships yet.
+        <div className="ds-surface">
+          <EmptyState
+            icon={<Building2 className="size-5" />}
+            title="No dealerships yet"
+            description="Create the first dealership tenant before inviting staff or adding inventory."
+            action={
+              <Button
+                onClick={() => {
+                  setEditing(null);
+                  setShowForm(true);
+                }}
+              >
+                <Plus className="size-4" />
+                Create dealership
+              </Button>
+            }
+          />
         </div>
       ) : (
         <>
@@ -101,9 +146,9 @@ function DealershipsPage() {
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-card-foreground truncate">{d.name}</p>
-                    <span className="motion-status inline-flex mt-0.5 items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide text-secondary-foreground">
+                    <StatusBadge tone={d.subscription_status === "active" ? "success" : "warning"}>
                       {d.subscription_status}
-                    </span>
+                    </StatusBadge>
                   </div>
                 </div>
                 <dl className="mt-3 space-y-1.5 text-sm">
@@ -129,7 +174,7 @@ function DealershipsPage() {
                     Edit
                   </button>
                   <button
-                    onClick={() => void handleDelete(d.id)}
+                    onClick={() => setDeleteTarget(d)}
                     className="flex-1 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 min-h-[44px] text-xs font-medium text-destructive hover:bg-destructive/20"
                   >
                     Delete
@@ -140,7 +185,7 @@ function DealershipsPage() {
           </div>
 
           {/* Desktop: table */}
-          <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
+          <div className="ds-surface hidden overflow-hidden md:block">
             <table className="w-full text-sm">
               <thead className="bg-secondary/50 text-left text-xs uppercase text-muted-foreground">
                 <tr>
@@ -173,9 +218,11 @@ function DealershipsPage() {
                     <td className="px-4 py-3 text-muted-foreground">{d.address || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{d.phone || "—"}</td>
                     <td className="px-4 py-3">
-                      <span className="motion-status inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-xs">
+                      <StatusBadge
+                        tone={d.subscription_status === "active" ? "success" : "warning"}
+                      >
                         {d.subscription_status}
-                      </span>
+                      </StatusBadge>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
@@ -188,7 +235,7 @@ function DealershipsPage() {
                         Edit
                       </button>
                       <button
-                        onClick={() => void handleDelete(d.id)}
+                        onClick={() => setDeleteTarget(d)}
                         className="text-xs text-destructive hover:text-destructive/80"
                       >
                         Delete
@@ -212,6 +259,29 @@ function DealershipsPage() {
           }}
         />
       )}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this dealership?</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{deleteTarget?.name}” and its tenant relationships may be permanently removed. This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep dealership</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget) void handleDelete(deleteTarget.id);
+                setDeleteTarget(null);
+              }}
+            >
+              Delete dealership
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }
@@ -277,7 +347,12 @@ function DealershipForm({
 
   return (
     <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Dealership details"
+        className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl"
+      >
         <h2 className="text-lg font-semibold text-card-foreground mb-1">
           {dealership ? "Edit Dealership" : "Add Dealership"}
         </h2>

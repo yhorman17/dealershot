@@ -2,6 +2,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { ImagePlus, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { EmptyState, PageHeader } from "@/components/product-ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/overlays")({
   head: () => ({ meta: [{ title: "Overlays — DealerShot" }] }),
@@ -29,6 +43,7 @@ function OverlaysPage() {
   const [selectedDealershipId, setSelectedDealershipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Overlay | null>(null);
 
   useEffect(() => {
     if (isOwner) {
@@ -64,7 +79,6 @@ function OverlaysPage() {
   }, [selectedDealershipId]);
 
   const handleDelete = async (o: Overlay) => {
-    if (!confirm(`Delete overlay "${o.name}"?`)) return;
     try {
       const url = new URL(o.image_url);
       const idx = url.pathname.indexOf("/overlays/");
@@ -80,53 +94,64 @@ function OverlaysPage() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Overlays</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Reusable banner images you can stamp on vehicle photos
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-          {isOwner && (
-            <select
-              value={selectedDealershipId || ""}
-              onChange={(e) => setSelectedDealershipId(e.target.value || null)}
-              className="form-input"
-            >
-              {dealerships.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          )}
-          <button
-            onClick={() => setShowForm(true)}
-            disabled={!selectedDealershipId}
-            className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-          >
-            Add Overlay
-          </button>
-        </div>
-      </div>
+    <main className="ds-page-gutter">
+      <PageHeader
+        eyebrow="Photo resources"
+        title="Overlays"
+        description="Manage reusable dealership banners, corner badges, and disclosure graphics."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {isOwner && (
+              <select
+                value={selectedDealershipId || ""}
+                onChange={(e) => setSelectedDealershipId(e.target.value || null)}
+                className="form-input"
+              >
+                {dealerships.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Button onClick={() => setShowForm(true)} disabled={!selectedDealershipId}>
+              <Plus className="size-4" />
+              Add overlay
+            </Button>
+          </div>
+        }
+      />
 
       {loading ? (
-        <div className="motion-content text-sm text-muted-foreground text-center py-16">
-          Loading…
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-busy="true">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div className="ds-surface overflow-hidden" key={index}>
+              <Skeleton className="aspect-video w-full rounded-none" />
+              <div className="space-y-2 p-4">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/3" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : overlays.length === 0 ? (
-        <div className="motion-empty text-sm text-muted-foreground text-center py-16 rounded-xl border border-dashed border-border">
-          No overlays yet. Upload a PNG banner to get started.
+        <div className="ds-surface">
+          <EmptyState
+            icon={<ImagePlus className="size-5" />}
+            title="No overlays yet"
+            description="Upload a transparent PNG banner or badge to reuse across vehicle photos."
+            action={
+              <Button onClick={() => setShowForm(true)} disabled={!selectedDealershipId}>
+                <Plus className="size-4" />
+                Add overlay
+              </Button>
+            }
+          />
         </div>
       ) : (
         <div className="motion-content grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {overlays.map((o) => (
-            <div
-              key={o.id}
-              className="motion-card rounded-xl border border-border bg-card overflow-hidden"
-            >
+            <div key={o.id} className="motion-card ds-surface overflow-hidden">
               <div className="aspect-[16/9] bg-[conic-gradient(at_top_left,_#1a1a2e,_#0f0f1a)] flex items-center justify-center overflow-hidden">
                 <img
                   src={o.image_url}
@@ -139,7 +164,7 @@ function OverlaysPage() {
                 <p className="text-xs text-muted-foreground mt-0.5">{o.category || "—"}</p>
                 <div className="mt-3 flex justify-end">
                   <button
-                    onClick={() => void handleDelete(o)}
+                    onClick={() => setDeleteTarget(o)}
                     className="text-xs text-destructive hover:text-destructive/80"
                   >
                     Delete
@@ -161,6 +186,29 @@ function OverlaysPage() {
           }}
         />
       )}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this overlay?</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{deleteTarget?.name}” will no longer be available in the photo editor. This cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep overlay</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget) void handleDelete(deleteTarget);
+                setDeleteTarget(null);
+              }}
+            >
+              Delete overlay
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }
@@ -213,7 +261,12 @@ function OverlayForm({
 
   return (
     <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add overlay"
+        className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl"
+      >
         <h2 className="text-lg font-semibold text-card-foreground mb-1">Add Overlay</h2>
         <p className="text-xs text-muted-foreground mb-5">Upload a transparent PNG banner</p>
         <form onSubmit={handleSubmit} className="space-y-4">

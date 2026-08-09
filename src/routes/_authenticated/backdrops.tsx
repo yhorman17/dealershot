@@ -2,6 +2,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { Aperture, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { EmptyState, PageHeader } from "@/components/product-ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/backdrops")({
   head: () => ({ meta: [{ title: "Backdrops — DealerShot" }] }),
@@ -26,6 +40,7 @@ function BackdropsPage() {
   const [selectedDealershipId, setSelectedDealershipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Backdrop | null>(null);
 
   useEffect(() => {
     if (isOwner) {
@@ -61,7 +76,6 @@ function BackdropsPage() {
   }, [selectedDealershipId]);
 
   const handleDelete = async (b: Backdrop) => {
-    if (!confirm(`Delete backdrop "${b.name}"?`)) return;
     try {
       const url = new URL(b.image_url);
       const idx = url.pathname.indexOf("/backdrops/");
@@ -77,53 +91,63 @@ function BackdropsPage() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Backdrops</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Background images for composited vehicle photos
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-          {isOwner && (
-            <select
-              value={selectedDealershipId || ""}
-              onChange={(e) => setSelectedDealershipId(e.target.value || null)}
-              className="form-input"
-            >
-              {dealerships.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          )}
-          <button
-            onClick={() => setShowForm(true)}
-            disabled={!selectedDealershipId}
-            className="rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-          >
-            Add Backdrop
-          </button>
-        </div>
-      </div>
+    <main className="ds-page-gutter">
+      <PageHeader
+        eyebrow="Photo resources"
+        title="Backdrops"
+        description="Manage approved showroom and lot backgrounds for processed vehicle photos."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {isOwner && (
+              <select
+                value={selectedDealershipId || ""}
+                onChange={(e) => setSelectedDealershipId(e.target.value || null)}
+                className="form-input"
+              >
+                {dealerships.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Button onClick={() => setShowForm(true)} disabled={!selectedDealershipId}>
+              <Plus className="size-4" />
+              Add backdrop
+            </Button>
+          </div>
+        }
+      />
 
       {loading ? (
-        <div className="motion-content text-sm text-muted-foreground text-center py-16">
-          Loading…
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-busy="true">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div className="ds-surface overflow-hidden" key={index}>
+              <Skeleton className="aspect-video w-full rounded-none" />
+              <div className="p-4">
+                <Skeleton className="h-4 w-2/3" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="motion-empty text-sm text-muted-foreground text-center py-16 rounded-xl border border-dashed border-border">
-          No backdrops yet. Upload a background image to get started.
+        <div className="ds-surface">
+          <EmptyState
+            icon={<Aperture className="size-5" />}
+            title="No backdrops yet"
+            description="Upload an approved background to use in the vehicle photo editor."
+            action={
+              <Button onClick={() => setShowForm(true)} disabled={!selectedDealershipId}>
+                <Plus className="size-4" />
+                Add backdrop
+              </Button>
+            }
+          />
         </div>
       ) : (
         <div className="motion-content grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {items.map((b) => (
-            <div
-              key={b.id}
-              className="motion-card rounded-xl border border-border bg-card overflow-hidden"
-            >
+            <div key={b.id} className="motion-card ds-surface overflow-hidden">
               <div className="aspect-[16/9] bg-secondary overflow-hidden">
                 <img
                   src={b.image_url}
@@ -135,7 +159,7 @@ function BackdropsPage() {
                 <h3 className="font-medium text-card-foreground text-sm truncate">{b.name}</h3>
                 <div className="mt-3 flex justify-end">
                   <button
-                    onClick={() => void handleDelete(b)}
+                    onClick={() => setDeleteTarget(b)}
                     className="text-xs text-destructive hover:text-destructive/80"
                   >
                     Delete
@@ -157,6 +181,29 @@ function BackdropsPage() {
           }}
         />
       )}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this backdrop?</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{deleteTarget?.name}” will be removed from the photo editor. Existing processed
+              images are not changed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep backdrop</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget) void handleDelete(deleteTarget);
+                setDeleteTarget(null);
+              }}
+            >
+              Delete backdrop
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }
@@ -207,7 +254,12 @@ function BackdropForm({
 
   return (
     <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add backdrop"
+        className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl"
+      >
         <h2 className="text-lg font-semibold text-card-foreground mb-1">Add Backdrop</h2>
         <p className="text-xs text-muted-foreground mb-5">Upload a JPG or PNG background image</p>
         <form onSubmit={handleSubmit} className="space-y-4">

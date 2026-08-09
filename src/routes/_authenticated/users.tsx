@@ -13,6 +13,20 @@ import {
 } from "@/lib/api/users.functions";
 import { relativeTime } from "@/lib/relative-time";
 import { toast } from "sonner";
+import { Plus, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { EmptyState, PageHeader } from "@/components/product-ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/users")({
   head: () => ({ meta: [{ title: "Users — DealerShot" }] }),
@@ -57,6 +71,7 @@ function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [filterDealership, setFilterDealership] = useState<string>("all");
   const [showInvite, setShowInvite] = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
   const [editTarget, setEditTarget] = useState<UserRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
 
@@ -152,7 +167,6 @@ function UsersPage() {
   };
 
   const handleRevoke = async (inv: Invitation) => {
-    if (!confirm(`Revoke invitation for ${inv.email}?`)) return;
     const { error } = await supabase
       .from("user_invitations")
       .update({ status: "revoked" })
@@ -163,23 +177,18 @@ function UsersPage() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-10">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
-            Users
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage user accounts and invitations across all dealerships
-          </p>
-        </div>
-        <button
-          onClick={() => setShowInvite(true)}
-          className="rounded-md bg-primary px-4 py-2.5 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          + Invite user
-        </button>
-      </div>
+    <main className="ds-page-gutter">
+      <PageHeader
+        eyebrow="Access administration"
+        title="Users & invitations"
+        description="Manage dealership roles, activation status, invitations, and account recovery."
+        actions={
+          <Button onClick={() => setShowInvite(true)}>
+            <Plus className="size-4" />
+            Invite user
+          </Button>
+        }
+      />
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
         <div className="flex items-center gap-2">
@@ -216,8 +225,20 @@ function UsersPage() {
       </div>
 
       {loading ? (
-        <div className="motion-content rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
-          Loading…
+        <div className="ds-surface overflow-hidden" aria-busy="true">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={index}
+              className="flex items-center gap-3 border-b border-border p-4 last:border-0"
+            >
+              <Skeleton className="size-9" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-44" />
+                <Skeleton className="h-3 w-64" />
+              </div>
+              <Skeleton className="h-6 w-20" />
+            </div>
+          ))}
         </div>
       ) : tab === "active" ? (
         <ActiveUsersTab
@@ -235,7 +256,7 @@ function UsersPage() {
           dealershipById={dealershipById}
           onResend={(i) => void handleResend(i)}
           onCopy={(i) => void handleCopyLink(i)}
-          onRevoke={(i) => void handleRevoke(i)}
+          onRevoke={setRevokeTarget}
         />
       )}
 
@@ -265,6 +286,29 @@ function UsersPage() {
           onConfirm={() => void handleDelete(deleteTarget)}
         />
       )}
+      <AlertDialog open={!!revokeTarget} onOpenChange={(open) => !open && setRevokeTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke this invitation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {revokeTarget?.email} will no longer be able to use this invitation link. You can send
+              a new invitation later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep invitation</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (revokeTarget) void handleRevoke(revokeTarget);
+                setRevokeTarget(null);
+              }}
+            >
+              Revoke invitation
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }
@@ -288,8 +332,13 @@ function ActiveUsersTab({
 }) {
   if (users.length === 0) {
     return (
-      <div className="motion-empty rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
-        No users found.
+      <div className="ds-surface">
+        <EmptyState
+          compact
+          icon={<Users className="size-5" />}
+          title="No users found"
+          description="No active users match the selected dealership filter."
+        />
       </div>
     );
   }
@@ -599,7 +648,7 @@ function RoleBadge({ role }: { role: string }) {
     role === "owner"
       ? "bg-primary/15 text-primary border-primary/30"
       : role === "dealer_admin"
-        ? "bg-amber-400/15 text-amber-300 border-amber-400/30"
+        ? "border-warning/35 bg-warning/15 text-warning-foreground"
         : "bg-secondary text-secondary-foreground border-border";
   return (
     <span
@@ -662,7 +711,12 @@ function EditUserModal({
 
   return (
     <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit user"
+        className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl"
+      >
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-card-foreground">Edit user</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -764,7 +818,12 @@ function ConfirmRemove({
   const [text, setText] = useState("");
   return (
     <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="motion-panel-static w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Remove user"
+        className="motion-panel-static w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+      >
         <h2 className="text-lg font-semibold text-card-foreground mb-1">Remove user</h2>
         <p className="text-sm text-muted-foreground mb-4">
           This permanently deletes <span className="text-foreground font-medium">{user.email}</span>{" "}

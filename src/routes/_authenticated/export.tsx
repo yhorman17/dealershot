@@ -10,6 +10,8 @@ import {
   todayStamp,
 } from "@/lib/export-photos";
 import { CustomExportModal } from "@/components/CustomExportModal";
+import { PageHeader, StatusBadge } from "@/components/product-ui";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_authenticated/export")({
   head: () => ({ meta: [{ title: "Export — DealerShot" }] }),
@@ -153,28 +155,27 @@ function ExportPage() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-10">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Export</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Download photos in bulk as a ZIP archive.
-          </p>
-        </div>
-        {isOwner && (
-          <select
-            value={selectedDealershipId || ""}
-            onChange={(e) => setSelectedDealershipId(e.target.value || null)}
-            className="form-input w-full sm:w-auto"
-          >
-            {dealerships.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+    <main className="ds-page-gutter">
+      <PageHeader
+        eyebrow="Delivery"
+        title="Photo exports"
+        description="Select retail-ready vehicles and package their ordered photo sets into a ZIP archive."
+        actions={
+          isOwner ? (
+            <select
+              value={selectedDealershipId || ""}
+              onChange={(e) => setSelectedDealershipId(e.target.value || null)}
+              className="form-input w-full sm:w-auto"
+            >
+              {dealerships.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          ) : undefined
+        }
+      />
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <input
@@ -235,13 +236,28 @@ function ExportPage() {
       </div>
 
       {loading ? (
-        <p className="motion-content text-sm text-muted-foreground text-center py-16">Loading…</p>
+        <div className="ds-surface overflow-hidden" aria-busy="true">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div
+              className="flex items-center gap-3 border-b border-border p-3 last:border-0"
+              key={index}
+            >
+              <Skeleton className="size-5" />
+              <Skeleton className="h-12 w-16" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-44" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+              <Skeleton className="h-6 w-20" />
+            </div>
+          ))}
+        </div>
       ) : filtered.length === 0 ? (
         <p className="motion-empty text-sm text-muted-foreground text-center py-16 rounded-xl border border-dashed border-border">
           No vehicles match.
         </p>
       ) : (
-        <ul className="divide-y divide-border rounded-xl border border-border bg-card overflow-hidden">
+        <ul className="ds-surface divide-y divide-border overflow-hidden">
           {filtered.map((v) => (
             <li key={v.id} className="motion-row flex items-center gap-3 p-3 hover:bg-secondary/40">
               <input
@@ -265,9 +281,9 @@ function ExportPage() {
                   {v.stock_number || v.vin || "—"}
                 </p>
               </div>
-              <span className="motion-status inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide text-secondary-foreground">
+              <StatusBadge tone={(v.photo_count || 0) > 0 ? "success" : "warning"}>
                 {v.photo_count || 0} photo{v.photo_count === 1 ? "" : "s"}
-              </span>
+              </StatusBadge>
             </li>
           ))}
         </ul>

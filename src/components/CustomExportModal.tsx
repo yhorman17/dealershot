@@ -105,7 +105,12 @@ export function CustomExportModal({ vehicles, onClose }: Props) {
 
   return (
     <div className="motion-overlay-static fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-stretch sm:items-center justify-center sm:p-4">
-      <div className="motion-panel-static bg-card text-card-foreground w-full sm:max-w-3xl sm:rounded-xl border border-border flex flex-col max-h-screen sm:max-h-[90vh]">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Custom export"
+        className="motion-panel-static bg-card text-card-foreground w-full sm:max-w-3xl sm:rounded-xl border border-border flex flex-col max-h-screen sm:max-h-[90vh]"
+      >
         <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between gap-3">
           <h2 className="text-base sm:text-lg font-semibold">Custom Export</h2>
           <button
