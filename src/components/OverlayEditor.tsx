@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export type Position = "top" | "bottom" | "tl" | "tr" | "bl" | "br";
 
@@ -98,6 +108,7 @@ export function OverlayEditor({
   const [pos, setPos] = useState<Position>("bottom");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [overwriteOpen, setOverwriteOpen] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -177,7 +188,12 @@ export function OverlayEditor({
 
   return (
     <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-auto">
-      <div className="motion-panel-static w-full max-w-3xl rounded-xl border border-border bg-card p-6 shadow-2xl my-8">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Overlay editor"
+        className="motion-panel-static w-full max-w-3xl rounded-xl border border-border bg-card p-6 shadow-2xl my-8"
+      >
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold text-card-foreground">Add Overlay</h2>
@@ -266,16 +282,33 @@ export function OverlayEditor({
                 {saving ? "Saving…" : "Save as new photo"}
               </button>
               <button
-                onClick={() => {
-                  if (confirm("Overwrite the original photo? This cannot be undone."))
-                    void save("overwrite");
-                }}
+                onClick={() => setOverwriteOpen(true)}
                 disabled={saving || !selected}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
               >
                 {saving ? "Saving…" : "Overwrite original"}
               </button>
             </div>
+            <AlertDialog open={overwriteOpen} onOpenChange={setOverwriteOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Overwrite the original photo?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    The current photo file will be replaced with this edited version. This cannot be
+                    undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Keep original</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => void save("overwrite")}
+                  >
+                    Overwrite photo
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </>
         )}
       </div>

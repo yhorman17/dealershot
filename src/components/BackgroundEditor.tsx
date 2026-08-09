@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { removeBackground } from "@imgly/background-removal";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export type Position = "top" | "bottom" | "tl" | "tr" | "bl" | "br";
 
@@ -451,6 +461,7 @@ export function BackgroundEditor({
   const [removeErr, setRemoveErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [comparing, setComparing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("background");
 
@@ -1022,7 +1033,12 @@ export function BackgroundEditor({
   return (
     <div className="motion-overlay-static fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-background/80 backdrop-blur-sm">
       <div className="min-h-full w-full flex items-stretch sm:items-start justify-center p-0 sm:p-4">
-        <div className="motion-panel-static w-full sm:max-w-3xl sm:rounded-xl border-0 sm:border border-border bg-card p-4 sm:p-6 shadow-2xl sm:my-8">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Background editor"
+          className="motion-panel-static w-full sm:max-w-3xl sm:rounded-xl border-0 sm:border border-border bg-card p-4 sm:p-6 shadow-2xl sm:my-8"
+        >
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-card-foreground">Change Background</h2>
@@ -1500,16 +1516,33 @@ export function BackgroundEditor({
                   {saving ? "Saving…" : "Save as new photo"}
                 </button>
                 <button
-                  onClick={() => {
-                    if (confirm("Overwrite the original photo? This cannot be undone."))
-                      void save("overwrite");
-                  }}
+                  onClick={() => setOverwriteOpen(true)}
                   disabled={saving || !ready}
                   className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
                 >
                   {saving ? "Saving…" : "Overwrite original"}
                 </button>
               </div>
+              <AlertDialog open={overwriteOpen} onOpenChange={setOverwriteOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Overwrite the original photo?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      The current photo file will be replaced with this edited version. This cannot
+                      be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep original</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => void save("overwrite")}
+                    >
+                      Overwrite photo
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </>
           )}
         </div>
