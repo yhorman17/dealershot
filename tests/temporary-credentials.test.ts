@@ -99,6 +99,10 @@ test("hosted acceptance keeps protected projects closed unless exactly authorize
   assert.match(harness, /validate-authorized-dealershot:oyuvdarrkwpqmufzidnc/);
   assert.match(harness, /validate-disposable:/);
   assert.match(harness, /confirmation !== expectedConfirmation/);
+  assert.match(
+    harness,
+    /updateUserById\(generated\.user\.id, \{\s*password: invitedPassword,\s*email_confirm: true,/,
+  );
   assert.doesNotMatch(
     harness,
     /console\.(?:log|info|warn|error)\([^\n]*(?:serviceRoleKey|publishableKey)/,

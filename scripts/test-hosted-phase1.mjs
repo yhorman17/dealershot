@@ -450,8 +450,11 @@ try {
     createdUsers.push(generated.user.id);
     await waitForProfile(admin, generated.user.id);
     assertNoError(
-      await admin.auth.admin.updateUserById(generated.user.id, { password: invitedPassword }),
-      "set invite test password",
+      await admin.auth.admin.updateUserById(generated.user.id, {
+        password: invitedPassword,
+        email_confirm: true,
+      }),
+      "confirm invite identity and set test password",
     );
     assertDenied(
       await staffBAuth.scoped.rpc("accept_invitation", { _token: invitationToken }),
