@@ -60,13 +60,18 @@ function LoginPage() {
       description="Sign in to continue managing dealership inventory and photo operations."
       footer="DealerShot access is limited to active, authorized dealership users."
     >
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} autoComplete="on" className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor="email">Work email</Label>
           <Input
             id="email"
+            name="username"
             type="email"
-            autoComplete="email"
+            autoComplete="username"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -87,8 +92,12 @@ function LoginPage() {
           </div>
           <Input
             id="password"
+            name="password"
             type="password"
             autoComplete="current-password"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -160,7 +169,7 @@ function ForgotPasswordDialog({
             </DialogFooter>
           </>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} autoComplete="on" className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="reset-email">Work email</Label>
               <div className="relative">
@@ -170,7 +179,13 @@ function ForgotPasswordDialog({
                 />
                 <Input
                   id="reset-email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

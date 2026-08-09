@@ -24,6 +24,27 @@ test("collapsed navigation provides the Radix tooltip context", () => {
   );
 });
 
+test("mobile navigation uses a deliberate in-header close control", () => {
+  const appNav = readFileSync(path.join(sourceRoot, "components", "AppNav.tsx"), "utf8");
+  const sheet = readFileSync(path.join(sourceRoot, "components", "ui", "sheet.tsx"), "utf8");
+
+  assert.match(sheet, /showCloseButton\?: boolean/);
+  assert.match(appNav, /showCloseButton=\{false\}/);
+  assert.match(appNav, /<SheetClose asChild>[\s\S]*aria-label="Close navigation"/);
+  assert.match(appNav, /<PanelLeftClose aria-hidden className="size-5"/);
+});
+
+test("login exposes native password-manager semantics", () => {
+  const login = readFileSync(path.join(sourceRoot, "routes", "login.tsx"), "utf8");
+
+  assert.match(login, /<form onSubmit=\{handleSubmit\} autoComplete="on"/);
+  assert.match(
+    login,
+    /id="email"[\s\S]*name="username"[\s\S]*autoComplete="username"[\s\S]*id="password"/,
+  );
+  assert.match(login, /id="password"[\s\S]*name="password"[\s\S]*autoComplete="current-password"/);
+});
+
 test("page entrance animation releases its transform for viewport-fixed overlays", () => {
   const styles = readFileSync(path.join(sourceRoot, "styles.css"), "utf8");
   const motionPageRule = styles.match(/\.motion-page\s*\{(?<body>[^}]*)\}/)?.groups?.body;

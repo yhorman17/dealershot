@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   PackageSearch,
+  PanelLeftClose,
   Plus,
   ScanLine,
   ShieldCheck,
@@ -21,7 +22,13 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -66,7 +73,7 @@ export function AppNav({ children }: { children: ReactNode }) {
     .map((part) => part[0]?.toUpperCase())
     .join("");
 
-  const renderNavigation = (isCollapsed: boolean) => (
+  const renderNavigation = (isCollapsed: boolean, showMobileClose = false) => (
     <>
       <div
         className={cn(
@@ -78,7 +85,7 @@ export function AppNav({ children }: { children: ReactNode }) {
           <ScanLine aria-hidden className="size-5" />
         </div>
         {!isCollapsed && (
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-[15px] font-semibold leading-5 tracking-[-0.02em] text-white">
               DealerShot
             </p>
@@ -86,6 +93,18 @@ export function AppNav({ children }: { children: ReactNode }) {
               Photo operations
             </p>
           </div>
+        )}
+        {showMobileClose && (
+          <SheetClose asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-auto size-11 shrink-0 text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+              aria-label="Close navigation"
+            >
+              <PanelLeftClose aria-hidden className="size-5" />
+            </Button>
+          </SheetClose>
         )}
       </div>
       <nav aria-label="Primary navigation" className="flex-1 overflow-y-auto px-2 py-4">
@@ -175,11 +194,12 @@ export function AppNav({ children }: { children: ReactNode }) {
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetContent
             side="left"
-            className="w-[19rem] border-sidebar-border bg-sidebar p-0 text-sidebar-foreground [&>button]:text-sidebar-foreground"
+            showCloseButton={false}
+            className="w-[19rem] border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
           >
             <SheetTitle className="sr-only">DealerShot navigation</SheetTitle>
             <SheetDescription className="sr-only">Navigate dealership operations.</SheetDescription>
-            <div className="flex h-full flex-col">{renderNavigation(false)}</div>
+            <div className="flex h-full flex-col">{renderNavigation(false, true)}</div>
           </SheetContent>
         </Sheet>
 
