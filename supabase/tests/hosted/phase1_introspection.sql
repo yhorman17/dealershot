@@ -121,6 +121,23 @@ BEGIN
 END;
 $$;
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_constraint AS c
+    WHERE c.conrelid = 'public.audit_events'::regclass
+      AND c.contype = 'f'
+      AND c.confrelid IN (
+        'public.profiles'::regclass,
+        'public.dealerships'::regclass
+      )
+  ) THEN
+    RAISE EXCEPTION 'Audit subject identifiers must remain immutable historical values.';
+  END IF;
+END;
+$$;
+
 SELECT grantee, table_schema, table_name, privilege_type
 FROM information_schema.role_table_grants
 WHERE grantee IN ('anon', 'authenticated', 'service_role')

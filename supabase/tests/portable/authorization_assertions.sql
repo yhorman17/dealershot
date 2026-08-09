@@ -1077,6 +1077,40 @@ SELECT test.expect_sqlstate(
 );
 RESET ROLE;
 
+-- Audit subject identifiers survive account erasure without mutating the
+-- append-only audit row.
+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES (
+  '00000000-0000-0000-0000-000000000099',
+  'audit-erasure@example.test',
+  '{"full_name":"Audit Erasure Fixture"}'::jsonb
+);
+INSERT INTO public.audit_events (
+  event_type,
+  actor_profile_id,
+  target_profile_id,
+  payload
+) VALUES (
+  'user.erasure_fixture',
+  '00000000-0000-0000-0000-000000000099',
+  '00000000-0000-0000-0000-000000000099',
+  '{}'::jsonb
+);
+DELETE FROM auth.users
+WHERE id = '00000000-0000-0000-0000-000000000099';
+SELECT test.assert_true(
+  NOT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = '00000000-0000-0000-0000-000000000099'
+  )
+  AND EXISTS (
+    SELECT 1 FROM public.audit_events
+    WHERE event_type = 'user.erasure_fixture'
+      AND actor_profile_id = '00000000-0000-0000-0000-000000000099'
+      AND target_profile_id = '00000000-0000-0000-0000-000000000099'
+  ),
+  'account erasure preserves immutable audit subject identifiers'
+);
+
 DROP SCHEMA test CASCADE;
 
 \echo 'DealerShot portable authorization assertions passed.'
