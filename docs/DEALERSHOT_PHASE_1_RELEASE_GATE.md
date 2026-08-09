@@ -1,18 +1,18 @@
 # DealerShot Phase 1 release gate and manual testing handoff
 
-This runbook is for disposable Supabase and non-production DigitalOcean resources only. It does not authorize a production migration, DNS change, merge to `main`, or Phase 2 work.
+This runbook covers disposable Supabase validation and the explicitly authorized DealerShot testing project. It does not authorize an unrelated Supabase project, unrelated DigitalOcean app, DNS change, merge to `main`, or Phase 2 work.
 
 ## Current gate status
 
-On 2026-08-09, the connected Supabase account could not create a disposable hosted environment: both active Free project slots were occupied and preview branches required Pro. Both requests failed before creating a resource. The live DealerShot reference is `oyuvdarrkwpqmufzidnc`; the hosted runner refuses that reference.
+On 2026-08-09, the DealerShot testing project `oyuvdarrkwpqmufzidnc` was explicitly authorized for an in-place Phase 1 migration and acceptance run. The hosted runner still refuses that protected reference by default; it accepts it only with the exact project-bound confirmation documented below.
 
 Local verification applies the complete chain to disposable PostgreSQL 17 and exercises grants, RLS, Storage policy expressions, lifecycle procedures, settings, audit, and jobs. Real GoTrue, hosted JWT/session behavior, native Storage, email delivery, hosted extensions, and a deployed worker remain release gates until an independent hosted environment is available.
 
-## 1. Create and prove the disposable environment
+## 1. Prove the authorized environment
 
-Either create a new Free project after a genuinely unused slot becomes available, or create a persistent data-less branch in a Pro non-production organization. Never pause/delete DealerShot or StudioGecko to free a slot. Never seed/copy production data or use `--with-data`.
+For the authorized DealerShot testing run, verify the reference is exactly `oyuvdarrkwpqmufzidnc` and the URL is exactly `https://oyuvdarrkwpqmufzidnc.supabase.co` before any mutation. For future disposable runs, create a separate project or persistent data-less branch and use the disposable confirmation path. Never pause/delete another project to free a slot, seed/copy production data, or use `--with-data`.
 
-Record the new reference; it must differ from `oyuvdarrkwpqmufzidnc`. In a visible local terminal, authenticate and link. Enter the database password only in the CLI prompt—not chat, source, or command history.
+Record the exact authorized reference. In a visible local terminal, authenticate and link only when the database password can be entered at the CLI prompt—not in chat, source, or command history.
 
 ```powershell
 supabase.cmd login
@@ -20,7 +20,7 @@ supabase.cmd projects list
 supabase.cmd link --project-ref <DISPOSABLE_PROJECT_REF>
 ```
 
-Inspect `supabase/.temp/linked-project.json` and confirm `ref` exactly matches the disposable project before any migration. Record project reference/region/status, Postgres version, existing schemas/tables/migration history, enabled/available extensions (especially `pgmq`, `pg_cron`, `pg_net`, `pg_graphql`, `pg_stat_statements`), and Database/Auth/API/Storage/Realtime health.
+Inspect `supabase/.temp/linked-project.json` and confirm `ref` exactly matches the authorized project before any CLI migration. Record project reference/region/status, Postgres version, existing schemas/tables/migration history, enabled/available extensions (especially `pgmq`, `pg_cron`, `pg_net`, `pg_graphql`, `pg_stat_statements`), and Database/Auth/API/Storage/Realtime health.
 
 ## 2. Apply and inspect the full migration chain
 
@@ -47,16 +47,18 @@ Compare migrations, tables, constraints, indexes, triggers, grants/revokes, RLS,
 
 ## 3. Run real hosted acceptance
 
-Put the disposable URL/keys only in the current terminal. The service-role key is secret.
+Put the authorized URL/keys only in the current terminal. The service-role key is secret. Protected DealerShot validation requires the exact confirmation below; any typo or different protected reference fails closed.
 
 ```powershell
-$env:DEALERSHOT_VALIDATION_PROJECT_REF = "<DISPOSABLE_PROJECT_REF>"
-$env:DEALERSHOT_VALIDATION_CONFIRM = "validate-disposable:$env:DEALERSHOT_VALIDATION_PROJECT_REF"
-$env:SUPABASE_URL = "https://<DISPOSABLE_PROJECT_REF>.supabase.co"
-$env:SUPABASE_PUBLISHABLE_KEY = "<DISPOSABLE_PUBLISHABLE_KEY>"
-$env:SUPABASE_SERVICE_ROLE_KEY = "<DISPOSABLE_SERVICE_ROLE_KEY>"
+$env:DEALERSHOT_VALIDATION_PROJECT_REF = "oyuvdarrkwpqmufzidnc"
+$env:DEALERSHOT_VALIDATION_CONFIRM = "validate-authorized-dealershot:oyuvdarrkwpqmufzidnc"
+$env:SUPABASE_URL = "https://oyuvdarrkwpqmufzidnc.supabase.co"
+$env:SUPABASE_PUBLISHABLE_KEY = "<DEALERSHOT_PUBLISHABLE_KEY>"
+$env:SUPABASE_SERVICE_ROLE_KEY = "<DEALERSHOT_SERVICE_ROLE_KEY>"
 npm.cmd run test:hosted:phase1
 ```
+
+For a disposable project, retain `validate-disposable:<project-ref>` instead. The protected confirmation is not a wildcard and does not authorize any other project.
 
 The runner uses real Auth users/JWTs and tests tenant RLS, onboarding, Admin Auth replacement, existing-session containment, invitations, settings, append-only audit, Storage paths/public reads, and queue primitives. It never prints passwords, keys, JWTs, refresh tokens, or database credentials. Ordinary fixtures are removed by default; append-only audit/private job evidence remains until project destruction. Record its sanitized `existing_session_after_admin_password_update` result exactly—do not infer hosted behavior from local GoTrue.
 
@@ -77,9 +79,9 @@ Remove-Item Env:DEALERSHOT_VALIDATION_CONFIRM,Env:DEALERSHOT_VALIDATION_PROJECT_
 - Configure custom SMTP before relying on outbound delivery.
 - Set `DEALERSHOT_PUBLIC_URL` to the exact HTTPS testing origin. Browser input never chooses invitation redirect hosts.
 
-## 5. Bootstrap one disposable Owner
+## 5. Bootstrap one Owner only if none exists
 
-The product intentionally cannot create Owners. In the disposable dashboard, create one confirmed Auth email/password user using a private password. Then run this once with its UUID; never include the password in SQL.
+The product intentionally cannot create Owners. First reuse the existing valid active Owner. Only when none exists, create one confirmed Auth email/password user using a private password and run the documented bootstrap once with its UUID; never include the password in SQL.
 
 ```sql
 BEGIN;
@@ -97,9 +99,9 @@ COMMIT;
 
 Verify exactly one intended active Owner. Create every Dealer Admin/Staff account through DealerShot thereafter.
 
-## 6. Non-production DigitalOcean deployment
+## 6. DealerShot DigitalOcean testing deployment
 
-Deploy the reviewed feature branch and exact reported SHA—not `main`—to a separate test app. Do not modify live DealerShot. Keep Autodeploy off.
+Deploy the reviewed feature branch and exact reported SHA—not `main`—to the existing DealerShot testing app serving `https://dealershot.studiogecko.dev`. Do not modify unrelated apps or DNS. Keep Autodeploy off.
 
 Web: root `Dockerfile`, default `node .output/server/index.mjs`, port 8080, `/health`, one `basic-xxs` instance.
 

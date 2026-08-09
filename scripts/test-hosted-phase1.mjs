@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 
-const KNOWN_LIVE_PROJECT_REFS = new Set(["oyuvdarrkwpqmufzidnc"]);
+const PROTECTED_PROJECT_CONFIRMATIONS = new Map([
+  ["oyuvdarrkwpqmufzidnc", "validate-authorized-dealershot:oyuvdarrkwpqmufzidnc"],
+]);
 
 function requiredEnv(name) {
   const value = process.env[name]?.trim();
@@ -54,17 +56,17 @@ const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
 const confirmation = requiredEnv("DEALERSHOT_VALIDATION_CONFIRM");
 const parsedUrl = new URL(supabaseUrl);
 
-if (
-  KNOWN_LIVE_PROJECT_REFS.has(projectRef) ||
-  KNOWN_LIVE_PROJECT_REFS.has(parsedUrl.hostname.split(".")[0])
-) {
-  throw new Error("Safety stop: hosted acceptance refuses the known live DealerShot project.");
-}
 if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== `${projectRef}.supabase.co`) {
-  throw new Error("SUPABASE_URL must match the explicitly named disposable project reference.");
+  throw new Error("SUPABASE_URL must match the explicitly named project reference.");
 }
-if (confirmation !== `validate-disposable:${projectRef}`) {
-  throw new Error("Set DEALERSHOT_VALIDATION_CONFIRM to validate-disposable:<project-ref>.");
+
+const protectedConfirmation = PROTECTED_PROJECT_CONFIRMATIONS.get(projectRef);
+const expectedConfirmation = protectedConfirmation ?? `validate-disposable:${projectRef}`;
+if (confirmation !== expectedConfirmation) {
+  const targetKind = protectedConfirmation ? "authorized protected" : "disposable";
+  throw new Error(
+    `Safety stop: DEALERSHOT_VALIDATION_CONFIRM does not authorize this ${targetKind} project.`,
+  );
 }
 
 const admin = client(supabaseUrl, serviceRoleKey);

@@ -92,11 +92,13 @@ test("invitation redirects do not trust a browser-supplied origin", () => {
   assert.doesNotMatch(server, /from\("user_invitations"\)\.select\("\*"\)\.order\("invited_at"/);
 });
 
-test("hosted acceptance refuses the known live project and requires an explicit disposable target", () => {
+test("hosted acceptance keeps protected projects closed unless exactly authorized", () => {
   const harness = readFileSync(path.join(process.cwd(), "scripts/test-hosted-phase1.mjs"), "utf8");
-  assert.match(harness, /KNOWN_LIVE_PROJECT_REFS/);
+  assert.match(harness, /PROTECTED_PROJECT_CONFIRMATIONS/);
   assert.match(harness, /oyuvdarrkwpqmufzidnc/);
+  assert.match(harness, /validate-authorized-dealershot:oyuvdarrkwpqmufzidnc/);
   assert.match(harness, /validate-disposable:/);
+  assert.match(harness, /confirmation !== expectedConfirmation/);
   assert.doesNotMatch(
     harness,
     /console\.(?:log|info|warn|error)\([^\n]*(?:serviceRoleKey|publishableKey)/,
