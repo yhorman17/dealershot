@@ -11,16 +11,16 @@ domains:
     minimum_tls_version: "1.2"
 
 services:
-  - name: web
+  - name: dealershot
     github:
       repo: yhorman17/dealershot
-      branch: main
-      deploy_on_push: true
+      branch: feature/expansion-phase-1-foundation
+      deploy_on_push: false
     dockerfile_path: Dockerfile
     source_dir: /
     http_port: 8080
     instance_count: 1
-    instance_size_slug: basic-xxs
+    instance_size_slug: basic-xs
     envs:
       - key: NODE_ENV
         scope: RUN_TIME
@@ -45,8 +45,8 @@ workers:
   - name: background-worker
     github:
       repo: yhorman17/dealershot
-      branch: main
-      deploy_on_push: true
+      branch: feature/expansion-phase-1-foundation
+      deploy_on_push: false
     dockerfile_path: Dockerfile
     source_dir: /
     run_command: node .worker/index.mjs
@@ -73,7 +73,7 @@ workers:
 ingress:
   rules:
     - component:
-        name: web
+        name: dealershot
       match:
         path:
           prefix: /

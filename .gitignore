@@ -16,6 +16,7 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
+supabase/.temp/
 
 # Local environment files. Commit names/placeholders only in .env.example.
 .env
