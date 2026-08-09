@@ -3,129 +3,191 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { resolveUserAccountUpdate } from "@/lib/api/user-account-policy";
+import { generateTemporaryPassword } from "@/lib/api/temporary-credentials.server";
+import type { Json } from "@/integrations/supabase/types";
+import { getApplicationOrigin } from "@/lib/api/application-origin.server";
 
-type ProfileStatus = "active" | "deactivated";
+type ManagedRole = "dealer_admin" | "staff";
+type ActorScope = { role: "owner" | "dealer_admin"; dealershipIds: string[] };
+type OperationResult = {
+  operation_id?: string;
+  status?: string;
+  target_profile_id?: string | null;
+};
 
-async function assertActiveOwner(userId: string) {
-  const { data, error } = await supabaseAdmin
-    .from("profiles")
-    .select("role, status")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data || data.role !== "owner" || data.status !== "active") {
+const dealershipIdsSchema = z.array(z.string().uuid()).min(1).max(100);
+const provisionInput = z.object({
+  email: z.string().trim().toLowerCase().email().max(255),
+  full_name: z.string().trim().min(1).max(120),
+  role: z.enum(["dealer_admin", "staff"]),
+  dealership_ids: dealershipIdsSchema,
+  idempotency_key: z.string().uuid(),
+});
+
+function asOperationResult(value: unknown): OperationResult {
+  return value && typeof value === "object" ? (value as OperationResult) : {};
+}
+
+function safeErrorCode(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/already|registered|exists|duplicate/i.test(message)) return "duplicate_email";
+  if (/timeout|fetch|network|connection/i.test(message)) return "transport_uncertain";
+  return "provider_error";
+}
+
+async function getActorScope(actorId: string): Promise<ActorScope> {
+  const [{ data: profile, error: profileError }, { data: onboarding, error: onboardingError }] =
+    await Promise.all([
+      supabaseAdmin.from("profiles").select("role, status").eq("id", actorId).maybeSingle(),
+      supabaseAdmin
+        .from("user_onboarding")
+        .select("onboarding_state, password_change_required")
+        .eq("profile_id", actorId)
+        .maybeSingle(),
+    ]);
+  if (profileError) throw new Error(profileError.message);
+  if (onboardingError) throw new Error(onboardingError.message);
+  if (
+    !profile ||
+    profile.status !== "active" ||
+    !onboarding ||
+    onboarding.onboarding_state !== "complete" ||
+    onboarding.password_change_required
+  ) {
     throw new Error("Forbidden");
   }
-}
+  if (profile.role === "owner") return { role: "owner", dealershipIds: [] };
+  if (profile.role !== "dealer_admin") throw new Error("Forbidden");
 
-async function assertActiveDealership(dealershipId: string) {
   const { data, error } = await supabaseAdmin
-    .from("dealerships")
-    .select("id, status, subscription_status")
-    .eq("id", dealershipId)
-    .maybeSingle();
+    .from("profile_dealerships")
+    .select("dealership_id, dealerships!inner(status, subscription_status)")
+    .eq("profile_id", actorId)
+    .in("dealerships.status", ["active", "trial"])
+    .eq("dealerships.subscription_status", "active");
   if (error) throw new Error(error.message);
-  if (
-    !data ||
-    !["active", "trial"].includes(data.status) ||
-    data.subscription_status !== "active"
-  ) {
-    throw new Error("The selected dealership is not active.");
-  }
+  const dealershipIds = (data ?? []).map((row) => row.dealership_id);
+  if (dealershipIds.length === 0) throw new Error("Forbidden");
+  return { role: "dealer_admin", dealershipIds };
 }
 
-async function assertActiveDealerships(dealershipIds: string[]) {
+function assertRequestedScope(scope: ActorScope, role: ManagedRole, dealershipIds: string[]) {
   const uniqueIds = [...new Set(dealershipIds)];
   if (uniqueIds.length !== dealershipIds.length) {
     throw new Error("Duplicate dealership assignments are not allowed.");
   }
-  const { data, error } = await supabaseAdmin
-    .from("dealerships")
-    .select("id, status, subscription_status")
-    .in("id", uniqueIds);
-  if (error) throw new Error(error.message);
-  const activeIds = new Set(
-    (data ?? [])
-      .filter(
-        (dealership) =>
-          ["active", "trial"].includes(dealership.status) &&
-          dealership.subscription_status === "active",
-      )
-      .map((dealership) => dealership.id),
-  );
-  if (uniqueIds.length === 0 || uniqueIds.some((id) => !activeIds.has(id))) {
-    throw new Error("Every assigned dealership must be active.");
+  if (role === "staff" && uniqueIds.length !== 1) {
+    throw new Error("Staff accounts must belong to exactly one dealership.");
+  }
+  if (
+    scope.role === "dealer_admin" &&
+    (role !== "staff" || uniqueIds.length !== 1 || !scope.dealershipIds.includes(uniqueIds[0]))
+  ) {
+    throw new Error("Forbidden");
   }
 }
 
-async function assertTargetProfile(userId: string) {
+async function markOperation(
+  actorId: string,
+  operationId: string,
+  status: string,
+  targetProfileId: string | null = null,
+  errorCode: string | null = null,
+) {
+  const { error } = await supabaseAdmin.rpc("mark_user_account_operation", {
+    _actor_id: actorId,
+    _operation_id: operationId,
+    _status: status,
+    _target_profile_id: targetProfileId ?? undefined,
+    _safe_error_code: errorCode ?? undefined,
+  });
+  if (error) throw new Error(error.message);
+}
+
+async function readOperation(actorId: string, operationId: string) {
   const { data, error } = await supabaseAdmin
-    .from("profiles")
-    .select("id, role, dealership_id, status")
-    .eq("id", userId)
+    .from("user_account_operations")
+    .select("id, status, target_profile_id")
+    .eq("id", operationId)
+    .eq("actor_profile_id", actorId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("User not found");
   return data;
 }
 
-async function assertProfileHasActiveDealership(
-  userId: string,
-  role: string,
-  primaryDealershipId: string | null,
-) {
-  let dealershipIds = primaryDealershipId ? [primaryDealershipId] : [];
-  if (role === "dealer_admin") {
-    const { data, error } = await supabaseAdmin
-      .from("profile_dealerships")
-      .select("dealership_id")
-      .eq("profile_id", userId);
-    if (error) throw new Error(error.message);
-    dealershipIds = (data ?? []).map((assignment) => assignment.dealership_id);
-  }
-  if (dealershipIds.length === 0) {
-    throw new Error("Assign an active dealership before reactivating this user.");
-  }
+async function writeAuditEvent(event: {
+  event_type: string;
+  actor_profile_id: string;
+  dealership_id?: string | null;
+  request_id?: string | null;
+  payload?: Json;
+}) {
+  const { error } = await supabaseAdmin.from("audit_events").insert(event);
+  if (error) throw new Error(`Audit event could not be recorded: ${error.message}`);
+}
 
-  const { data, error } = await supabaseAdmin
-    .from("dealerships")
-    .select("id")
-    .in("id", dealershipIds)
-    .in("status", ["active", "trial"])
-    .eq("subscription_status", "active")
-    .limit(1);
-  if (error) throw new Error(error.message);
-  if (!data?.length) {
-    throw new Error("Assign an active dealership before reactivating this user.");
+async function reconcileProvisioning(actorId: string, operationId: string, authUserId: string) {
+  let operation = await readOperation(actorId, operationId);
+  if (operation?.status === "complete" && operation.target_profile_id === authUserId) return true;
+
+  if (!operation?.target_profile_id) {
+    await markOperation(actorId, operationId, "auth_updated", authUserId).catch(() => undefined);
   }
+  const { error } = await supabaseAdmin.rpc("finalize_user_provisioning_operation", {
+    _actor_id: actorId,
+    _operation_id: operationId,
+    _auth_user_id: authUserId,
+  });
+  if (!error) return true;
+
+  operation = await readOperation(actorId, operationId);
+  return operation?.status === "complete" && operation.target_profile_id === authUserId;
 }
 
 export const listUsersWithAuth = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertActiveOwner(context.userId);
-    const { data: profiles, error: profileError } = await supabaseAdmin
+    const scope = await getActorScope(context.userId);
+    let profileQuery = supabaseAdmin
       .from("profiles")
       .select(
         "id, email, full_name, role, dealership_id, status, created_at, profile_dealerships(dealership_id)",
       )
       .order("created_at", { ascending: false });
+    // Dealer administrators manage staff by the staff account's authoritative
+    // primary dealership. A stale secondary assignment must never widen this
+    // directory or disclose an unrelated tenant's account.
+    if (scope.role === "dealer_admin") {
+      profileQuery = profileQuery.in("dealership_id", scope.dealershipIds).eq("role", "staff");
+    }
+    const { data: profiles, error: profileError } = await profileQuery;
     if (profileError) throw new Error(profileError.message);
 
+    const ids = (profiles ?? []).map((profile) => profile.id);
+    const onboardingMap = new Map<string, boolean>();
+    if (ids.length) {
+      const { data, error } = await supabaseAdmin
+        .from("user_onboarding")
+        .select("profile_id, password_change_required")
+        .in("profile_id", ids);
+      if (error) throw new Error(error.message);
+      for (const row of data ?? []) onboardingMap.set(row.profile_id, row.password_change_required);
+    }
+
+    const wantedIds = new Set(ids);
     const authMap = new Map<string, string | null>();
     let page = 1;
-    while (true) {
-      const { data, error } = await supabaseAdmin.auth.admin.listUsers({
-        page,
-        perPage: 200,
-      });
+    while (wantedIds.size > 0 && page <= 25) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 });
       if (error) throw new Error(error.message);
       for (const user of data.users) {
-        authMap.set(user.id, user.last_sign_in_at ?? null);
+        if (wantedIds.has(user.id)) {
+          authMap.set(user.id, user.last_sign_in_at ?? null);
+          wantedIds.delete(user.id);
+        }
       }
       if (data.users.length < 200) break;
-      page++;
-      if (page > 25) break;
+      page += 1;
     }
 
     return (profiles ?? []).map((profile) => {
@@ -138,8 +200,24 @@ export const listUsersWithAuth = createServerFn({ method: "GET" })
         ...userProfile,
         dealership_ids: dealershipIds,
         last_sign_in_at: authMap.get(profile.id) ?? null,
+        password_change_required: onboardingMap.get(profile.id) ?? false,
       };
     });
+  });
+
+export const listUserInvitations = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const scope = await getActorScope(context.userId);
+    let query = supabaseAdmin.from("user_invitations").select("*").order("invited_at", {
+      ascending: false,
+    });
+    if (scope.role === "dealer_admin") {
+      query = query.in("dealership_id", scope.dealershipIds).eq("role", "staff");
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return data ?? [];
   });
 
 export const inviteUser = createServerFn({ method: "POST" })
@@ -151,13 +229,12 @@ export const inviteUser = createServerFn({ method: "POST" })
         full_name: z.string().trim().min(1).max(120),
         role: z.enum(["dealer_admin", "staff"]),
         dealership_id: z.string().uuid(),
-        origin: z.string().url(),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    await assertActiveOwner(context.userId);
-    await assertActiveDealership(data.dealership_id);
+    const scope = await getActorScope(context.userId);
+    assertRequestedScope(scope, data.role, [data.dealership_id]);
 
     const { data: existing, error: existingError } = await supabaseAdmin
       .from("profiles")
@@ -182,89 +259,291 @@ export const inviteUser = createServerFn({ method: "POST" })
       .single();
     if (invitationError) throw new Error(invitationError.message);
 
-    const redirectTo = `${data.origin}/accept-invite?token=${encodeURIComponent(token)}`;
+    const redirectTo = `${getApplicationOrigin()}/accept-invite?token=${encodeURIComponent(token)}`;
     const { error: mailError } = await supabaseAdmin.auth.admin.inviteUserByEmail(data.email, {
       redirectTo,
-      data: {
-        full_name: data.full_name,
-        invitation_token: token,
-      },
+      data: { full_name: data.full_name, invitation_token: token },
     });
     if (mailError) {
-      const { error: cleanupError } = await supabaseAdmin
-        .from("user_invitations")
-        .delete()
-        .eq("id", invitation.id);
-      if (cleanupError) {
-        throw new Error(
-          `Could not send invite email, and invitation cleanup failed: ${cleanupError.message}`,
-        );
-      }
+      await supabaseAdmin.from("user_invitations").delete().eq("id", invitation.id);
       throw new Error(`Could not send invite email: ${mailError.message}`);
     }
-
-    return { invitation, invite_link: redirectTo };
+    await writeAuditEvent({
+      event_type: "user.invitation_sent",
+      actor_profile_id: context.userId,
+      dealership_id: data.dealership_id,
+      request_id: invitation.id,
+      payload: { role: data.role },
+    });
+    return { invitation };
   });
 
 export const resendInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
-    z.object({ invitation_id: z.string().uuid(), origin: z.string().url() }).parse(input),
-  )
+  .inputValidator((input) => z.object({ invitation_id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    await assertActiveOwner(context.userId);
+    const scope = await getActorScope(context.userId);
     const { data: invitation, error } = await supabaseAdmin
       .from("user_invitations")
       .select("*")
       .eq("id", data.invitation_id)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!invitation) throw new Error("Invitation not found");
-    if (invitation.status !== "pending") {
-      throw new Error("Invitation is no longer pending");
+    if (!invitation || invitation.status !== "pending" || !invitation.dealership_id) {
+      throw new Error("Invitation is unavailable.");
     }
-    if (!["dealer_admin", "staff"].includes(invitation.role) || !invitation.dealership_id) {
-      throw new Error("Owner invitations are not supported.");
-    }
-    await assertActiveDealership(invitation.dealership_id);
+    assertRequestedScope(scope, invitation.role as ManagedRole, [invitation.dealership_id]);
 
-    const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const redirectTo = `${getApplicationOrigin()}/accept-invite?token=${encodeURIComponent(invitation.token)}`;
+    const { error: mailError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      invitation.email,
+      { redirectTo, data: { full_name: invitation.full_name, invitation_token: invitation.token } },
+    );
+    if (mailError) throw new Error(`Could not resend invite email: ${mailError.message}`);
     const { error: updateError } = await supabaseAdmin
       .from("user_invitations")
       .update({
-        expires_at: newExpiry,
+        expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
         invited_at: new Date().toISOString(),
       })
       .eq("id", invitation.id);
     if (updateError) throw new Error(updateError.message);
+    await writeAuditEvent({
+      event_type: "user.invitation_resent",
+      actor_profile_id: context.userId,
+      dealership_id: invitation.dealership_id,
+      request_id: invitation.id,
+      payload: { role: invitation.role },
+    });
+    return { ok: true };
+  });
 
-    const redirectTo = `${data.origin}/accept-invite?token=${encodeURIComponent(invitation.token)}`;
-    const { error: mailError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-      invitation.email,
+export const revokeInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ invitation_id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const scope = await getActorScope(context.userId);
+    const { data: invitation, error } = await supabaseAdmin
+      .from("user_invitations")
+      .select("id, role, dealership_id, status")
+      .eq("id", data.invitation_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!invitation || invitation.status !== "pending" || !invitation.dealership_id) {
+      throw new Error("Invitation is unavailable.");
+    }
+    assertRequestedScope(scope, invitation.role as ManagedRole, [invitation.dealership_id]);
+    const { error: updateError } = await supabaseAdmin
+      .from("user_invitations")
+      .update({ status: "revoked" })
+      .eq("id", invitation.id);
+    if (updateError) throw new Error(updateError.message);
+    await writeAuditEvent({
+      event_type: "user.invitation_revoked",
+      actor_profile_id: context.userId,
+      dealership_id: invitation.dealership_id,
+      request_id: invitation.id,
+    });
+    return { ok: true };
+  });
+
+export const provisionUserWithTemporaryPassword = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => provisionInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const scope = await getActorScope(context.userId);
+    assertRequestedScope(scope, data.role, data.dealership_ids);
+    const { data: beginData, error: beginError } = await supabaseAdmin.rpc(
+      "begin_user_provisioning_operation",
       {
-        redirectTo,
-        data: {
-          full_name: invitation.full_name,
-          invitation_token: invitation.token,
-        },
+        _actor_id: context.userId,
+        _idempotency_key: data.idempotency_key,
+        _email: data.email,
+        _full_name: data.full_name,
+        _role: data.role,
+        _dealership_ids: data.dealership_ids,
       },
     );
-    if (mailError) {
-      const { error: rollbackError } = await supabaseAdmin
-        .from("user_invitations")
-        .update({
-          expires_at: invitation.expires_at,
-          invited_at: invitation.invited_at,
-        })
-        .eq("id", invitation.id);
-      if (rollbackError) {
+    if (beginError) throw new Error(beginError.message);
+    const operation = asOperationResult(beginData);
+    if (!operation.operation_id) throw new Error("Provisioning operation was not created.");
+    if (operation.status !== "requested") {
+      return { status: operation.status, operation_id: operation.operation_id, credentials: null };
+    }
+
+    const password = generateTemporaryPassword();
+    await markOperation(context.userId, operation.operation_id, "auth_pending");
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: data.email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: data.full_name },
+    });
+    if (authError || !authData.user) {
+      const code = safeErrorCode(authError ?? new Error("Auth user was not returned."));
+      await markOperation(
+        context.userId,
+        operation.operation_id,
+        code === "duplicate_email" ? "failed" : "needs_reconciliation",
+        null,
+        code,
+      ).catch(() => undefined);
+      throw new Error(
+        code === "duplicate_email"
+          ? "A user with that email already exists."
+          : "Account creation needs reconciliation before it can be retried.",
+      );
+    }
+
+    await markOperation(context.userId, operation.operation_id, "auth_updated", authData.user.id);
+    const reconciled = await reconcileProvisioning(
+      context.userId,
+      operation.operation_id,
+      authData.user.id,
+    );
+    if (!reconciled) {
+      await markOperation(
+        context.userId,
+        operation.operation_id,
+        "needs_reconciliation",
+        authData.user.id,
+        "database_finalize_uncertain",
+      ).catch(() => undefined);
+      throw new Error(
+        "The Auth account exists, but access setup needs administrator reconciliation.",
+      );
+    }
+
+    return {
+      status: "complete",
+      operation_id: operation.operation_id,
+      credentials: {
+        email: data.email,
+        temporary_password: password,
+        requires_password_change: true,
+      },
+    };
+  });
+
+export const resetTemporaryPassword = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ user_id: z.string().uuid(), idempotency_key: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await getActorScope(context.userId);
+    const { data: beginData, error: beginError } = await supabaseAdmin.rpc(
+      "begin_temporary_password_reset_operation",
+      {
+        _actor_id: context.userId,
+        _idempotency_key: data.idempotency_key,
+        _target_profile_id: data.user_id,
+      },
+    );
+    if (beginError) throw new Error(beginError.message);
+    const operation = asOperationResult(beginData);
+    if (!operation.operation_id) throw new Error("Password reset operation was not created.");
+    if (operation.status !== "requested") {
+      return { status: operation.status, operation_id: operation.operation_id, credentials: null };
+    }
+
+    const password = generateTemporaryPassword();
+    await markOperation(context.userId, operation.operation_id, "auth_pending", data.user_id);
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+      data.user_id,
+      { password },
+    );
+    if (authError || !authData.user) {
+      const code = safeErrorCode(authError ?? new Error("Auth user was not returned."));
+      if (code === "transport_uncertain") {
+        const { error: containmentError } = await supabaseAdmin.rpc(
+          "contain_temporary_password_reset_operation",
+          {
+            _actor_id: context.userId,
+            _operation_id: operation.operation_id,
+            _safe_error_code: code,
+          },
+        );
+        if (containmentError) {
+          throw new Error(
+            "The password reset result is uncertain and access containment failed. Reconciliation is required immediately.",
+          );
+        }
         throw new Error(
-          `Could not resend invite email, and invitation rollback failed: ${rollbackError.message}`,
+          "The password reset result is uncertain. The account was contained and requires reconciliation.",
         );
       }
-      throw new Error(`Could not resend invite email: ${mailError.message}`);
+      await markOperation(
+        context.userId,
+        operation.operation_id,
+        "failed",
+        data.user_id,
+        code,
+      ).catch(() => undefined);
+      throw new Error("The temporary password could not be reset safely.");
     }
-    return { ok: true, invite_link: redirectTo };
+    await markOperation(context.userId, operation.operation_id, "auth_updated", data.user_id);
+    const { error: finalizeError } = await supabaseAdmin.rpc(
+      "finalize_temporary_password_reset_operation",
+      { _actor_id: context.userId, _operation_id: operation.operation_id },
+    );
+    if (finalizeError) {
+      const current = await readOperation(context.userId, operation.operation_id);
+      if (current?.status !== "complete") {
+        const { error: containmentError } = await supabaseAdmin.rpc(
+          "contain_temporary_password_reset_operation",
+          {
+            _actor_id: context.userId,
+            _operation_id: operation.operation_id,
+            _safe_error_code: "database_finalize_uncertain",
+          },
+        );
+        if (containmentError) {
+          throw new Error(
+            "The password changed, but access containment failed. Reconciliation is required immediately.",
+          );
+        }
+        throw new Error("The password changed, but onboarding containment needs reconciliation.");
+      }
+    }
+
+    return {
+      status: "complete",
+      operation_id: operation.operation_id,
+      credentials: {
+        email: authData.user.email ?? "",
+        temporary_password: password,
+        requires_password_change: true,
+      },
+    };
+  });
+
+export const completeTemporaryPasswordChange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        password: z
+          .string()
+          .min(12)
+          .max(128)
+          .regex(/[A-Z]/, "Include an uppercase letter.")
+          .regex(/[a-z]/, "Include a lowercase letter.")
+          .regex(/[0-9]/, "Include a number.")
+          .regex(/[^A-Za-z0-9]/, "Include a symbol."),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { error: passwordError } = await context.supabase.auth.updateUser({
+      password: data.password,
+    });
+    if (passwordError) throw new Error(passwordError.message);
+    const { error } = await supabaseAdmin.rpc("complete_temporary_password_onboarding", {
+      _actor_id: context.userId,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const updateUserAccount = createServerFn({ method: "POST" })
@@ -275,23 +554,24 @@ export const updateUserAccount = createServerFn({ method: "POST" })
         user_id: z.string().uuid(),
         full_name: z.string().trim().min(1).max(120),
         role: z.enum(["dealer_admin", "staff"]).optional(),
-        dealership_ids: z.array(z.string().uuid()).min(1).max(100),
+        dealership_ids: dealershipIdsSchema,
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    await assertActiveOwner(context.userId);
-    if (data.user_id === context.userId) {
-      throw new Error("Use profile settings to change your own name.");
-    }
-    const target = await assertTargetProfile(data.user_id);
+    await getActorScope(context.userId);
+    const { data: target, error: targetError } = await supabaseAdmin
+      .from("profiles")
+      .select("role")
+      .eq("id", data.user_id)
+      .maybeSingle();
+    if (targetError) throw new Error(targetError.message);
+    if (!target) throw new Error("User not found");
     const accountUpdate = resolveUserAccountUpdate({
       targetRole: target.role,
       requestedRole: data.role,
       requestedDealershipIds: data.dealership_ids,
     });
-    await assertActiveDealerships(accountUpdate.dealershipIds);
-
     const { error } = await supabaseAdmin.rpc("admin_update_user_account_access", {
       _actor_user_id: context.userId,
       _target_user_id: data.user_id,
@@ -307,48 +587,16 @@ export const setUserActivation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
     z
-      .object({
-        user_id: z.string().uuid(),
-        status: z.enum(["active", "deactivated"]),
-      })
+      .object({ user_id: z.string().uuid(), status: z.enum(["active", "deactivated"]) })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    await assertActiveOwner(context.userId);
-    if (data.user_id === context.userId) {
-      throw new Error("You cannot deactivate your own account.");
-    }
-    const target = await assertTargetProfile(data.user_id);
-    if (data.status === "active" && target.role !== "owner") {
-      await assertProfileHasActiveDealership(data.user_id, target.role, target.dealership_id);
-    }
-
-    const { error } = await supabaseAdmin
-      .from("profiles")
-      .update({ status: data.status as ProfileStatus })
-      .eq("id", data.user_id);
+    await getActorScope(context.userId);
+    const { error } = await supabaseAdmin.rpc("admin_set_user_activation", {
+      _actor_id: context.userId,
+      _target_profile_id: data.user_id,
+      _status: data.status,
+    });
     if (error) throw new Error(error.message);
-    return { ok: true };
-  });
-
-export const deleteUserAccount = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ user_id: z.string().uuid() }).parse(input))
-  .handler(async ({ data, context }) => {
-    await assertActiveOwner(context.userId);
-    if (data.user_id === context.userId) {
-      throw new Error("You cannot remove your own account.");
-    }
-    await assertTargetProfile(data.user_id);
-
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(data.user_id);
-    if (authError && !/not found/i.test(authError.message)) {
-      throw new Error(authError.message);
-    }
-    const { error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .delete()
-      .eq("id", data.user_id);
-    if (profileError) throw new Error(profileError.message);
     return { ok: true };
   });

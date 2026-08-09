@@ -18,14 +18,16 @@ function AuthenticatedLayout() {
   useEffect(() => {
     if (!loading && !session) {
       navigate({ to: "/login", replace: true });
+    } else if (!loading && session && profile?.password_change_required) {
+      navigate({ to: "/change-password", replace: true });
     }
-  }, [session, loading, navigate]);
+  }, [session, profile?.password_change_required, loading, navigate]);
 
   if (loading || !session) {
     return <PageSkeleton cards={3} rows={4} />;
   }
 
-  if (!profile) {
+  if (!profile || profile.password_change_required) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
         <div className="w-full max-w-md rounded-lg border border-border bg-card p-7 text-center shadow-sm">

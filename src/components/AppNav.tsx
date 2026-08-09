@@ -59,7 +59,9 @@ export function AppNav({ children }: { children: ReactNode }) {
     ...(isOwner || profile?.role === "dealer_admin"
       ? [{ to: "/dealerships", label: "Dealerships", icon: Building2 }]
       : []),
-    ...(isOwner ? [{ to: "/users", label: "Users & access", icon: Users }] : []),
+    ...(isOwner || profile?.role === "dealer_admin"
+      ? [{ to: "/users", label: "Users & access", icon: Users }]
+      : []),
   ];
 
   const title = pageTitle(pathname);

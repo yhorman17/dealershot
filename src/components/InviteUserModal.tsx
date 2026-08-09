@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ProductSelect } from "@/components/product-ui";
+import { useAuth } from "@/hooks/use-auth";
 
 type Dealership = { id: string; name: string };
 
@@ -24,6 +25,7 @@ export function InviteUserModal({
   onInvited?: () => void;
 }) {
   const callInvite = useServerFn(inviteUser);
+  const { profile } = useAuth();
   const [dealerships, setDealerships] = useState<Dealership[]>([]);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
@@ -56,7 +58,6 @@ export function InviteUserModal({
           full_name: fullName.trim(),
           role,
           dealership_id: dealershipId,
-          origin: window.location.origin,
         },
       });
       toast.success(`Invitation sent to ${email.trim().toLowerCase()}`);
@@ -108,7 +109,9 @@ export function InviteUserModal({
               ariaLabel="Role"
               options={[
                 { value: "staff", label: "Staff" },
-                { value: "dealer_admin", label: "Dealer administrator" },
+                ...(profile?.role === "owner"
+                  ? [{ value: "dealer_admin", label: "Dealer administrator" }]
+                  : []),
               ]}
             />
           </div>

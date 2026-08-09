@@ -5,9 +5,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { InviteUserModal } from "@/components/InviteUserModal";
 import {
-  deleteUserAccount,
+  ProvisionUserDialog,
+  TemporaryCredentialsDialog,
+  type TemporaryCredentials,
+} from "@/components/TemporaryCredentialsDialogs";
+import {
   listUsersWithAuth,
+  listUserInvitations,
+  resetTemporaryPassword,
   resendInvite,
+  revokeInvite,
   setUserActivation,
   updateUserAccount,
 } from "@/lib/api/users.functions";
@@ -44,6 +51,7 @@ type UserRow = {
   status: string;
   created_at: string;
   last_sign_in_at: string | null;
+  password_change_required: boolean;
 };
 type Invitation = {
   id: string;
@@ -61,8 +69,10 @@ function UsersPage() {
   const { profile, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const callList = useServerFn(listUsersWithAuth);
-  const callDelete = useServerFn(deleteUserAccount);
+  const callListInvitations = useServerFn(listUserInvitations);
+  const callResetTemporaryPassword = useServerFn(resetTemporaryPassword);
   const callResend = useServerFn(resendInvite);
+  const callRevoke = useServerFn(revokeInvite);
   const callSetActivation = useServerFn(setUserActivation);
 
   const [tab, setTab] = useState<"active" | "pending">("active");
@@ -72,12 +82,15 @@ function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [filterDealership, setFilterDealership] = useState<string>("all");
   const [showInvite, setShowInvite] = useState(false);
+  const [showProvision, setShowProvision] = useState(false);
+  const [temporaryCredentials, setTemporaryCredentials] = useState<TemporaryCredentials | null>(
+    null,
+  );
   const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
   const [editTarget, setEditTarget] = useState<UserRow | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
 
   useEffect(() => {
-    if (!authLoading && profile && profile.role !== "owner") {
+    if (!authLoading && profile && profile.role === "staff") {
       navigate({ to: "/dashboard", replace: true });
     }
   }, [profile, authLoading, navigate]);
@@ -87,16 +100,16 @@ function UsersPage() {
     const [d, u, i] = await Promise.all([
       supabase.from("dealerships").select("id, name, logo_url").order("name"),
       callList(),
-      supabase.from("user_invitations").select("*").order("invited_at", { ascending: false }),
+      callListInvitations(),
     ]);
     setDealerships((d.data as Dealership[]) ?? []);
     setUsers((u as UserRow[]) ?? []);
-    setInvites((i.data as Invitation[]) ?? []);
+    setInvites((i as Invitation[]) ?? []);
     setLoading(false);
-  }, [callList]);
+  }, [callList, callListInvitations]);
 
   useEffect(() => {
-    if (profile?.role === "owner") void load();
+    if (profile?.role === "owner" || profile?.role === "dealer_admin") void load();
   }, [profile?.role, load]);
 
   const dealershipById = useMemo(() => {
@@ -116,13 +129,20 @@ function UsersPage() {
     return list.filter((i) => i.dealership_id === filterDealership);
   }, [invites, filterDealership]);
 
-  if (profile?.role !== "owner") return null;
+  if (profile?.role !== "owner" && profile?.role !== "dealer_admin") return null;
 
-  const handleSendReset = async (email: string) => {
-    await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    toast.success(`Password reset email sent to ${email}`);
+  const handleSendReset = async (target: UserRow) => {
+    try {
+      const result = await callResetTemporaryPassword({
+        data: { user_id: target.id, idempotency_key: crypto.randomUUID() },
+      });
+      if (!result.credentials) throw new Error("The one-time password is unavailable.");
+      setTemporaryCredentials(result.credentials as TemporaryCredentials);
+      toast.success(`Temporary credentials created for ${target.email}`);
+      void load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Password could not be reset");
+    }
   };
 
   const handleToggleActive = async (u: UserRow) => {
@@ -136,20 +156,9 @@ function UsersPage() {
     }
   };
 
-  const handleDelete = async (u: UserRow) => {
-    try {
-      await callDelete({ data: { user_id: u.id } });
-      toast.success("User removed");
-      setDeleteTarget(null);
-      void load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to remove user");
-    }
-  };
-
   const handleResend = async (inv: Invitation) => {
     try {
-      await callResend({ data: { invitation_id: inv.id, origin: window.location.origin } });
+      await callResend({ data: { invitation_id: inv.id } });
       toast.success("Invitation resent");
       void load();
     } catch (err) {
@@ -168,13 +177,13 @@ function UsersPage() {
   };
 
   const handleRevoke = async (inv: Invitation) => {
-    const { error } = await supabase
-      .from("user_invitations")
-      .update({ status: "revoked" })
-      .eq("id", inv.id);
-    if (error) return toast.error(error.message);
-    toast.success("Invitation revoked");
-    void load();
+    try {
+      await callRevoke({ data: { invitation_id: inv.id } });
+      toast.success("Invitation revoked");
+      void load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Invitation could not be revoked");
+    }
   };
 
   return (
@@ -182,12 +191,16 @@ function UsersPage() {
       <PageHeader
         eyebrow="Access administration"
         title="Users & invitations"
-        description="Manage dealership roles, activation status, invitations, and account recovery."
+        description="Manage scoped dealership access, invitations, temporary credentials, and activation."
         actions={
-          <Button onClick={() => setShowInvite(true)}>
-            <Plus className="size-4" />
-            Invite user
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setShowInvite(true)}>
+              Send invitation
+            </Button>
+            <Button onClick={() => setShowProvision(true)}>
+              <Plus className="size-4" /> Create login now
+            </Button>
+          </div>
         }
       />
 
@@ -248,8 +261,7 @@ function UsersPage() {
           currentUserId={user?.id ?? ""}
           onEdit={setEditTarget}
           onToggleActive={handleToggleActive}
-          onSendReset={(u) => void handleSendReset(u.email)}
-          onDelete={setDeleteTarget}
+          onSendReset={(u) => void handleSendReset(u)}
         />
       ) : (
         <PendingInvitesTab
@@ -268,6 +280,25 @@ function UsersPage() {
           onInvited={() => void load()}
         />
       )}
+      {showProvision && (
+        <ProvisionUserDialog
+          dealerships={dealerships}
+          actorRole={profile.role as "owner" | "dealer_admin"}
+          defaultDealershipId={filterDealership !== "all" ? filterDealership : undefined}
+          onClose={() => setShowProvision(false)}
+          onCreated={(credentials) => {
+            setShowProvision(false);
+            setTemporaryCredentials(credentials);
+            void load();
+          }}
+        />
+      )}
+      {temporaryCredentials && (
+        <TemporaryCredentialsDialog
+          credentials={temporaryCredentials}
+          onClose={() => setTemporaryCredentials(null)}
+        />
+      )}
       {editTarget && (
         <EditUserModal
           user={editTarget}
@@ -278,13 +309,6 @@ function UsersPage() {
             void load();
           }}
           isSelf={editTarget.id === user?.id}
-        />
-      )}
-      {deleteTarget && (
-        <ConfirmRemove
-          user={deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-          onConfirm={() => void handleDelete(deleteTarget)}
         />
       )}
       <AlertDialog open={!!revokeTarget} onOpenChange={(open) => !open && setRevokeTarget(null)}>
@@ -321,7 +345,6 @@ function ActiveUsersTab({
   onEdit,
   onToggleActive,
   onSendReset,
-  onDelete,
 }: {
   users: UserRow[];
   dealershipById: Map<string, Dealership>;
@@ -329,7 +352,6 @@ function ActiveUsersTab({
   onEdit: (u: UserRow) => void;
   onToggleActive: (u: UserRow) => void;
   onSendReset: (u: UserRow) => void;
-  onDelete: (u: UserRow) => void;
 }) {
   if (users.length === 0) {
     return (
@@ -374,6 +396,11 @@ function ActiveUsersTab({
                           Deactivated
                         </span>
                       )}
+                      {u.password_change_required && (
+                        <span className="text-[10px] uppercase tracking-wide rounded-full border border-warning/30 bg-warning/10 text-warning-foreground px-1.5 py-0.5">
+                          Password change required
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
@@ -409,9 +436,7 @@ function ActiveUsersTab({
                       onEdit={() => onEdit(u)}
                       onToggleActive={() => onToggleActive(u)}
                       onSendReset={() => onSendReset(u)}
-                      onDelete={() => onDelete(u)}
                       status={u.status}
-                      disableDelete={isSelf}
                       disableToggle={isSelf}
                     />
                   </td>
@@ -449,13 +474,18 @@ function ActiveUsersTab({
                         Deactivated
                       </span>
                     )}
+                    {u.password_change_required && (
+                      <span className="motion-status text-[10px] uppercase tracking-wide rounded-full border border-warning/30 bg-warning/10 text-warning-foreground px-1.5 py-0.5">
+                        Password change required
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
               <div className="mt-1 text-[11px] text-muted-foreground">
                 Last sign-in: {u.last_sign_in_at ? relativeTime(u.last_sign_in_at) : "—"}
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-3 grid grid-cols-3 gap-2">
                 <button
                   onClick={() => onEdit(u)}
                   className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground"
@@ -474,13 +504,6 @@ function ActiveUsersTab({
                   className="rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] text-xs font-medium text-secondary-foreground"
                 >
                   Reset password
-                </button>
-                <button
-                  disabled={isSelf}
-                  onClick={() => onDelete(u)}
-                  className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 min-h-[44px] text-xs font-medium text-destructive disabled:opacity-40"
-                >
-                  Remove
                 </button>
               </div>
             </div>
@@ -616,17 +639,13 @@ function RowMenu({
   onEdit,
   onToggleActive,
   onSendReset,
-  onDelete,
   status,
-  disableDelete,
   disableToggle,
 }: {
   onEdit: () => void;
   onToggleActive: () => void;
   onSendReset: () => void;
-  onDelete: () => void;
   status: string;
-  disableDelete: boolean;
   disableToggle: boolean;
 }) {
   return (
@@ -643,13 +662,6 @@ function RowMenu({
       </button>
       <button onClick={onSendReset} className="text-muted-foreground hover:text-foreground">
         Send reset
-      </button>
-      <button
-        disabled={disableDelete}
-        onClick={onDelete}
-        className="text-destructive hover:text-destructive/80 disabled:opacity-40"
-      >
-        Remove
       </button>
     </div>
   );
@@ -870,57 +882,6 @@ function EditUserModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmRemove({
-  user,
-  onClose,
-  onConfirm,
-}: {
-  user: UserRow;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  const [text, setText] = useState("");
-  return (
-    <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Remove user"
-        className="motion-panel-static w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
-      >
-        <h2 className="text-lg font-semibold text-card-foreground mb-1">Remove user</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          This permanently deletes <span className="text-foreground font-medium">{user.email}</span>{" "}
-          and revokes their access. This cannot be undone.
-        </p>
-        <p className="text-xs text-muted-foreground mb-2">
-          Type <span className="font-mono text-foreground">REMOVE</span> to confirm.
-        </p>
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        />
-        <div className="flex justify-end gap-2 pt-4">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-          >
-            Cancel
-          </button>
-          <button
-            disabled={text !== "REMOVE"}
-            onClick={onConfirm}
-            className="rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
-          >
-            Remove user
-          </button>
-        </div>
       </div>
     </div>
   );

@@ -28,7 +28,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { session, loading } = useAuth();
+  const { session, profile, loading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -37,9 +37,12 @@ function LoginPage() {
 
   useEffect(() => {
     if (!loading && session) {
-      navigate({ to: "/dashboard", replace: true });
+      navigate({
+        to: profile?.password_change_required ? "/change-password" : "/dashboard",
+        replace: true,
+      });
     }
-  }, [session, loading, navigate]);
+  }, [session, profile?.password_change_required, loading, navigate]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();

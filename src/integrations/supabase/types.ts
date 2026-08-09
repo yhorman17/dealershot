@@ -65,6 +65,41 @@ export type Database = {
         };
         Relationships: [];
       };
+      dealership_settings: {
+        Row: {
+          dealership_id: string;
+          read_scope: string;
+          setting_key: string;
+          setting_value: Json;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          dealership_id: string;
+          read_scope?: string;
+          setting_key: string;
+          setting_value?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          dealership_id?: string;
+          read_scope?: string;
+          setting_key?: string;
+          setting_value?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dealership_settings_dealership_id_fkey";
+            columns: ["dealership_id"];
+            isOneToOne: false;
+            referencedRelation: "dealerships";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       documents: {
         Row: {
           created_at: string;
@@ -158,6 +193,27 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      platform_settings: {
+        Row: {
+          setting_key: string;
+          setting_value: Json;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          setting_key: string;
+          setting_value?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          setting_key?: string;
+          setting_value?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
       };
       photos: {
         Row: {
@@ -276,6 +332,132 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      audit_events: {
+        Row: {
+          actor_profile_id: string | null;
+          dealership_id: string | null;
+          event_type: string;
+          id: number;
+          occurred_at: string;
+          payload: Json;
+          request_id: string | null;
+          target_profile_id: string | null;
+        };
+        Insert: {
+          actor_profile_id?: string | null;
+          dealership_id?: string | null;
+          event_type: string;
+          id?: number;
+          occurred_at?: string;
+          payload?: Json;
+          request_id?: string | null;
+          target_profile_id?: string | null;
+        };
+        Update: {
+          actor_profile_id?: string | null;
+          dealership_id?: string | null;
+          event_type?: string;
+          id?: number;
+          occurred_at?: string;
+          payload?: Json;
+          request_id?: string | null;
+          target_profile_id?: string | null;
+        };
+        Relationships: [];
+      };
+      user_account_operation_dealerships: {
+        Row: { dealership_id: string; operation_id: string; position: number };
+        Insert: { dealership_id: string; operation_id: string; position: number };
+        Update: { dealership_id?: string; operation_id?: string; position?: number };
+        Relationships: [];
+      };
+      user_account_operations: {
+        Row: {
+          actor_profile_id: string;
+          completed_at: string | null;
+          created_at: string;
+          id: string;
+          idempotency_key: string;
+          operation_type: string;
+          primary_dealership_id: string | null;
+          requested_full_name: string | null;
+          requested_role: Database["public"]["Enums"]["app_role"] | null;
+          safe_error_code: string | null;
+          status: string;
+          target_email: string;
+          target_profile_id: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          actor_profile_id: string;
+          completed_at?: string | null;
+          created_at?: string;
+          id?: string;
+          idempotency_key: string;
+          operation_type: string;
+          primary_dealership_id?: string | null;
+          requested_full_name?: string | null;
+          requested_role?: Database["public"]["Enums"]["app_role"] | null;
+          safe_error_code?: string | null;
+          status?: string;
+          target_email: string;
+          target_profile_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          actor_profile_id?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          id?: string;
+          idempotency_key?: string;
+          operation_type?: string;
+          primary_dealership_id?: string | null;
+          requested_full_name?: string | null;
+          requested_role?: Database["public"]["Enums"]["app_role"] | null;
+          safe_error_code?: string | null;
+          status?: string;
+          target_email?: string;
+          target_profile_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      user_onboarding: {
+        Row: {
+          completed_at: string | null;
+          credential_issued_at: string | null;
+          issued_by: string | null;
+          onboarding_method: string;
+          onboarding_state: string;
+          password_change_required: boolean;
+          password_changed_at: string | null;
+          profile_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          credential_issued_at?: string | null;
+          issued_by?: string | null;
+          onboarding_method?: string;
+          onboarding_state?: string;
+          password_change_required?: boolean;
+          password_changed_at?: string | null;
+          profile_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          credential_issued_at?: string | null;
+          issued_by?: string | null;
+          onboarding_method?: string;
+          onboarding_state?: string;
+          password_change_required?: boolean;
+          password_changed_at?: string | null;
+          profile_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       user_invitations: {
         Row: {
@@ -455,6 +637,96 @@ export type Database = {
     };
     Functions: {
       accept_invitation: { Args: { _token: string }; Returns: Json };
+      begin_temporary_password_reset_operation: {
+        Args: { _actor_id: string; _idempotency_key: string; _target_profile_id: string };
+        Returns: Json;
+      };
+      begin_user_provisioning_operation: {
+        Args: {
+          _actor_id: string;
+          _dealership_ids: string[];
+          _email: string;
+          _full_name: string;
+          _idempotency_key: string;
+          _role: Database["public"]["Enums"]["app_role"];
+        };
+        Returns: Json;
+      };
+      complete_temporary_password_onboarding: {
+        Args: { _actor_id: string };
+        Returns: undefined;
+      };
+      contain_temporary_password_reset_operation: {
+        Args: { _actor_id: string; _operation_id: string; _safe_error_code: string };
+        Returns: undefined;
+      };
+      finalize_temporary_password_reset_operation: {
+        Args: { _actor_id: string; _operation_id: string };
+        Returns: Json;
+      };
+      finalize_user_provisioning_operation: {
+        Args: { _actor_id: string; _auth_user_id: string; _operation_id: string };
+        Returns: Json;
+      };
+      mark_user_account_operation: {
+        Args: {
+          _actor_id: string;
+          _operation_id: string;
+          _safe_error_code?: string;
+          _status: string;
+          _target_profile_id?: string;
+        };
+        Returns: undefined;
+      };
+      admin_set_platform_setting: {
+        Args: { _actor_id: string; _setting_key: string; _setting_value: Json };
+        Returns: undefined;
+      };
+      admin_set_dealership_setting: {
+        Args: {
+          _actor_id: string;
+          _dealership_id: string;
+          _read_scope?: string;
+          _setting_key: string;
+          _setting_value: Json;
+        };
+        Returns: undefined;
+      };
+      enqueue_background_job: {
+        Args: {
+          _job_type: string;
+          _payload?: Json;
+          _dealership_id?: string;
+          _dedupe_key?: string;
+          _trace_id?: string;
+          _max_attempts?: number;
+          _priority?: number;
+          _created_by?: string;
+        };
+        Returns: Json;
+      };
+      worker_claim_background_job: {
+        Args: { _worker_id: string; _lease_seconds?: number };
+        Returns: Json;
+      };
+      worker_heartbeat_background_job: {
+        Args: { _worker_id: string; _job_id: string; _lease_seconds?: number };
+        Returns: boolean;
+      };
+      worker_complete_background_job: {
+        Args: { _worker_id: string; _job_id: string; _safe_result?: Json };
+        Returns: boolean;
+      };
+      worker_fail_background_job: {
+        Args: {
+          _worker_id: string;
+          _job_id: string;
+          _safe_error_code: string;
+          _retryable?: boolean;
+        };
+        Returns: string;
+      };
+      worker_get_queue_metrics: { Args: Record<PropertyKey, never>; Returns: Json };
       admin_update_user_account_access: {
         Args: {
           _actor_user_id: string;
@@ -463,6 +735,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"];
           _target_user_id: string;
         };
+        Returns: undefined;
+      };
+      admin_set_user_activation: {
+        Args: { _actor_id: string; _status: string; _target_profile_id: string };
         Returns: undefined;
       };
       check_invitation_account_exists: {

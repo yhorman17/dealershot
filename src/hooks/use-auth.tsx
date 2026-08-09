@@ -15,6 +15,7 @@ type Profile = {
   role: "owner" | "dealer_admin" | "staff";
   dealership_id: string | null;
   status: "active" | "deactivated";
+  password_change_required: boolean;
 };
 
 type AuthContextValue = {
@@ -57,6 +58,36 @@ async function verifyAuthorization(userId: string): Promise<AuthorizationResult<
     };
   }
 
+  const { data: onboarding, error: onboardingError } = await supabase
+    .from("user_onboarding")
+    .select("onboarding_state, password_change_required")
+    .eq("profile_id", userId)
+    .maybeSingle();
+  if (onboardingError) {
+    return {
+      kind: "transient",
+      message: "We couldn't verify your account setup. Check your connection and retry.",
+    };
+  }
+  if (!onboarding) {
+    return {
+      kind: "denied",
+      message: "Your account setup is incomplete. Contact your administrator.",
+    };
+  }
+
+  const authorizedProfile: Profile = {
+    ...nextProfile,
+    password_change_required:
+      onboarding.password_change_required || onboarding.onboarding_state !== "complete",
+  };
+
+  // Password-gated users may load only their own profile and onboarding row.
+  // Database authorization helpers independently deny every business table.
+  if (authorizedProfile.password_change_required) {
+    return { kind: "authorized", profile: authorizedProfile };
+  }
+
   if (nextProfile.role !== "owner") {
     const { data: dealership, error: dealershipError } = await supabase
       .from("dealerships")
@@ -78,7 +109,7 @@ async function verifyAuthorization(userId: string): Promise<AuthorizationResult<
     }
   }
 
-  return { kind: "authorized", profile: nextProfile };
+  return { kind: "authorized", profile: authorizedProfile };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

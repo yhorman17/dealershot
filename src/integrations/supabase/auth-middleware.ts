@@ -53,20 +53,22 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
       },
     });
 
-    const { data, error } = await supabase.auth.getClaims(token);
-    if (error || !data?.claims) {
+    // Privileged server functions must verify the bearer token with Supabase
+    // Auth, rather than trusting locally decoded JWT claims alone.
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data.user) {
       throw new Error("Unauthorized: Invalid token");
     }
 
-    if (!data.claims.sub) {
+    if (!data.user.id) {
       throw new Error("Unauthorized: No user ID found in token");
     }
 
     return next({
       context: {
         supabase,
-        userId: data.claims.sub,
-        claims: data.claims,
+        userId: data.user.id,
+        user: data.user,
       },
     });
   },
