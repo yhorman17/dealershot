@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/user-account-policy.test.ts tests/health-endpoint.test.ts",
+    "test": "node --test tests/*.test.ts",
     "test:authorization": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-security-policies.ps1",
     "test:security": "npm run test && npm run test:authorization",
     "verify": "npm run lint && npm run typecheck && npm run build && npm run test:security"

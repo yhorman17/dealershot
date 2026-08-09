@@ -1,6 +1,11 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  createAuthLifecycleController,
+  type AuthLifecycleController,
+  type AuthorizationResult,
+} from "@/hooks/auth-lifecycle";
 
 type Profile = {
   id: string;
@@ -16,6 +21,7 @@ type AuthContextValue = {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  revalidating: boolean;
   authorizationError: string | null;
   retryAuthorization: () => void;
   signOut: () => Promise<void>;
@@ -23,132 +29,114 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+async function verifyAuthorization(userId: string): Promise<AuthorizationResult<Profile>> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, email, full_name, role, dealership_id, status")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const nextProfile = data as Profile | null;
+  if (error) {
+    return {
+      kind: "transient",
+      message: "We couldn't verify your account. Check your connection and retry.",
+    };
+  }
+  if (!nextProfile) {
+    return {
+      kind: "denied",
+      message: "Your account is unavailable. Contact your administrator.",
+    };
+  }
+  if (nextProfile.status !== "active") {
+    return {
+      kind: "denied",
+      message: "Your account has been deactivated. Contact your administrator.",
+    };
+  }
+
+  if (nextProfile.role !== "owner") {
+    if (!nextProfile.dealership_id) {
+      return {
+        kind: "denied",
+        message: "Your account is not assigned to a dealership. Contact support.",
+      };
+    }
+
+    const { data: dealership, error: dealershipError } = await supabase
+      .from("dealerships")
+      .select("status, subscription_status")
+      .eq("id", nextProfile.dealership_id)
+      .maybeSingle();
+
+    if (dealershipError) {
+      return {
+        kind: "transient",
+        message: "We couldn't verify your dealership access. Check your connection and retry.",
+      };
+    }
+    if (
+      !dealership ||
+      !["active", "trial"].includes(dealership.status) ||
+      dealership.subscription_status !== "active"
+    ) {
+      return {
+        kind: "denied",
+        message: "Your dealership account is not active. Contact support.",
+      };
+    }
+  }
+
+  return { kind: "authorized", profile: nextProfile };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [revalidating, setRevalidating] = useState(false);
   const [authorizationError, setAuthorizationError] = useState<string | null>(null);
-  const [authorizationAttempt, setAuthorizationAttempt] = useState(0);
+  const controllerRef = useRef<AuthLifecycleController<Session, Profile> | null>(null);
 
   useEffect(() => {
-    let active = true;
-
-    const rejectSession = async (message: string) => {
-      if (!active) return;
-      setProfile(null);
-      setAuthorizationError(null);
-      window.alert(message);
-      await supabase.auth.signOut();
-    };
-
-    const failAuthorizationCheck = (message: string) => {
-      if (!active) return;
-      setProfile(null);
-      setAuthorizationError(message);
-    };
-
-    const loadProfile = async (userId: string) => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, email, full_name, role, dealership_id, status")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (!active) return;
-      const nextProfile = data as Profile | null;
-      if (error) {
-        failAuthorizationCheck("We couldn't verify your account. Check your connection and retry.");
-        return;
-      }
-      if (!nextProfile) {
-        await rejectSession("Your account is unavailable. Contact your administrator.");
-        return;
-      }
-      if (nextProfile.status !== "active") {
-        await rejectSession("Your account has been deactivated. Contact your administrator.");
-        return;
-      }
-
-      if (nextProfile.role !== "owner") {
-        if (!nextProfile.dealership_id) {
-          await rejectSession("Your account is not assigned to a dealership. Contact support.");
-          return;
-        }
-
-        const { data: dealership, error: dealershipError } = await supabase
-          .from("dealerships")
-          .select("status, subscription_status")
-          .eq("id", nextProfile.dealership_id)
-          .maybeSingle();
-
-        if (dealershipError) {
-          failAuthorizationCheck(
-            "We couldn't verify your dealership access. Check your connection and retry.",
-          );
-          return;
-        }
-        if (
-          !dealership ||
-          !["active", "trial"].includes(dealership.status) ||
-          dealership.subscription_status !== "active"
-        ) {
-          await rejectSession("Your dealership account is not active. Contact support.");
-          return;
-        }
-      }
-
-      setProfile(nextProfile);
-      setAuthorizationError(null);
-    };
-
-    const resolveSession = async (nextSession: Session | null) => {
-      if (!active) return;
-      setLoading(true);
-      setSession(nextSession);
-      setProfile(null);
-      setAuthorizationError(null);
-      if (nextSession?.user) {
-        await loadProfile(nextSession.user.id);
-      } else {
-        setProfile(null);
-      }
-      if (active) setLoading(false);
-    };
+    const controller = createAuthLifecycleController<Session, Profile>({
+      verifyAuthorization,
+      unexpectedVerificationErrorMessage:
+        "We couldn't verify your account. Check your connection and retry.",
+      signOut: () => supabase.auth.signOut().then(() => undefined),
+      onDenied: (message) => window.alert(message),
+      onChange: (next) => {
+        setSession(next.session);
+        setProfile(next.profile);
+        setLoading(next.initializing);
+        setRevalidating(next.revalidating);
+        setAuthorizationError(next.authorizationError);
+      },
+    });
+    controllerRef.current = controller;
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setTimeout(() => {
-        void resolveSession(nextSession);
+        controller.handleAuthChange(event, nextSession);
       }, 0);
     });
 
-    void supabase.auth.getSession().then(({ data, error }) => {
-      if (error) {
-        if (active) {
-          setSession(null);
-          failAuthorizationCheck(
-            "We couldn't restore your session. Check your connection and retry.",
-          );
-          setLoading(false);
-        }
-        return;
-      }
-      void resolveSession(data.session);
-    });
-
     return () => {
-      active = false;
+      controller.dispose();
+      if (controllerRef.current === controller) controllerRef.current = null;
       subscription.unsubscribe();
     };
-  }, [authorizationAttempt]);
+  }, []);
 
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
   const retryAuthorization = () => {
-    setAuthorizationAttempt((attempt) => attempt + 1);
+    controllerRef.current?.retryAuthorization();
   };
 
   return (
@@ -158,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user: session?.user ?? null,
         profile,
         loading,
+        revalidating,
         authorizationError,
         retryAuthorization,
         signOut,
