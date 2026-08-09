@@ -6,9 +6,11 @@
   "packageManager": "bun@1.2.22",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "vite build && npm run build:worker",
+    "build:worker": "vite build --config vite.worker.config.ts",
     "build:dev": "vite build --mode development",
     "start": "node .output/server/index.mjs",
+    "start:worker": "node .worker/index.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",

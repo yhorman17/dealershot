@@ -41,6 +41,35 @@ services:
       timeout_seconds: 3
       failure_threshold: 3
 
+workers:
+  - name: background-worker
+    github:
+      repo: yhorman17/dealershot
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    source_dir: /
+    run_command: node .worker/index.mjs
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    envs:
+      - key: NODE_ENV
+        scope: RUN_TIME
+        type: GENERAL
+        value: production
+      - key: WORKER_POLL_INTERVAL_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: "2000"
+      - key: WORKER_LEASE_SECONDS
+        scope: RUN_TIME
+        type: GENERAL
+        value: "60"
+      - key: WORKER_METRICS_INTERVAL_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: "60000"
+
 ingress:
   rules:
     - component:

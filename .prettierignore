@@ -1,6 +1,7 @@
 node_modules
 dist
 .output
+.worker
 .vinxi
 pnpm-lock.yaml
 package-lock.json

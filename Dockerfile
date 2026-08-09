@@ -28,6 +28,7 @@ ENV HOST=0.0.0.0
 WORKDIR /app
 
 COPY --from=build --chown=node:node /app/.output ./.output
+COPY --from=build --chown=node:node /app/.worker ./.worker
 
 USER node
 
