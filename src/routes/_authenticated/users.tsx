@@ -10,6 +10,7 @@ import {
   type TemporaryCredentials,
 } from "@/components/TemporaryCredentialsDialogs";
 import {
+  createInvitationAcceptanceLink,
   listUsersWithAuth,
   listUserInvitations,
   resetTemporaryPassword,
@@ -62,7 +63,6 @@ type Invitation = {
   invited_at: string;
   expires_at: string;
   status: string;
-  token: string;
 };
 
 function UsersPage() {
@@ -70,6 +70,7 @@ function UsersPage() {
   const navigate = useNavigate();
   const callList = useServerFn(listUsersWithAuth);
   const callListInvitations = useServerFn(listUserInvitations);
+  const callCreateInvitationLink = useServerFn(createInvitationAcceptanceLink);
   const callResetTemporaryPassword = useServerFn(resetTemporaryPassword);
   const callResend = useServerFn(resendInvite);
   const callRevoke = useServerFn(revokeInvite);
@@ -167,12 +168,12 @@ function UsersPage() {
   };
 
   const handleCopyLink = async (inv: Invitation) => {
-    const url = `${window.location.origin}/accept-invite?token=${encodeURIComponent(inv.token)}`;
     try {
+      const { url } = await callCreateInvitationLink({ data: { invitation_id: inv.id } });
       await navigator.clipboard.writeText(url);
       toast.success("Invite link copied to clipboard");
-    } catch {
-      toast.error("Could not copy link");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not copy link");
     }
   };
 

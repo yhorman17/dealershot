@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { completeTemporaryPasswordChange } from "@/lib/api/users.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/change-password")({
   head: () => ({ meta: [{ title: "Secure your account — DealerShot" }] }),
@@ -52,8 +53,26 @@ function ChangePasswordPage() {
     setSubmitting(true);
     try {
       await callComplete({ data: { password } });
-      // A full navigation reloads authorization state after Supabase may rotate
-      // the session during the password update.
+      const email = session.user.email;
+      if (!email) {
+        setPassword("");
+        setConfirm("");
+        await supabase.auth.signOut({ scope: "local" });
+        window.location.assign("/login");
+        return;
+      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        setPassword("");
+        setConfirm("");
+        await supabase.auth.signOut({ scope: "local" });
+        window.location.assign("/login");
+        return;
+      }
+      setPassword("");
+      setConfirm("");
+      // Hosted Admin password replacement may revoke the session that entered
+      // this flow. Re-authentication above establishes a fresh real session.
       window.location.assign("/dashboard");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Password could not be changed.");

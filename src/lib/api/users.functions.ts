@@ -133,15 +133,17 @@ async function reconcileProvisioning(actorId: string, operationId: string, authU
   if (!operation?.target_profile_id) {
     await markOperation(actorId, operationId, "auth_updated", authUserId).catch(() => undefined);
   }
-  const { error } = await supabaseAdmin.rpc("finalize_user_provisioning_operation", {
-    _actor_id: actorId,
-    _operation_id: operationId,
-    _auth_user_id: authUserId,
-  });
-  if (!error) return true;
-
-  operation = await readOperation(actorId, operationId);
-  return operation?.status === "complete" && operation.target_profile_id === authUserId;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { error } = await supabaseAdmin.rpc("finalize_user_provisioning_operation", {
+      _actor_id: actorId,
+      _operation_id: operationId,
+      _auth_user_id: authUserId,
+    });
+    if (!error) return true;
+    operation = await readOperation(actorId, operationId);
+    if (operation?.status === "complete" && operation.target_profile_id === authUserId) return true;
+  }
+  return false;
 }
 
 export const listUsersWithAuth = createServerFn({ method: "GET" })
@@ -209,15 +211,64 @@ export const listUserInvitations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const scope = await getActorScope(context.userId);
-    let query = supabaseAdmin.from("user_invitations").select("*").order("invited_at", {
-      ascending: false,
-    });
+    let query = supabaseAdmin
+      .from("user_invitations")
+      .select(
+        "id, email, full_name, role, dealership_id, invited_at, expires_at, accepted_at, status",
+      )
+      .order("invited_at", { ascending: false });
     if (scope.role === "dealer_admin") {
       query = query.in("dealership_id", scope.dealershipIds).eq("role", "staff");
     }
     const { data, error } = await query;
     if (error) throw new Error(error.message);
     return data ?? [];
+  });
+
+export const createInvitationAcceptanceLink = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ invitation_id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const scope = await getActorScope(context.userId);
+    const { data: invitation, error } = await supabaseAdmin
+      .from("user_invitations")
+      .select("id, email, full_name, role, dealership_id, token, status, expires_at")
+      .eq("id", data.invitation_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (
+      !invitation ||
+      invitation.status !== "pending" ||
+      !invitation.dealership_id ||
+      new Date(invitation.expires_at).getTime() <= Date.now()
+    ) {
+      throw new Error("Invitation is unavailable.");
+    }
+    assertRequestedScope(scope, invitation.role as ManagedRole, [invitation.dealership_id]);
+
+    const redirectTo = `${getApplicationOrigin()}/accept-invite?token=${encodeURIComponent(invitation.token)}`;
+    const { data: generated, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: "invite",
+      email: invitation.email,
+      options: {
+        redirectTo,
+        data: {
+          full_name: invitation.full_name,
+          invitation_token: invitation.token,
+        },
+      },
+    });
+    if (linkError || !generated.properties?.action_link) {
+      throw new Error("A secure invitation link could not be generated.");
+    }
+    await writeAuditEvent({
+      event_type: "user.invitation_link_generated",
+      actor_profile_id: context.userId,
+      dealership_id: invitation.dealership_id,
+      request_id: invitation.id,
+      payload: { role: invitation.role },
+    });
+    return { url: generated.properties.action_link };
   });
 
 export const inviteUser = createServerFn({ method: "POST" })
@@ -265,8 +316,17 @@ export const inviteUser = createServerFn({ method: "POST" })
       data: { full_name: data.full_name, invitation_token: token },
     });
     if (mailError) {
-      await supabaseAdmin.from("user_invitations").delete().eq("id", invitation.id);
-      throw new Error(`Could not send invite email: ${mailError.message}`);
+      // A timeout or provider error may arrive after GoTrue created the Auth
+      // identity. Keep the durable invitation so the link can be copied or
+      // resent instead of creating an orphaned, unrecoverable placeholder.
+      await writeAuditEvent({
+        event_type: "user.invitation_delivery_unconfirmed",
+        actor_profile_id: context.userId,
+        dealership_id: data.dealership_id,
+        request_id: invitation.id,
+        payload: { role: data.role },
+      });
+      return { invitation, delivery: "unconfirmed" as const };
     }
     await writeAuditEvent({
       event_type: "user.invitation_sent",
@@ -275,7 +335,7 @@ export const inviteUser = createServerFn({ method: "POST" })
       request_id: invitation.id,
       payload: { role: data.role },
     });
-    return { invitation };
+    return { invitation, delivery: "sent" as const };
   });
 
 export const resendInvite = createServerFn({ method: "POST" })
@@ -395,7 +455,6 @@ export const provisionUserWithTemporaryPassword = createServerFn({ method: "POST
       );
     }
 
-    await markOperation(context.userId, operation.operation_id, "auth_updated", authData.user.id);
     const reconciled = await reconcileProvisioning(
       context.userId,
       operation.operation_id,
@@ -420,6 +479,7 @@ export const provisionUserWithTemporaryPassword = createServerFn({ method: "POST
       credentials: {
         email: data.email,
         temporary_password: password,
+        login_url: `${getApplicationOrigin()}/login`,
         requires_password_change: true,
       },
     };
@@ -453,7 +513,7 @@ export const resetTemporaryPassword = createServerFn({ method: "POST" })
       data.user_id,
       { password },
     );
-    if (authError || !authData.user) {
+    if (authError || !authData.user || authData.user.id !== data.user_id) {
       const code = safeErrorCode(authError ?? new Error("Auth user was not returned."));
       if (code === "transport_uncertain") {
         const { error: containmentError } = await supabaseAdmin.rpc(
@@ -480,9 +540,28 @@ export const resetTemporaryPassword = createServerFn({ method: "POST" })
         data.user_id,
         code,
       ).catch(() => undefined);
-      throw new Error("The temporary password could not be reset safely.");
+      throw new Error(
+        "The temporary password could not be reset. Account access remains contained; issue a fresh reset after resolving the provider error.",
+      );
     }
-    await markOperation(context.userId, operation.operation_id, "auth_updated", data.user_id);
+    try {
+      await markOperation(context.userId, operation.operation_id, "auth_updated", data.user_id);
+    } catch {
+      const { error: containmentError } = await supabaseAdmin.rpc(
+        "contain_temporary_password_reset_operation",
+        {
+          _actor_id: context.userId,
+          _operation_id: operation.operation_id,
+          _safe_error_code: "operation_mark_uncertain",
+        },
+      );
+      if (containmentError) {
+        throw new Error(
+          "The password changed, but operation reconciliation failed. Operator action is required.",
+        );
+      }
+      throw new Error("The password changed, but a fresh administrator reset is required.");
+    }
     const { error: finalizeError } = await supabaseAdmin.rpc(
       "finalize_temporary_password_reset_operation",
       { _actor_id: context.userId, _operation_id: operation.operation_id },
@@ -513,6 +592,7 @@ export const resetTemporaryPassword = createServerFn({ method: "POST" })
       credentials: {
         email: authData.user.email ?? "",
         temporary_password: password,
+        login_url: `${getApplicationOrigin()}/login`,
         requires_password_change: true,
       },
     };
@@ -535,14 +615,41 @@ export const completeTemporaryPasswordChange = createServerFn({ method: "POST" }
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { error: passwordError } = await context.supabase.auth.updateUser({
-      password: data.password,
-    });
-    if (passwordError) throw new Error(passwordError.message);
+    const { data: onboarding, error: onboardingError } = await supabaseAdmin
+      .from("user_onboarding")
+      .select("onboarding_method, onboarding_state, password_change_required")
+      .eq("profile_id", context.userId)
+      .maybeSingle();
+    if (onboardingError) throw new Error(onboardingError.message);
+    if (
+      !onboarding ||
+      onboarding.onboarding_method !== "admin_provisioned" ||
+      onboarding.onboarding_state !== "password_change_required" ||
+      !onboarding.password_change_required
+    ) {
+      throw new Error("Password change is not required.");
+    }
+
+    // The middleware verifies the caller's bearer token but deliberately does
+    // not persist an Auth session. Bind the Admin update to that verified user
+    // ID; supabase.auth.updateUser() would fail here with AuthSessionMissingError.
+    const { data: authData, error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(
+      context.userId,
+      {
+        password: data.password,
+      },
+    );
+    if (passwordError || !authData.user || authData.user.id !== context.userId) {
+      throw new Error("Password could not be updated.");
+    }
     const { error } = await supabaseAdmin.rpc("complete_temporary_password_onboarding", {
       _actor_id: context.userId,
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      throw new Error(
+        "The password changed, but account setup did not complete. Submit a different new password to finish securely.",
+      );
+    }
     return { ok: true };
   });
 

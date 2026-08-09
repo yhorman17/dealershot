@@ -43,13 +43,75 @@ test("privileged middleware verifies the token against Supabase Auth", () => {
   assert.doesNotMatch(middleware, /auth\.getClaims\(token\)/);
 });
 
+test("forced password completion binds the Admin Auth update to the verified caller", () => {
+  const server = readFileSync(path.join(process.cwd(), "src/lib/api/users.functions.ts"), "utf8");
+  const route = readFileSync(path.join(process.cwd(), "src/routes/change-password.tsx"), "utf8");
+  assert.match(server, /auth\.admin\.updateUserById\(\s*context\.userId/);
+  assert.doesNotMatch(server, /context\.supabase\.auth\.updateUser\(/);
+  assert.match(server, /onboarding_method\s*!==\s*"admin_provisioned"/);
+  assert.match(route, /auth\.signInWithPassword\(\{ email, password \}\)/);
+  assert.match(route, /auth\.signOut\(\{ scope: "local" \}\)/);
+});
+
+test("administrator reset containment precedes the hosted Auth password update", () => {
+  const migration = readFileSync(
+    path.join(
+      process.cwd(),
+      "supabase/migrations/20260809220000_harden_hosted_password_lifecycle.sql",
+    ),
+    "utf8",
+  );
+  const containment = migration.indexOf("UPDATE public.user_onboarding");
+  const returnedOperation = migration.indexOf(
+    "RETURN jsonb_build_object('operation_id', operation_id, 'status', 'requested')",
+  );
+  assert.ok(containment >= 0);
+  assert.ok(returnedOperation > containment);
+  assert.match(migration, /user_account_operations_active_reset_target_idx/);
+});
+
 test("invitation redirects do not trust a browser-supplied origin", () => {
   const server = readFileSync(path.join(process.cwd(), "src/lib/api/users.functions.ts"), "utf8");
   const invite = readFileSync(
     path.join(process.cwd(), "src/components/InviteUserModal.tsx"),
     "utf8",
   );
+  const users = readFileSync(
+    path.join(process.cwd(), "src/routes/_authenticated/users.tsx"),
+    "utf8",
+  );
   assert.match(server, /getApplicationOrigin\(\)/);
+  assert.match(server, /invitation_delivery_unconfirmed/);
+  assert.match(server, /auth\.admin\.generateLink\(\{/);
+  assert.match(server, /properties\?\.action_link/);
+  assert.match(server, /invitation_link_generated/);
+  assert.doesNotMatch(server, /from\("user_invitations"\)\.delete\(\)/);
   assert.doesNotMatch(server, /origin:\s*z\.string/);
   assert.doesNotMatch(invite, /window\.location\.origin/);
+  assert.doesNotMatch(users, /window\.location\.origin/);
+  assert.doesNotMatch(server, /from\("user_invitations"\)\.select\("\*"\)\.order\("invited_at"/);
+});
+
+test("hosted acceptance refuses the known live project and requires an explicit disposable target", () => {
+  const harness = readFileSync(path.join(process.cwd(), "scripts/test-hosted-phase1.mjs"), "utf8");
+  assert.match(harness, /KNOWN_LIVE_PROJECT_REFS/);
+  assert.match(harness, /oyuvdarrkwpqmufzidnc/);
+  assert.match(harness, /validate-disposable:/);
+  assert.doesNotMatch(
+    harness,
+    /console\.(?:log|info|warn|error)\([^\n]*(?:serviceRoleKey|publishableKey)/,
+  );
+});
+
+test("one-time credential handoff exposes every copy target without persisting it", () => {
+  const component = readFileSync(
+    path.join(process.cwd(), "src/components/TemporaryCredentialsDialogs.tsx"),
+    "utf8",
+  );
+  const server = readFileSync(path.join(process.cwd(), "src/lib/api/users.functions.ts"), "utf8");
+  assert.match(component, /aria-label="Copy email"/);
+  assert.match(component, /aria-label="Copy temporary password"/);
+  assert.match(component, /aria-label="Copy login URL"/);
+  assert.match(component, /Copy all credentials/);
+  assert.match(server, /login_url: `\$\{getApplicationOrigin\(\)\}\/login`/);
 });

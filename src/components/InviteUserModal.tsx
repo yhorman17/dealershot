@@ -52,7 +52,7 @@ export function InviteUserModal({
     if (!dealershipId) return setError("Select a dealership");
     setSubmitting(true);
     try {
-      await callInvite({
+      const result = await callInvite({
         data: {
           email: email.trim().toLowerCase(),
           full_name: fullName.trim(),
@@ -60,7 +60,13 @@ export function InviteUserModal({
           dealership_id: dealershipId,
         },
       });
-      toast.success(`Invitation sent to ${email.trim().toLowerCase()}`);
+      if (result.delivery === "unconfirmed") {
+        toast.warning("Invitation saved, but email delivery was not confirmed", {
+          description: "Open Pending invitations to copy the secure link or resend it.",
+        });
+      } else {
+        toast.success(`Invitation sent to ${email.trim().toLowerCase()}`);
+      }
       onInvited?.();
       onClose();
     } catch (err) {

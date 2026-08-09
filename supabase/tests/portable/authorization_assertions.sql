@@ -320,6 +320,31 @@ SELECT public.begin_temporary_password_reset_operation(
   '90000000-0000-0000-0000-000000000002',
   '00000000-0000-0000-0000-000000000012'
 );
+SELECT test.expect_sqlstate(
+  $$SELECT public.begin_temporary_password_reset_operation(
+    '00000000-0000-0000-0000-000000000001',
+    '90000000-0000-0000-0000-000000000013',
+    '00000000-0000-0000-0000-000000000012'
+  )$$,
+  'P0001',
+  'concurrent password resets for one target are serialized'
+);
+SELECT test.expect_sqlstate(
+  $$UPDATE public.profiles
+    SET dealership_id = 'bbbbbbbb-0000-0000-0000-000000000001'
+    WHERE id = '00000000-0000-0000-0000-000000000012'$$,
+  'P0001',
+  'tenant access cannot move while a credential reset is in progress'
+);
+RESET ROLE;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000012';
+SELECT test.assert_true(
+  (SELECT count(*) = 0 FROM public.vehicles),
+  'reset start contains an already-issued identity before the external Auth update'
+);
+RESET ROLE;
+SET ROLE service_role;
 SELECT public.mark_user_account_operation(
   '00000000-0000-0000-0000-000000000001',
   (SELECT id FROM public.user_account_operations
@@ -862,18 +887,11 @@ SELECT test.assert_true(
 );
 SELECT test.assert_true(
   (
-    SELECT bool_and(p.prosecdef AND array_to_string(p.proconfig, ',') = 'search_path=""')
+    SELECT bool_and(array_to_string(p.proconfig, ',') = 'search_path=""')
     FROM pg_proc AS p
     JOIN pg_namespace AS n ON n.oid = p.pronamespace
-    WHERE (n.nspname = 'private')
-       OR (
-         n.nspname = 'public'
-         AND p.proname IN (
-           'handle_new_user', 'get_invitation_details',
-            'check_invitation_account_exists', 'accept_invitation',
-            'admin_update_user_account_access'
-         )
-       )
+    WHERE p.prosecdef
+      AND n.nspname IN ('private', 'public')
   ),
   'every authorization SECURITY DEFINER function fixes search_path'
 );

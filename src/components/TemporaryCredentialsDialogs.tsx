@@ -18,6 +18,7 @@ import { ProductSelect } from "@/components/product-ui";
 export type TemporaryCredentials = {
   email: string;
   temporary_password: string;
+  login_url: string;
   requires_password_change: true;
 };
 
@@ -206,17 +207,23 @@ export function TemporaryCredentialsDialog({
   onClose: () => void;
 }) {
   const [revealed, setRevealed] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"email" | "password" | "login" | "all" | null>(null);
+  const [copyError, setCopyError] = useState(false);
   const copyText = useMemo(
     () =>
-      `DealerShot login\nEmail: ${credentials.email}\nTemporary password: ${credentials.temporary_password}\nSign in and change this password immediately.`,
+      `DealerShot login\nURL: ${credentials.login_url}\nEmail: ${credentials.email}\nTemporary password: ${credentials.temporary_password}\nSign in and change this password immediately.`,
     [credentials],
   );
 
-  const copy = async () => {
-    await navigator.clipboard.writeText(copyText);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+  const copy = async (field: "email" | "password" | "login" | "all", value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyError(false);
+      setCopied(field);
+      window.setTimeout(() => setCopied((current) => (current === field ? null : current)), 1600);
+    } catch {
+      setCopyError(true);
+    }
   };
 
   return (
@@ -236,8 +243,23 @@ export function TemporaryCredentialsDialog({
           </div>
           <div className="space-y-2">
             <Label>Email</Label>
-            <div className="rounded-md border border-border bg-secondary/40 px-3 py-2 font-mono text-sm">
-              {credentials.email}
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1 break-all rounded-md border border-border bg-secondary/40 px-3 py-2 font-mono text-sm">
+                {credentials.email}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => void copy("email", credentials.email)}
+                aria-label="Copy email"
+              >
+                {copied === "email" ? (
+                  <Check aria-hidden className="size-4" />
+                ) : (
+                  <Clipboard aria-hidden className="size-4" />
+                )}
+              </Button>
             </div>
           </div>
           <div className="space-y-2">
@@ -259,17 +281,56 @@ export function TemporaryCredentialsDialog({
                   <Eye aria-hidden className="size-4" />
                 )}
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => void copy("password", credentials.temporary_password)}
+                aria-label="Copy temporary password"
+              >
+                {copied === "password" ? (
+                  <Check aria-hidden className="size-4" />
+                ) : (
+                  <Clipboard aria-hidden className="size-4" />
+                )}
+              </Button>
             </div>
           </div>
+          <div className="space-y-2">
+            <Label>Login URL</Label>
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1 break-all rounded-md border border-border bg-secondary/40 px-3 py-2 font-mono text-sm">
+                {credentials.login_url}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => void copy("login", credentials.login_url)}
+                aria-label="Copy login URL"
+              >
+                {copied === "login" ? (
+                  <Check aria-hidden className="size-4" />
+                ) : (
+                  <Clipboard aria-hidden className="size-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+          {copyError && (
+            <p role="alert" className="text-sm text-destructive">
+              Clipboard access was blocked. Select and copy the value manually.
+            </p>
+          )}
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={copy}>
-            {copied ? (
+          <Button type="button" variant="outline" onClick={() => void copy("all", copyText)}>
+            {copied === "all" ? (
               <Check aria-hidden className="size-4" />
             ) : (
               <Clipboard aria-hidden className="size-4" />
             )}
-            {copied ? "Copied" : "Copy credentials"}
+            {copied === "all" ? "Copied" : "Copy all credentials"}
           </Button>
           <Button type="button" onClick={onClose}>
             I saved them

@@ -10,9 +10,11 @@ export const Route = createFileRoute("/reset-password")({
 });
 
 function isStrong(pw: string): { ok: boolean; msg: string | null } {
-  if (pw.length < 8) return { ok: false, msg: "At least 8 characters" };
-  if (!/[A-Za-z]/.test(pw)) return { ok: false, msg: "Must include a letter" };
-  if (!/[0-9]/.test(pw)) return { ok: false, msg: "Must include a number" };
+  if (pw.length < 12) return { ok: false, msg: "Use at least 12 characters" };
+  if (!/[A-Z]/.test(pw)) return { ok: false, msg: "Include an uppercase letter" };
+  if (!/[a-z]/.test(pw)) return { ok: false, msg: "Include a lowercase letter" };
+  if (!/[0-9]/.test(pw)) return { ok: false, msg: "Include a number" };
+  if (!/[^A-Za-z0-9]/.test(pw)) return { ok: false, msg: "Include a symbol" };
   return { ok: true, msg: null };
 }
 
@@ -55,6 +57,8 @@ function ResetPasswordPage() {
     const { error: updErr } = await supabase.auth.updateUser({ password });
     setSubmitting(false);
     if (updErr) return setError(updErr.message);
+    setPassword("");
+    setConfirm("");
     toast.success("Password updated");
     navigate({ to: "/dashboard", replace: true });
   };
@@ -88,7 +92,11 @@ function ResetPasswordPage() {
               </label>
               <input
                 type="password"
+                name="new-password"
+                autoComplete="new-password"
                 required
+                minLength={12}
+                maxLength={128}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -103,7 +111,11 @@ function ResetPasswordPage() {
               </label>
               <input
                 type="password"
+                name="confirm-password"
+                autoComplete="new-password"
                 required
+                minLength={12}
+                maxLength={128}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
