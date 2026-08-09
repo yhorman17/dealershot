@@ -363,7 +363,7 @@
   }
 
   .motion-page {
-    animation: ds-page-enter var(--motion-duration-standard) var(--motion-ease-enter) both;
+    animation: ds-page-enter var(--motion-duration-standard) var(--motion-ease-enter);
   }
 
   .motion-content,

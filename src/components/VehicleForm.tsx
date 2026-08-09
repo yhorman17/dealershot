@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useRef, useEffect, type FormEvent } from "rea
 import { supabase } from "@/integrations/supabase/client";
 import { CONDITIONS, STATUSES } from "@/lib/vehicle-options";
 import { toast } from "sonner";
+import { ProductSelect } from "@/components/product-ui";
 
 const VinScannerModal = lazy(() =>
   import("@/components/VinScannerModal").then((module) => ({ default: module.VinScannerModal })),
@@ -318,31 +319,21 @@ export function VehicleForm({
       >
         <div>
           <label className="block text-xs font-medium text-card-foreground mb-1.5">Condition</label>
-          <select
+          <ProductSelect
             value={values.condition}
-            onChange={(e) => set("condition", e.target.value)}
-            className="form-input"
-          >
-            {CONDITIONS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => set("condition", value)}
+            ariaLabel="Condition"
+            options={CONDITIONS.map((condition) => ({ value: condition, label: condition }))}
+          />
         </div>
         <div>
           <label className="block text-xs font-medium text-card-foreground mb-1.5">Status</label>
-          <select
+          <ProductSelect
             value={values.status}
-            onChange={(e) => set("status", e.target.value)}
-            className="form-input"
-          >
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => set("status", value)}
+            ariaLabel="Status"
+            options={STATUSES.map((status) => ({ value: status, label: status }))}
+          />
         </div>
       </Section>
 

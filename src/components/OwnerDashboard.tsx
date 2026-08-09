@@ -6,7 +6,7 @@ import { relativeTime } from "@/lib/relative-time";
 import { InviteUserModal } from "@/components/InviteUserModal";
 import { Building2, Camera, CarFront, Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MetricCard, PageHeader, SectionHeader } from "@/components/product-ui";
+import { MetricCard, PageHeader, ProductSelect, SectionHeader } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
@@ -711,11 +711,16 @@ function DealershipModal({
           />
         </FieldLabel>
         <FieldLabel label="Initial status">
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="form-input">
-            <option value="active">Active</option>
-            <option value="trial">Trial</option>
-            {dealership && <option value="suspended">Suspended</option>}
-          </select>
+          <ProductSelect
+            value={status}
+            onValueChange={setStatus}
+            ariaLabel="Initial status"
+            options={[
+              { value: "active", label: "Active" },
+              { value: "trial", label: "Trial" },
+              ...(dealership ? [{ value: "suspended", label: "Suspended" }] : []),
+            ]}
+          />
         </FieldLabel>
         <FieldLabel label="Address">
           <input

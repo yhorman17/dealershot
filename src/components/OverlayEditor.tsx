@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { ProductSelect } from "@/components/product-ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -215,34 +216,26 @@ export function OverlayEditor({
                 <label className="block text-xs font-medium text-card-foreground mb-1.5">
                   Overlay
                 </label>
-                <select
+                <ProductSelect
                   value={overlayId}
-                  onChange={(e) => setOverlayId(e.target.value)}
-                  className="form-input"
-                >
-                  {overlays.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}
-                      {o.category ? ` — ${o.category}` : ""}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={setOverlayId}
+                  ariaLabel="Overlay"
+                  options={overlays.map((overlay) => ({
+                    value: overlay.id,
+                    label: `${overlay.name}${overlay.category ? ` — ${overlay.category}` : ""}`,
+                  }))}
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-card-foreground mb-1.5">
                   Position
                 </label>
-                <select
+                <ProductSelect
                   value={pos}
-                  onChange={(e) => setPos(e.target.value as Position)}
-                  className="form-input"
-                >
-                  {POSITIONS.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(value) => setPos(value as Position)}
+                  ariaLabel="Overlay position"
+                  options={POSITIONS}
+                />
               </div>
             </div>
 

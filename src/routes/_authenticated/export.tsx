@@ -10,7 +10,7 @@ import {
   todayStamp,
 } from "@/lib/export-photos";
 import { CustomExportModal } from "@/components/CustomExportModal";
-import { PageHeader, StatusBadge } from "@/components/product-ui";
+import { PageHeader, ProductSelect, StatusBadge } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_authenticated/export")({
@@ -162,17 +162,17 @@ function ExportPage() {
         description="Select retail-ready vehicles and package their ordered photo sets into a ZIP archive."
         actions={
           isOwner ? (
-            <select
+            <ProductSelect
               value={selectedDealershipId || ""}
-              onChange={(e) => setSelectedDealershipId(e.target.value || null)}
-              className="form-input w-full sm:w-auto"
-            >
-              {dealerships.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => setSelectedDealershipId(value || null)}
+              ariaLabel="Dealership"
+              placeholder="Select dealership"
+              className="w-full sm:w-auto"
+              options={dealerships.map((dealership) => ({
+                value: dealership.id,
+                label: dealership.name,
+              }))}
+            />
           ) : undefined
         }
       />
@@ -184,42 +184,27 @@ function ExportPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="form-input"
         />
-        <select
+        <ProductSelect
           value={yearFilter}
-          onChange={(e) => setYearFilter(e.target.value)}
-          className="form-input"
-        >
-          <option value="">All years</option>
-          {years.map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
-        </select>
-        <select
+          onValueChange={setYearFilter}
+          ariaLabel="Year"
+          emptyLabel="All years"
+          options={years.map((year) => ({ value: String(year), label: String(year) }))}
+        />
+        <ProductSelect
           value={conditionFilter}
-          onChange={(e) => setConditionFilter(e.target.value)}
-          className="form-input"
-        >
-          <option value="">All conditions</option>
-          {CONDITIONS.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <select
+          onValueChange={setConditionFilter}
+          ariaLabel="Condition"
+          emptyLabel="All conditions"
+          options={CONDITIONS.map((condition) => ({ value: condition, label: condition }))}
+        />
+        <ProductSelect
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="form-input"
-        >
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+          onValueChange={setStatusFilter}
+          ariaLabel="Status"
+          emptyLabel="All statuses"
+          options={STATUSES.map((status) => ({ value: status, label: status }))}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-4 text-sm">

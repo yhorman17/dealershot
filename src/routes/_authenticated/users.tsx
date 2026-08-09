@@ -15,7 +15,7 @@ import { relativeTime } from "@/lib/relative-time";
 import { toast } from "sonner";
 import { Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EmptyState, PageHeader } from "@/components/product-ui";
+import { EmptyState, PageHeader, ProductSelect } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -195,18 +195,18 @@ function UsersPage() {
           <label className="text-xs uppercase tracking-wide text-muted-foreground">
             Dealership
           </label>
-          <select
+          <ProductSelect
             value={filterDealership}
-            onChange={(e) => setFilterDealership(e.target.value)}
-            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-          >
-            <option value="all">All dealerships</option>
-            {dealerships.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
+            onValueChange={setFilterDealership}
+            ariaLabel="Filter by dealership"
+            options={[
+              { value: "all", label: "All dealerships" },
+              ...dealerships.map((dealership) => ({
+                value: dealership.id,
+                label: dealership.name,
+              })),
+            ]}
+          />
         </div>
         <div className="flex rounded-md border border-border bg-card p-1 self-start">
           <button
@@ -745,16 +745,17 @@ function EditUserModal({
           </div>
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">Role</label>
-            <select
+            <ProductSelect
               value={role}
               disabled={isSelf || user.role === "owner"}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"
-            >
-              <option value="staff">Staff</option>
-              <option value="dealer_admin">Dealer Admin</option>
-              {user.role === "owner" && <option value="owner">Owner</option>}
-            </select>
+              onValueChange={setRole}
+              ariaLabel="Role"
+              options={[
+                { value: "staff", label: "Staff" },
+                { value: "dealer_admin", label: "Dealer administrator" },
+                ...(user.role === "owner" ? [{ value: "owner", label: "Owner" }] : []),
+              ]}
+            />
             {(isSelf || user.role === "owner") && (
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {isSelf ? "You can't change your own role." : "Owner roles cannot be changed here."}
@@ -765,19 +766,17 @@ function EditUserModal({
             <label className="block text-xs font-medium text-card-foreground mb-1.5">
               Dealership
             </label>
-            <select
+            <ProductSelect
               value={dealershipId}
               disabled={isSelf || user.role === "owner"}
-              onChange={(e) => setDealershipId(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"
-            >
-              <option value="">—</option>
-              {dealerships.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+              onValueChange={setDealershipId}
+              ariaLabel="Dealership"
+              emptyLabel="—"
+              options={dealerships.map((dealership) => ({
+                value: dealership.id,
+                label: dealership.name,
+              }))}
+            />
           </div>
           {error && (
             <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">

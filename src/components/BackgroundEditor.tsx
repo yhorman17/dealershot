@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { removeBackground } from "@imgly/background-removal";
 import { supabase } from "@/integrations/supabase/client";
+import { ProductSelect } from "@/components/product-ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1064,17 +1065,15 @@ export function BackgroundEditor({
                 <label className="block text-xs font-medium text-card-foreground mb-1.5">
                   Backdrop
                 </label>
-                <select
+                <ProductSelect
                   value={backdropId}
-                  onChange={(e) => track(setBackdropId)(e.target.value)}
-                  className="form-input"
-                >
-                  {backdrops.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={track(setBackdropId)}
+                  ariaLabel="Backdrop"
+                  options={backdrops.map((backdrop) => ({
+                    value: backdrop.id,
+                    label: backdrop.name,
+                  }))}
+                />
               </div>
 
               <div
@@ -1460,36 +1459,28 @@ export function BackgroundEditor({
                       <label className="block text-xs font-medium text-card-foreground mb-1.5">
                         Overlay
                       </label>
-                      <select
+                      <ProductSelect
                         value={overlayId}
-                        onChange={(e) => track(setOverlayId)(e.target.value)}
-                        className="form-input"
-                      >
-                        <option value="">None</option>
-                        {overlays.map((o) => (
-                          <option key={o.id} value={o.id}>
-                            {o.name}
-                            {o.category ? ` — ${o.category}` : ""}
-                          </option>
-                        ))}
-                      </select>
+                        onValueChange={track(setOverlayId)}
+                        ariaLabel="Overlay"
+                        emptyLabel="None"
+                        options={overlays.map((overlay) => ({
+                          value: overlay.id,
+                          label: `${overlay.name}${overlay.category ? ` — ${overlay.category}` : ""}`,
+                        }))}
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-card-foreground mb-1.5">
                         Overlay position
                       </label>
-                      <select
+                      <ProductSelect
                         value={overlayPos}
-                        onChange={(e) => track(setOverlayPos)(e.target.value as Position)}
+                        onValueChange={(value) => track(setOverlayPos)(value as Position)}
                         disabled={!overlayId}
-                        className="form-input disabled:opacity-50"
-                      >
-                        {POSITIONS.map((p) => (
-                          <option key={p.value} value={p.value}>
-                            {p.label}
-                          </option>
-                        ))}
-                      </select>
+                        ariaLabel="Overlay position"
+                        options={POSITIONS}
+                      />
                     </div>
                   </div>
                 )}

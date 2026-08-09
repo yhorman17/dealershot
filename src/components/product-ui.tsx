@@ -14,6 +14,22 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const EMPTY_SELECT_VALUE = "__dealershot_empty__";
+
+export type ProductSelectOption = {
+  value: string;
+  label: string;
+  disabled?: boolean;
+};
 
 export function PageHeader({
   eyebrow,
@@ -228,6 +244,58 @@ export function SearchInput({ className, ...props }: React.ComponentProps<typeof
       />
       <Input {...props} type="search" className="h-11 bg-card pl-9" />
     </div>
+  );
+}
+
+export function ProductSelect({
+  value,
+  onValueChange,
+  options,
+  placeholder = "Select an option",
+  emptyLabel,
+  disabled,
+  className,
+  id,
+  ariaLabel,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  options: ProductSelectOption[];
+  placeholder?: string;
+  emptyLabel?: string;
+  disabled?: boolean;
+  className?: string;
+  id?: string;
+  ariaLabel?: string;
+}) {
+  const resolvedValue = value || (emptyLabel ? EMPTY_SELECT_VALUE : "");
+
+  return (
+    <Select
+      value={resolvedValue}
+      disabled={disabled}
+      onValueChange={(nextValue) =>
+        onValueChange(nextValue === EMPTY_SELECT_VALUE ? "" : nextValue)
+      }
+    >
+      <SelectTrigger
+        id={id}
+        aria-label={ariaLabel}
+        className={cn("h-11 bg-card shadow-none", className)}
+      >
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent position="popper">
+        <SelectGroup>
+          {emptyLabel && <SelectItem value={EMPTY_SELECT_VALUE}>{emptyLabel}</SelectItem>}
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }
 

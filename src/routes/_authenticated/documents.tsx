@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { CONDITIONS, STATUSES } from "@/lib/vehicle-options";
 import { FileImage, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EmptyState, PageHeader } from "@/components/product-ui";
+import { EmptyState, PageHeader, ProductSelect } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -202,17 +202,16 @@ function DocumentsPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {isOwner && (
-              <select
+              <ProductSelect
                 value={selectedDealershipId || ""}
-                onChange={(e) => setSelectedDealershipId(e.target.value || null)}
-                className="form-input"
-              >
-                {dealerships.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={(value) => setSelectedDealershipId(value || null)}
+                ariaLabel="Dealership"
+                placeholder="Select dealership"
+                options={dealerships.map((dealership) => ({
+                  value: dealership.id,
+                  label: dealership.name,
+                }))}
+              />
             )}
             <Button onClick={() => setShowForm(true)} disabled={!selectedDealershipId}>
               <Plus className="size-4" />
@@ -585,26 +584,20 @@ function BulkAttachModal({
             onChange={(e) => setSearch(e.target.value)}
             className="form-input"
           />
-          <select
+          <ProductSelect
             value={condition}
-            onChange={(e) => setCondition(e.target.value)}
-            className="form-input"
-          >
-            <option value="">All conditions</option>
-            {CONDITIONS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="form-input">
-            <option value="">All statuses</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+            onValueChange={setCondition}
+            ariaLabel="Condition"
+            emptyLabel="All conditions"
+            options={CONDITIONS.map((item) => ({ value: item, label: item }))}
+          />
+          <ProductSelect
+            value={status}
+            onValueChange={setStatus}
+            ariaLabel="Status"
+            emptyLabel="All statuses"
+            options={STATUSES.map((item) => ({ value: item, label: item }))}
+          />
         </div>
         <div className="flex items-center gap-2 text-xs">
           <button

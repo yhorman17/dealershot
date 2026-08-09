@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { VehicleForm } from "@/components/VehicleForm";
 import { CarFront } from "lucide-react";
-import { EmptyState, PageHeader } from "@/components/product-ui";
+import { EmptyState, PageHeader, ProductSelect } from "@/components/product-ui";
 
 export const Route = createFileRoute("/_authenticated/vehicles/new")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -65,17 +65,13 @@ function NewVehiclePage() {
           <label className="block text-xs font-medium text-card-foreground mb-1.5">
             Dealership
           </label>
-          <select
-            value={dealershipId}
-            onChange={(e) => setDealershipId(e.target.value)}
-            className="form-input max-w-sm"
-          >
-            {dealerships.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
+          <ProductSelect
+            value={dealershipId || ""}
+            onValueChange={setDealershipId}
+            ariaLabel="Dealership"
+            className="max-w-sm"
+            options={dealerships.map((item) => ({ value: item.id, label: item.name }))}
+          />
         </div>
       )}
 

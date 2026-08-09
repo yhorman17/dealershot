@@ -31,7 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard };
 
@@ -161,101 +161,110 @@ export function AppNav({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      <aside
-        className={cn(
-          "motion-sidebar fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] md:flex",
-          collapsed ? "w-[72px]" : "w-64",
-        )}
-      >
-        {renderNavigation(collapsed)}
-      </aside>
-
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent
-          side="left"
-          className="w-[19rem] border-sidebar-border bg-sidebar p-0 text-sidebar-foreground [&>button]:text-sidebar-foreground"
+    <TooltipProvider delayDuration={120}>
+      <div className="min-h-screen bg-background">
+        <aside
+          className={cn(
+            "motion-sidebar fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] md:flex",
+            collapsed ? "w-[72px]" : "w-64",
+          )}
         >
-          <SheetTitle className="sr-only">DealerShot navigation</SheetTitle>
-          <SheetDescription className="sr-only">Navigate dealership operations.</SheetDescription>
-          <div className="flex h-full flex-col">{renderNavigation(false)}</div>
-        </SheetContent>
-      </Sheet>
+          {renderNavigation(collapsed)}
+        </aside>
 
-      <div
-        className={cn(
-          "motion-sidebar min-h-screen transition-[padding]",
-          collapsed ? "md:pl-[72px]" : "md:pl-64",
-        )}
-      >
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-card/95 px-3 backdrop-blur sm:px-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-11 md:hidden"
-              onClick={() => setMobileOpen(true)}
-              aria-label="Open navigation"
-            >
-              <Menu aria-hidden className="size-5" />
-            </Button>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold tracking-[-0.01em] text-foreground">
-                {title}
-              </p>
-              <p className="hidden truncate text-xs text-muted-foreground sm:block">
-                Dealer operations workspace
-              </p>
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent
+            side="left"
+            className="w-[19rem] border-sidebar-border bg-sidebar p-0 text-sidebar-foreground [&>button]:text-sidebar-foreground"
+          >
+            <SheetTitle className="sr-only">DealerShot navigation</SheetTitle>
+            <SheetDescription className="sr-only">Navigate dealership operations.</SheetDescription>
+            <div className="flex h-full flex-col">{renderNavigation(false)}</div>
+          </SheetContent>
+        </Sheet>
+
+        <div
+          className={cn(
+            "motion-sidebar min-h-screen transition-[padding]",
+            collapsed ? "md:pl-[72px]" : "md:pl-64",
+          )}
+        >
+          <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-card/95 px-3 backdrop-blur sm:px-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-11 md:hidden"
+                onClick={() => setMobileOpen(true)}
+                aria-label="Open navigation"
+              >
+                <Menu aria-hidden className="size-5" />
+              </Button>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold tracking-[-0.01em] text-foreground">
+                  {title}
+                </p>
+                <p className="hidden truncate text-xs text-muted-foreground sm:block">
+                  Dealer operations workspace
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <Button asChild size="sm" className="hidden sm:inline-flex">
-              <Link to="/vehicles/new" search={{ dealership: profile?.dealership_id ?? undefined }}>
-                <Plus aria-hidden className="size-4" /> Add vehicle
-              </Link>
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-11 gap-2 px-2" aria-label="Open account menu">
-                  <Avatar className="size-8 border border-border">
-                    <AvatarFallback className="bg-secondary text-xs font-semibold text-secondary-foreground">
-                      {initials || "DS"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="hidden max-w-36 truncate text-sm font-medium sm:block">
-                    {displayName}
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>
-                  <span className="block truncate text-sm font-semibold">{displayName}</span>
-                  <span className="mt-0.5 block text-xs font-normal capitalize text-muted-foreground">
-                    {profile?.role?.replace("_", " ")}
-                  </span>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem disabled>
-                  <UserRound aria-hidden />
-                  Account settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => void signOut()}
-                  className="text-destructive focus:text-destructive"
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <Button asChild size="sm" className="hidden sm:inline-flex">
+                <Link
+                  to="/vehicles/new"
+                  search={{ dealership: profile?.dealership_id ?? undefined }}
                 >
-                  <LogOut aria-hidden />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <Plus aria-hidden className="size-4" /> Add vehicle
+                </Link>
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="h-11 gap-2 px-2"
+                    aria-label="Open account menu"
+                  >
+                    <Avatar className="size-8 border border-border">
+                      <AvatarFallback className="bg-secondary text-xs font-semibold text-secondary-foreground">
+                        {initials || "DS"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="hidden max-w-36 truncate text-sm font-medium sm:block">
+                      {displayName}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel>
+                    <span className="block truncate text-sm font-semibold">{displayName}</span>
+                    <span className="mt-0.5 block text-xs font-normal capitalize text-muted-foreground">
+                      {profile?.role?.replace("_", " ")}
+                    </span>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem disabled>
+                    <UserRound aria-hidden />
+                    Account settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => void signOut()}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <LogOut aria-hidden />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </header>
+          <div key={pathname} className="motion-page">
+            {children}
           </div>
-        </header>
-        <div key={pathname} className="motion-page">
-          {children}
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
 

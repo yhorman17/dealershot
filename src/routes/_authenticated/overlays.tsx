@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { ImagePlus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EmptyState, PageHeader } from "@/components/product-ui";
+import { EmptyState, PageHeader, ProductSelect } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -102,17 +102,16 @@ function OverlaysPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {isOwner && (
-              <select
+              <ProductSelect
                 value={selectedDealershipId || ""}
-                onChange={(e) => setSelectedDealershipId(e.target.value || null)}
-                className="form-input"
-              >
-                {dealerships.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={(value) => setSelectedDealershipId(value || null)}
+                ariaLabel="Dealership"
+                placeholder="Select dealership"
+                options={dealerships.map((dealership) => ({
+                  value: dealership.id,
+                  label: dealership.name,
+                }))}
+              />
             )}
             <Button onClick={() => setShowForm(true)} disabled={!selectedDealershipId}>
               <Plus className="size-4" />
@@ -285,17 +284,12 @@ function OverlayForm({
             <label className="block text-xs font-medium text-card-foreground mb-1.5">
               Category
             </label>
-            <select
+            <ProductSelect
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="form-input"
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onValueChange={setCategory}
+              ariaLabel="Category"
+              options={CATEGORIES.map((item) => ({ value: item, label: item }))}
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">

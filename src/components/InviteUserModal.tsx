@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ProductSelect } from "@/components/product-ui";
 
 type Dealership = { id: string; name: string };
 
@@ -101,34 +102,30 @@ export function InviteUserModal({
           </div>
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">Role</label>
-            <select
+            <ProductSelect
               value={role}
-              onChange={(e) => setRole(e.target.value as "dealer_admin" | "staff")}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="staff">Staff</option>
-              <option value="dealer_admin">Dealer Admin</option>
-            </select>
+              onValueChange={(nextRole) => setRole(nextRole as "dealer_admin" | "staff")}
+              ariaLabel="Role"
+              options={[
+                { value: "staff", label: "Staff" },
+                { value: "dealer_admin", label: "Dealer administrator" },
+              ]}
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">
               Dealership
             </label>
-            <select
-              required
+            <ProductSelect
               value={dealershipId}
-              onChange={(e) => setDealershipId(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="" disabled>
-                Select dealership…
-              </option>
-              {dealerships.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+              onValueChange={setDealershipId}
+              ariaLabel="Dealership"
+              placeholder="Select dealership…"
+              options={dealerships.map((dealership) => ({
+                value: dealership.id,
+                label: dealership.name,
+              }))}
+            />
           </div>
           {error && (
             <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">

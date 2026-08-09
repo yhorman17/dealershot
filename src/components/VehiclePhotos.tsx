@@ -18,7 +18,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { StatusBadge, EmptyState, InlineLoading, SectionHeader } from "@/components/product-ui";
+import {
+  EmptyState,
+  InlineLoading,
+  ProductSelect,
+  SectionHeader,
+  StatusBadge,
+} from "@/components/product-ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1016,18 +1022,13 @@ function FreeUploadPanel({
           <label className="block text-xs font-medium text-card-foreground mb-1.5">
             Tag with shot type (optional)
           </label>
-          <select
+          <ProductSelect
             value={shotType}
-            onChange={(e) => setShotType(e.target.value)}
-            className="form-input"
-          >
-            <option value="">No tag</option>
-            {SHOT_TYPES.map((s) => (
-              <option key={s.name} value={s.name}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+            onValueChange={setShotType}
+            ariaLabel="Shot type"
+            emptyLabel="No tag"
+            options={SHOT_TYPES.map((shot) => ({ value: shot.name, label: shot.name }))}
+          />
         </div>
       </div>
       <label className="motion-upload-target ds-grid-lines flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-input bg-secondary/30 p-8 text-center hover:border-primary/60 hover:bg-selected/35">
