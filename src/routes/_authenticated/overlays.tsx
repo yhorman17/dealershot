@@ -18,6 +18,9 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/overlays")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    dealership: typeof search.dealership === "string" ? search.dealership : undefined,
+  }),
   head: () => ({ meta: [{ title: "Overlays — DealerShot" }] }),
   component: OverlaysPage,
 });
@@ -37,6 +40,7 @@ type Dealership = { id: string; name: string };
 
 function OverlaysPage() {
   const { profile } = useAuth();
+  const { dealership } = Route.useSearch();
   const isOwner = profile?.role === "owner";
   const [overlays, setOverlays] = useState<Overlay[]>([]);
   const [dealerships, setDealerships] = useState<Dealership[]>([]);
@@ -51,12 +55,15 @@ function OverlaysPage() {
         const { data } = await supabase.from("dealerships").select("id, name").order("name");
         const list = (data as Dealership[]) || [];
         setDealerships(list);
-        if (list.length > 0 && !selectedDealershipId) setSelectedDealershipId(list[0].id);
+        setSelectedDealershipId((current) => {
+          const requested = dealership && list.some((item) => item.id === dealership);
+          return requested ? dealership : (current ?? list[0]?.id ?? null);
+        });
       })();
     } else if (profile?.dealership_id) {
       setSelectedDealershipId(profile.dealership_id);
     }
-  }, [isOwner, profile?.dealership_id]);
+  }, [isOwner, profile?.dealership_id, dealership]);
 
   const load = async () => {
     if (!selectedDealershipId) {

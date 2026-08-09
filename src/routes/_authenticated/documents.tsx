@@ -102,6 +102,9 @@ function DocumentThumb({ doc }: { doc: { id: string; image_url: string; name: st
 }
 
 export const Route = createFileRoute("/_authenticated/documents")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    dealership: typeof search.dealership === "string" ? search.dealership : undefined,
+  }),
   head: () => ({ meta: [{ title: "Documents — DealerShot" }] }),
   component: DocumentsPage,
 });
@@ -117,6 +120,7 @@ type DocumentRow = {
 
 function DocumentsPage() {
   const { profile } = useAuth();
+  const { dealership } = Route.useSearch();
   const isOwner = profile?.role === "owner";
   const [dealerships, setDealerships] = useState<Dealership[]>([]);
   const [selectedDealershipId, setSelectedDealershipId] = useState<string | null>(null);
@@ -134,12 +138,15 @@ function DocumentsPage() {
         const { data } = await supabase.from("dealerships").select("id, name").order("name");
         const list = (data as Dealership[]) || [];
         setDealerships(list);
-        if (list.length > 0) setSelectedDealershipId((curr) => curr ?? list[0].id);
+        setSelectedDealershipId((current) => {
+          const requested = dealership && list.some((item) => item.id === dealership);
+          return requested ? dealership : (current ?? list[0]?.id ?? null);
+        });
       })();
     } else if (profile?.dealership_id) {
       setSelectedDealershipId(profile.dealership_id);
     }
-  }, [isOwner, profile?.dealership_id]);
+  }, [isOwner, profile?.dealership_id, dealership]);
 
   const load = async () => {
     if (!selectedDealershipId) {

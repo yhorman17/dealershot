@@ -1,8 +1,8 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { Building2, Plus } from "lucide-react";
+import { ArrowRight, Building2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -163,6 +163,12 @@ function DealershipsPage() {
                     <dd className="text-card-foreground text-right">{d.phone || "—"}</dd>
                   </div>
                 </dl>
+                <Button asChild variant="secondary" className="mt-3 w-full justify-between">
+                  <Link to="/dealerships/$dealershipId" params={{ dealershipId: d.id }}>
+                    View dealership
+                    <ArrowRight aria-hidden />
+                  </Link>
+                </Button>
                 <div className="mt-3 flex gap-2">
                   <button
                     onClick={() => {
@@ -193,7 +199,7 @@ function DealershipsPage() {
                   <th className="px-4 py-3 font-medium">Address</th>
                   <th className="px-4 py-3 font-medium">Phone</th>
                   <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium w-32 text-right">Actions</th>
+                  <th className="w-48 px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -225,6 +231,13 @@ function DealershipsPage() {
                       </StatusBadge>
                     </td>
                     <td className="px-4 py-3 text-right">
+                      <Link
+                        to="/dealerships/$dealershipId"
+                        params={{ dealershipId: d.id }}
+                        className="mr-3 text-xs font-medium text-primary hover:text-primary/80"
+                      >
+                        View
+                      </Link>
                       <button
                         onClick={() => {
                           setEditing(d);

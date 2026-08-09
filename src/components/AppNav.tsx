@@ -291,6 +291,7 @@ export function AppNav({ children }: { children: ReactNode }) {
 function pageTitle(pathname: string) {
   if (pathname.startsWith("/vehicles/new")) return "Add vehicle";
   if (pathname.startsWith("/vehicles/")) return "Vehicle workspace";
+  if (pathname.startsWith("/dealerships/")) return "Dealership workspace";
   const labels: Record<string, string> = {
     "/dashboard": "Overview",
     "/inventory": "Inventory",
