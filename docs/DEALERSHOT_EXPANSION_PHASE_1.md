@@ -14,9 +14,9 @@ The browser calls authenticated TanStack server functions. The server verifies t
 
 `Create Login Now` generates a 20-character password in server memory using `node:crypto.randomInt`. The generated value is passed directly to Supabase Auth and returned only in the successful response. It is not placed in profile metadata, SQL arguments, database rows, URLs, logs, analytics, local storage, or session storage. Closing the one-time credentials dialog clears component state. Invitations remain a separate supported path.
 
-The `user_account_operations` record is created before crossing the Auth boundary. Reusing an idempotency key with identical input returns the durable status but never returns or rotates the original credential. Reusing it for different input is rejected. Provider timeouts become `needs_reconciliation`; a possibly created Auth identity remains a pristine password-gated profile through the Auth trigger. An uncertain password reset explicitly puts the target onboarding row back behind the database gate before reporting reconciliation.
+The `user_account_operations` record is created before crossing the Auth boundary. Reusing an idempotency key with identical input returns the durable status but never returns or rotates the original credential. Reusing it for different input is rejected. Provider timeouts become `needs_reconciliation`; a possibly created Auth identity remains a pristine password-gated profile through the Auth trigger. Password reset containment commits before the external GoTrue call, so existing JWTs lose business-data access before a credential changes. Active resets are serialized per target, and role/dealership access cannot move while a reset is in flight.
 
-Admin-provisioned users authenticate normally but business RLS helpers require a completed `user_onboarding` row. Until the user changes the password, only their own profile/onboarding state and the password screen are available. Existing profiles are backfilled as complete. Invitation acceptance remains distinct and completes invitation onboarding after validating the signed-in Auth email, invitation role, active dealership, and pristine placeholder profile.
+Admin-provisioned users authenticate normally but business RLS helpers require a completed `user_onboarding` row. Until the user changes the password, only their own profile/onboarding state and the password screen are available. The server binds hosted Admin password replacement to the Auth-verified caller ID, and the browser establishes a fresh session because hosted Admin replacement may revoke the entering session. Existing profiles are backfilled as complete. Invitation acceptance remains distinct and completes invitation onboarding after validating the signed-in Auth email, invitation role, active dealership, and pristine placeholder profile.
 
 ### Reconciliation runbook
 
@@ -61,6 +61,8 @@ Configure these as encrypted runtime variables on the worker (or inherited encry
 Non-secret tuning variables are `WORKER_POLL_INTERVAL_MS`, `WORKER_LEASE_SECONDS`, and `WORKER_METRICS_INTERVAL_MS`. Never give the service-role key a `VITE_` prefix. Repository app-spec changes do nothing to DigitalOcean until an operator explicitly applies/deploys them.
 
 ## Disposable Supabase validation gate
+
+The executable hosted runner, live-project safety interlock, complete deployment handoff, and rollback procedure are in [DEALERSHOT_PHASE_1_RELEASE_GATE.md](./DEALERSHOT_PHASE_1_RELEASE_GATE.md).
 
 1. Create a new disposable Supabase project or clean local stack; use disposable credentials and data only.
 2. Confirm Queue/PGMQ extension availability for the recorded architecture decision, but do not change the checked-in fallback during validation.
