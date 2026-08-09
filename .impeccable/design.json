@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-09T00:00:00Z",
+  "title": "Design System: DealerShot",
+  "extensions": {
+    "colorMeta": {
+      "steel-signal": {
+        "role": "primary",
+        "displayName": "Steel Signal",
+        "canonical": "oklch(0.52 0.18 257)",
+        "tonalRamp": ["#edf3fd", "#b7cff3", "#2868ca", "#194995"]
+      },
+      "cool-canvas": {
+        "role": "neutral",
+        "displayName": "Cool Canvas",
+        "canonical": "oklch(0.967 0.005 248)",
+        "tonalRamp": ["#ffffff", "#f3f5f7", "#d9dde2"]
+      },
+      "graphite-rail": {
+        "role": "neutral",
+        "displayName": "Graphite Rail",
+        "canonical": "oklch(0.205 0.027 252)",
+        "tonalRamp": ["#273342", "#17202b", "#0d131b"]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Operational Headline",
+        "purpose": "Route titles and vehicle identity."
+      },
+      "body": { "displayName": "Working Body", "purpose": "Dense, readable operational content." }
+    },
+    "shadows": [
+      {
+        "name": "ambient-control",
+        "value": "0 1px 2px rgb(20 30 45 / 0.06)",
+        "purpose": "Selected segmented controls."
+      },
+      {
+        "name": "overlay",
+        "value": "0 24px 60px -24px rgb(15 23 34 / 0.35)",
+        "purpose": "Dialogs, sheets, and menus."
+      }
+    ],
+    "motion": [
+      { "name": "fast", "value": "120ms", "purpose": "Hover, press, and focus feedback." },
+      { "name": "standard", "value": "180ms", "purpose": "Content and status transitions." },
+      { "name": "deliberate", "value": "240ms", "purpose": "Dialogs, drawers, and panels." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "2xl", "value": "1536px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single dominant action in a workflow region.",
+      "html": "<button class=\"ds-button-primary\">Add vehicle</button>",
+      "css": ".ds-button-primary{height:44px;padding:0 16px;border:0;border-radius:8px;background:#2868ca;color:#fff;font:600 14px Inter,system-ui;transition:background-color 120ms,transform 120ms}.ds-button-primary:hover{background:#225bb1}.ds-button-primary:active{transform:translateY(1px)}.ds-button-primary:focus-visible{outline:2px solid #2868ca;outline-offset:2px}"
+    },
+    {
+      "name": "Operational Surface",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat bordered container for workflow content.",
+      "html": "<section class=\"ds-surface\"><strong>Recent vehicles</strong><p>Newest inventory arrivals</p></section>",
+      "css": ".ds-surface{padding:20px;border:1px solid #d9dde2;border-radius:10px;background:#fefefe;color:#202b39;font:400 14px/1.5 Inter,system-ui}.ds-surface strong{font-weight:600}.ds-surface p{margin:4px 0 0;color:#6d7580;font-size:12px}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Labeled operational input with visible focus.",
+      "html": "<label class=\"ds-field\">Stock number<input value=\"DS-1048\"></label>",
+      "css": ".ds-field{display:grid;gap:6px;color:#202b39;font:600 12px Inter,system-ui}.ds-field input{height:44px;padding:0 12px;border:1px solid #c9cfd6;border-radius:8px;background:#fff;color:#202b39;font:400 14px Inter,system-ui}.ds-field input:focus-visible{outline:2px solid #2868ca;outline-offset:2px}"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "description": "Compact semantic state signal.",
+      "html": "<span class=\"ds-status\"><i></i>Available</span>",
+      "css": ".ds-status{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:2px 10px;border:1px solid #b9dfcf;border-radius:999px;background:#edf8f3;color:#226b4c;font:600 11px Inter,system-ui}.ds-status i{width:6px;height:6px;border-radius:50%;background:currentColor}"
+    },
+    {
+      "name": "Navigation Item",
+      "kind": "nav",
+      "description": "Graphite rail route with active steel signal.",
+      "html": "<a class=\"ds-nav\" href=\"#\">Inventory</a>",
+      "css": ".ds-nav{display:flex;align-items:center;min-height:40px;padding:0 10px;border-radius:6px;background:#273342;color:#fff;text-decoration:none;font:600 14px Inter,system-ui;box-shadow:inset 2px 0 #5e91dd}.ds-nav:hover{background:#303d4d}.ds-nav:focus-visible{outline:2px solid #6e9ce2;outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Precision Bay",
+    "overview": "A light, glare-resistant working canvas inside a durable graphite frame. Every control has a clear place and vehicle imagery stays dominant.",
+    "keyCharacteristics": [
+      "Operational density",
+      "Photo-first hierarchy",
+      "One disciplined action color",
+      "Purpose-built mobile reflow"
+    ],
+    "rules": [
+      {
+        "name": "The Signal Rule",
+        "body": "Steel blue communicates action or state, never decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat-by-Default Rule",
+        "body": "Use borders and tonal layers before shadows.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do prioritize the current vehicle and next action.",
+      "Do preserve 44px touch targets and visible focus."
+    ],
+    "donts": [
+      "Don't use generic SaaS card grids.",
+      "Don't introduce neon, glassmorphism, or ornamental motion."
+    ]
+  }
+}
