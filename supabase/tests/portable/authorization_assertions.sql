@@ -103,6 +103,25 @@ WHERE id = '00000000-0000-0000-0000-000000000005';
 UPDATE public.profiles SET role = 'owner', status = 'deactivated'
 WHERE id = '00000000-0000-0000-0000-000000000011';
 
+-- These fixtures model established accounts. Newly trigger-created accounts
+-- remain password-gated unless an explicit onboarding path completes them.
+UPDATE public.user_onboarding
+SET onboarding_method = 'existing',
+    onboarding_state = 'complete',
+    password_change_required = false,
+    password_changed_at = now(),
+    completed_at = now()
+WHERE profile_id IN (
+  '00000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000003',
+  '00000000-0000-0000-0000-000000000004',
+  '00000000-0000-0000-0000-000000000005',
+  '00000000-0000-0000-0000-000000000006',
+  '00000000-0000-0000-0000-000000000010',
+  '00000000-0000-0000-0000-000000000011'
+);
+
 -- Dealer Admin A is explicitly assigned to two active dealerships. An extra
 -- fixture row for Staff A proves that staff remain limited to their primary
 -- dealership even if assignment data drifts.
@@ -143,7 +162,9 @@ SELECT test.assert_true(
       AND c.relname IN (
         'profiles', 'dealerships', 'vehicles', 'photos', 'overlay_templates',
         'documents', 'vehicle_documents', 'backdrops', 'impersonation_logs',
-        'user_invitations', 'profile_dealerships', 'objects'
+        'user_invitations', 'profile_dealerships', 'user_onboarding',
+        'user_account_operations', 'user_account_operation_dealerships',
+        'audit_events', 'platform_settings', 'dealership_settings', 'objects'
       )
       AND r.rolname = 'authenticated'
   ),
@@ -151,14 +172,16 @@ SELECT test.assert_true(
 );
 SELECT test.assert_true(
   (
-    SELECT count(*) = 12
+    SELECT count(*) = 18
     FROM pg_class AS c
     JOIN pg_namespace AS n ON n.oid = c.relnamespace
     WHERE n.nspname IN ('public', 'storage')
       AND c.relname IN (
         'profiles', 'dealerships', 'vehicles', 'photos', 'overlay_templates',
         'documents', 'vehicle_documents', 'backdrops', 'impersonation_logs',
-        'user_invitations', 'profile_dealerships', 'objects'
+        'user_invitations', 'profile_dealerships', 'user_onboarding',
+        'user_account_operations', 'user_account_operation_dealerships',
+        'audit_events', 'platform_settings', 'dealership_settings', 'objects'
       )
       AND c.relrowsecurity
   ),
@@ -168,6 +191,235 @@ SELECT test.assert_true(
 SET ROLE authenticated;
 SELECT test.assert_true(current_user = 'authenticated', 'ordinary assertions run as authenticated');
 SELECT test.assert_true(current_setting('row_security') = 'on', 'row_security is on for ordinary assertions');
+RESET ROLE;
+
+SELECT test.assert_true(
+  NOT has_function_privilege(
+    'authenticated',
+    'public.begin_user_provisioning_operation(uuid,uuid,text,text,public.app_role,uuid[])',
+    'EXECUTE'
+  ),
+  'ordinary users cannot execute the provisioning RPC'
+);
+SELECT test.assert_true(
+  NOT has_function_privilege(
+    'anon',
+    'public.complete_temporary_password_onboarding(uuid)',
+    'EXECUTE'
+  ),
+  'anonymous users cannot execute onboarding completion'
+);
+SELECT test.assert_true(
+  NOT has_table_privilege('authenticated', 'public.user_account_operations', 'SELECT')
+  AND NOT has_table_privilege('authenticated', 'public.user_account_operations', 'INSERT')
+  AND NOT has_table_privilege('authenticated', 'public.user_onboarding', 'UPDATE'),
+  'operation writes and onboarding completion are server-only'
+);
+SELECT test.assert_true(
+  NOT EXISTS (
+    SELECT 1
+    FROM pg_proc AS p
+    JOIN pg_namespace AS n ON n.oid = p.pronamespace
+    WHERE p.prosecdef
+      AND n.nspname IN ('public', 'private')
+      AND p.proname IN (
+        'begin_user_provisioning_operation',
+        'mark_user_account_operation',
+        'finalize_user_provisioning_operation',
+        'begin_temporary_password_reset_operation',
+        'finalize_temporary_password_reset_operation',
+        'contain_temporary_password_reset_operation',
+        'complete_temporary_password_onboarding',
+        'admin_set_platform_setting',
+        'admin_set_dealership_setting',
+        'enqueue_background_job',
+        'worker_claim_background_job',
+        'worker_heartbeat_background_job',
+        'worker_complete_background_job',
+        'worker_fail_background_job',
+        'worker_get_queue_metrics'
+      )
+      AND COALESCE(array_to_string(p.proconfig, ','), '') NOT LIKE '%search_path=%'
+  ),
+  'new security-definer functions have a fixed search path'
+);
+
+-- Owner starts an idempotent multi-dealership administrator operation.
+SET ROLE service_role;
+SELECT public.begin_user_provisioning_operation(
+  '00000000-0000-0000-0000-000000000001',
+  '90000000-0000-0000-0000-000000000001',
+  'provisioned-admin@example.test',
+  'Provisioned Admin',
+  'dealer_admin',
+  ARRAY[
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'bbbbbbbb-0000-0000-0000-000000000001'
+  ]::uuid[]
+);
+RESET ROLE;
+
+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES (
+  '00000000-0000-0000-0000-000000000012',
+  'provisioned-admin@example.test',
+  '{"full_name":"Provisioned Admin"}'::jsonb
+);
+
+SET ROLE service_role;
+SELECT public.mark_user_account_operation(
+  '00000000-0000-0000-0000-000000000001',
+  (SELECT id FROM public.user_account_operations
+   WHERE idempotency_key = '90000000-0000-0000-0000-000000000001'),
+  'auth_updated',
+  '00000000-0000-0000-0000-000000000012',
+  NULL
+);
+SELECT public.finalize_user_provisioning_operation(
+  '00000000-0000-0000-0000-000000000001',
+  (SELECT id FROM public.user_account_operations
+   WHERE idempotency_key = '90000000-0000-0000-0000-000000000001'),
+  '00000000-0000-0000-0000-000000000012'
+);
+SELECT test.assert_true(
+  (SELECT role = 'dealer_admin' AND dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+   FROM public.profiles WHERE id = '00000000-0000-0000-0000-000000000012'),
+  'owner provisioning assigns the approved dealer role and primary dealership'
+);
+SELECT test.assert_true(
+  (SELECT count(*) = 2 FROM public.profile_dealerships
+   WHERE profile_id = '00000000-0000-0000-0000-000000000012'),
+  'owner provisioning atomically assigns multiple dealerships to an administrator'
+);
+SELECT test.assert_true(
+  (SELECT password_change_required AND onboarding_state = 'password_change_required'
+   FROM public.user_onboarding WHERE profile_id = '00000000-0000-0000-0000-000000000012'),
+  'provisioned account is password-gated'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000012';
+SELECT test.assert_true((SELECT count(*) = 0 FROM public.vehicles), 'temporary account cannot read business data');
+SELECT test.assert_true((SELECT count(*) = 1 FROM public.user_onboarding), 'temporary account can read only its onboarding state');
+SELECT test.assert_true((SELECT count(*) = 1 FROM public.profiles), 'temporary account can read only its own profile');
+RESET ROLE;
+
+SET ROLE service_role;
+SELECT public.complete_temporary_password_onboarding('00000000-0000-0000-0000-000000000012');
+RESET ROLE;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000012';
+SELECT test.assert_true((SELECT count(*) = 2 FROM public.vehicles), 'completed administrator can read assigned dealerships');
+RESET ROLE;
+
+-- Resetting credentials restores the database gate immediately, even while a
+-- caller continues using the same simulated JWT identity.
+SET ROLE service_role;
+SELECT public.begin_temporary_password_reset_operation(
+  '00000000-0000-0000-0000-000000000001',
+  '90000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000012'
+);
+SELECT public.mark_user_account_operation(
+  '00000000-0000-0000-0000-000000000001',
+  (SELECT id FROM public.user_account_operations
+   WHERE idempotency_key = '90000000-0000-0000-0000-000000000002'),
+  'auth_updated',
+  '00000000-0000-0000-0000-000000000012',
+  NULL
+);
+SELECT public.finalize_temporary_password_reset_operation(
+  '00000000-0000-0000-0000-000000000001',
+  (SELECT id FROM public.user_account_operations
+   WHERE idempotency_key = '90000000-0000-0000-0000-000000000002')
+);
+RESET ROLE;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000012';
+SELECT test.assert_true((SELECT count(*) = 0 FROM public.vehicles), 'credential reset immediately re-blocks an active identity');
+RESET ROLE;
+
+-- Dealer Admin A may create staff only in an assigned active dealership.
+SET ROLE service_role;
+SELECT public.begin_user_provisioning_operation(
+  '00000000-0000-0000-0000-000000000002',
+  '90000000-0000-0000-0000-000000000003',
+  'admin-created-staff@example.test',
+  'Admin Created Staff',
+  'staff',
+  ARRAY['aaaaaaaa-0000-0000-0000-000000000001']::uuid[]
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.begin_user_provisioning_operation(
+    '00000000-0000-0000-0000-000000000002',
+    '90000000-0000-0000-0000-000000000004',
+    'forbidden-admin@example.test', 'Forbidden Admin', 'dealer_admin',
+    ARRAY['aaaaaaaa-0000-0000-0000-000000000001']::uuid[])$$,
+  'P0001',
+  'dealer administrator cannot create another administrator'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.begin_user_provisioning_operation(
+    '00000000-0000-0000-0000-000000000002',
+    '90000000-0000-0000-0000-000000000005',
+    'cross-tenant-staff@example.test', 'Cross Tenant Staff', 'staff',
+    ARRAY['cccccccc-0000-0000-0000-000000000001']::uuid[])$$,
+  'P0001',
+  'dealer administrator cannot provision outside assigned active dealerships'
+);
+RESET ROLE;
+
+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES (
+  '00000000-0000-0000-0000-000000000013',
+  'admin-created-staff@example.test',
+  '{"full_name":"Admin Created Staff"}'::jsonb
+);
+SET ROLE service_role;
+SELECT public.finalize_user_provisioning_operation(
+  '00000000-0000-0000-0000-000000000002',
+  (SELECT id FROM public.user_account_operations
+   WHERE idempotency_key = '90000000-0000-0000-0000-000000000003'),
+  '00000000-0000-0000-0000-000000000013'
+);
+SELECT test.assert_true(
+  (SELECT role = 'staff' AND dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+   FROM public.profiles WHERE id = '00000000-0000-0000-0000-000000000013'),
+  'dealer administrator provisioning produces scoped staff access'
+);
+
+SELECT test.assert_true(
+  (
+    public.begin_user_provisioning_operation(
+      '00000000-0000-0000-0000-000000000001',
+      '90000000-0000-0000-0000-000000000001',
+      'provisioned-admin@example.test', 'Provisioned Admin', 'dealer_admin',
+      ARRAY[
+        'aaaaaaaa-0000-0000-0000-000000000001',
+        'bbbbbbbb-0000-0000-0000-000000000001'
+      ]::uuid[]
+    )->>'operation_id'
+  ) = (
+    SELECT id::text FROM public.user_account_operations
+    WHERE idempotency_key = '90000000-0000-0000-0000-000000000001'
+  ),
+  'same idempotency key returns the original completed operation'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.begin_user_provisioning_operation(
+    '00000000-0000-0000-0000-000000000001',
+    '90000000-0000-0000-0000-000000000001',
+    'different@example.test', 'Different Request', 'staff',
+    ARRAY['aaaaaaaa-0000-0000-0000-000000000001']::uuid[])$$,
+  'P0001',
+  'idempotency key cannot be reused for different input'
+);
+SELECT test.assert_true(
+  NOT EXISTS (
+    SELECT 1 FROM public.audit_events
+    WHERE payload::text ~* 'password|credential|token|secret'
+  ),
+  'audit payloads contain no credentials or tokens'
+);
 RESET ROLE;
 
 -- Active staff A: safe self-service succeeds; security fields and tenant B fail.
@@ -646,6 +898,154 @@ SELECT test.assert_true(
   ),
   'Storage has only the reviewed public-read and active-mutation policies'
 );
+
+-- Phase 1 settings remain readable only through active tenant scope, and all
+-- writes are audited server-side.
+-- An uncertain provider result also fails closed without claiming that the
+-- password reset completed. This runs after the ordinary Staff A assertions.
+SET ROLE service_role;
+SELECT public.begin_temporary_password_reset_operation(
+  '00000000-0000-0000-0000-000000000001',
+  '90000000-0000-0000-0000-00000000000f',
+  '00000000-0000-0000-0000-000000000003'
+);
+SELECT public.contain_temporary_password_reset_operation(
+  '00000000-0000-0000-0000-000000000001',
+  (SELECT id FROM public.user_account_operations
+   WHERE idempotency_key = '90000000-0000-0000-0000-00000000000f'),
+  'transport_uncertain'
+);
+SELECT test.assert_true(
+  (SELECT status = 'needs_reconciliation' AND safe_error_code = 'transport_uncertain'
+   FROM public.user_account_operations
+   WHERE idempotency_key = '90000000-0000-0000-0000-00000000000f'),
+  'uncertain reset is durable and requires reconciliation'
+);
+RESET ROLE;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT test.assert_true((SELECT count(*) = 0 FROM public.vehicles), 'uncertain reset immediately contains the active session');
+RESET ROLE;
+
+SET ROLE service_role;
+SELECT public.admin_set_platform_setting(
+  '00000000-0000-0000-0000-000000000001', 'platform.locale', '{"default":"en-US"}'::jsonb
+);
+SELECT public.admin_set_dealership_setting(
+  '00000000-0000-0000-0000-000000000002',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  'workflow.replacement_credit_policy', '{"review":true}'::jsonb
+);
+SELECT public.admin_set_dealership_setting(
+  '00000000-0000-0000-0000-000000000001',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  'staff.self_pay_visibility', '{"enabled":false}'::jsonb, 'active_members'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.admin_set_dealership_setting(
+    '00000000-0000-0000-0000-000000000002',
+    'aaaaaaaa-0000-0000-0000-000000000001', 'platform.sensitive', '{}'::jsonb)$$,
+  'P0001',
+  'dealer administrator cannot write non-allowlisted settings'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.admin_set_dealership_setting(
+    '00000000-0000-0000-0000-000000000002',
+    'cccccccc-0000-0000-0000-000000000001', 'dealer.workflow', '{}'::jsonb)$$,
+  'P0001',
+  'dealer administrator cannot write a suspended or unassigned dealership setting'
+);
+SELECT test.assert_true(
+  (SELECT count(*) = 3 FROM public.audit_events
+   WHERE event_type IN ('setting.platform_updated', 'setting.dealership_updated')),
+  'setting mutations emit durable audit events'
+);
+SELECT test.expect_sqlstate(
+  $$DELETE FROM public.audit_events WHERE event_type = 'setting.platform_updated'$$,
+  '55000',
+  'audit events are append-only even for the service role'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000001';
+SELECT test.assert_true((SELECT count(*) = 1 FROM public.platform_settings), 'active owner reads platform settings');
+RESET ROLE;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000004';
+SELECT test.assert_true((SELECT count(*) = 0 FROM public.platform_settings), 'staff cannot read platform settings');
+SELECT test.assert_true(
+  (SELECT count(*) = 1 FROM public.dealership_settings
+   WHERE dealership_id = 'bbbbbbbb-0000-0000-0000-000000000001'
+     AND read_scope = 'active_members'),
+  'staff reads only explicitly member-visible settings in its own tenant'
+);
+RESET ROLE;
+
+SELECT test.assert_true(
+  NOT has_table_privilege('authenticated', 'private.background_jobs', 'SELECT')
+  AND NOT has_table_privilege('authenticated', 'private.background_jobs', 'INSERT')
+  AND NOT has_function_privilege('authenticated', 'public.enqueue_background_job(text,jsonb,uuid,text,uuid,integer,smallint,uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('authenticated', 'public.worker_claim_background_job(text,integer)', 'EXECUTE'),
+  'ordinary users cannot inspect, enqueue, or claim private jobs'
+);
+
+-- Queue lifecycle: dedupe, claim, retry with backoff, reclaim, complete, and
+-- terminal failure all use service-only RPCs and durable attempt records.
+SET ROLE service_role;
+SELECT (public.enqueue_background_job(
+  'system.noop', '{"source":"portable-test"}'::jsonb,
+  'aaaaaaaa-0000-0000-0000-000000000001', 'portable-dedupe',
+  '91000000-0000-0000-0000-000000000001', 3, 10::smallint,
+  '00000000-0000-0000-0000-000000000001'
+)->>'job_id') AS queue_job_id \gset
+SELECT (public.enqueue_background_job(
+  'system.noop', '{"source":"portable-test"}'::jsonb,
+  'aaaaaaaa-0000-0000-0000-000000000001', 'portable-dedupe'
+)->>'job_id') AS duplicate_job_id \gset
+SELECT test.assert_true(:'queue_job_id' = :'duplicate_job_id', 'job enqueue deduplicates the same workload');
+
+SELECT (public.worker_claim_background_job('portable-worker', 60)->>'job_id') AS claimed_job_id \gset
+SELECT test.assert_true(:'claimed_job_id' = :'queue_job_id', 'worker atomically claims the ready job');
+SELECT test.assert_true(
+  public.worker_heartbeat_background_job('portable-worker', :'queue_job_id'::uuid, 60),
+  'worker can extend its own lease'
+);
+SELECT test.assert_true(
+  public.worker_fail_background_job('portable-worker', :'queue_job_id'::uuid, 'transient_test', true) = 'retry_scheduled',
+  'retryable failure schedules bounded retry'
+);
+RESET ROLE;
+UPDATE private.background_jobs SET available_at = now() WHERE id = :'queue_job_id'::uuid;
+SET ROLE service_role;
+SELECT (public.worker_claim_background_job('portable-worker-2', 60)->>'job_id') AS reclaimed_job_id \gset
+SELECT test.assert_true(:'reclaimed_job_id' = :'queue_job_id', 'scheduled retry can be claimed again');
+SELECT test.assert_true(
+  public.worker_complete_background_job('portable-worker-2', :'queue_job_id'::uuid, '{"ok":true}'::jsonb),
+  'worker completes its leased job'
+);
+RESET ROLE;
+SELECT test.assert_true(
+  (SELECT attempt_count = 2 AND status = 'succeeded' FROM private.background_jobs WHERE id = :'queue_job_id'::uuid)
+  AND (SELECT count(*) = 2 FROM private.background_job_attempts WHERE job_id = :'queue_job_id'::uuid),
+  'job and attempt history retain the complete lifecycle'
+);
+
+SET ROLE service_role;
+SELECT (public.enqueue_background_job(
+  'system.noop', '{}'::jsonb, NULL, 'portable-terminal',
+  '91000000-0000-0000-0000-000000000002', 1
+)->>'job_id') AS terminal_job_id \gset
+SELECT public.worker_claim_background_job('portable-worker', 60);
+SELECT test.assert_true(
+  public.worker_fail_background_job('portable-worker', :'terminal_job_id'::uuid, 'permanent_test', false) = 'dead_letter',
+  'non-retryable failure is dead-lettered'
+);
+SELECT test.assert_true(
+  ((public.worker_get_queue_metrics()->>'dead_letter')::integer = 1),
+  'queue metrics expose the terminal backlog without job payloads'
+);
+RESET ROLE;
 
 SET ROLE anon;
 SELECT test.assert_true(

@@ -38,7 +38,11 @@ test("overlay and backdrop cards expose preview and rename actions", () => {
 test("user administration submits an assignment list through the server function", () => {
   const users = source("src/routes/_authenticated/users.tsx");
   const server = source("src/lib/api/users.functions.ts");
+  const migration = source(
+    "supabase/migrations/20260809201651_admin_provisioned_user_accounts.sql",
+  );
   assert.match(users, /dealership_ids: user\.role === "owner" \? \[\] : dealershipIds/);
   assert.match(server, /admin_update_user_account_access/);
-  assert.match(server, /assertActiveDealerships/);
+  assert.match(server, /assertRequestedScope/);
+  assert.match(migration, /validate_dealer_account_scope/);
 });
