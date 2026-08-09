@@ -6,7 +6,18 @@ This runbook covers disposable Supabase validation and the explicitly authorized
 
 On 2026-08-09, the DealerShot testing project `oyuvdarrkwpqmufzidnc` was explicitly authorized for an in-place Phase 1 migration and acceptance run. The hosted runner still refuses that protected reference by default; it accepts it only with the exact project-bound confirmation documented below.
 
-Local verification applies the complete chain to disposable PostgreSQL 17 and exercises grants, RLS, Storage policy expressions, lifecycle procedures, settings, audit, and jobs. Real GoTrue, hosted JWT/session behavior, native Storage, email delivery, hosted extensions, and a deployed worker remain release gates until an independent hosted environment is available.
+Local verification applies the complete chain to disposable PostgreSQL 17 and exercises grants, RLS, Storage policy expressions, lifecycle procedures, settings, audit, and jobs. On 2026-08-09 the exact hosted runner also passed against the authorized DealerShot project with real GoTrue users/JWTs, native Storage, invitation identity handling, password-reset containment, settings, immutable audit, and durable queue primitives. The DigitalOcean web service and non-routable worker were then deployed from `feature/expansion-phase-1-foundation` with Autodeploy off.
+
+## Hosted acceptance evidence (2026-08-09)
+
+- Pre-migration baseline: 1 Auth user, 1 profile, 1 dealership, 0 vehicles, 0 photos, 1 document, 5 Storage buckets, and 7 Storage objects. The project was healthy on PostgreSQL 17.6 with `row_security=on`.
+- Missing migrations `20260809201651`, `20260809203613`, and `20260809220000` were dry-run and applied in order. Migration `20260809223000_preserve_audit_subject_identifiers.sql` was subsequently applied to preserve immutable audit identifiers during account erasure.
+- Hosted introspection passed with 22 registered migrations, 17 RLS-enabled public tables, private job/idempotency tables without client grants, fixed `SECURITY DEFINER` search paths, one completed existing Owner, and no protected audit-subject foreign keys.
+- The hosted acceptance runner passed all 11 groups. The observed existing session after an administrator password reset was `revoked`; DealerShot database containment also denied business data while password change was required.
+- Native Storage own-tenant mutations passed; cross-tenant mutation was denied; reviewed public reads were unchanged.
+- Queue enqueue, deduplication, concurrent claim, lease/heartbeat/completion, retry/backoff, expired lease reclaim, max-attempt dead-lettering, and metrics passed. PGMQ 1.5.1 was available but intentionally not installed.
+- The deployed worker emitted `worker.started`, periodic safe metrics, and completed the live `system.noop` acceptance job in one attempt without logging credentials.
+- Custom SMTP remains an external prerequisite for dependable outbound invitation/reset email delivery; Create Login Now does not depend on it.
 
 ## 1. Prove the authorized environment
 
@@ -34,8 +45,9 @@ Apply every repository migration in filename order. The final Phase 1 migrations
 1. `20260809201651_admin_provisioned_user_accounts.sql`
 2. `20260809203613_phase_1_settings_and_durable_jobs.sql`
 3. `20260809220000_harden_hosted_password_lifecycle.sql`
+4. `20260809223000_preserve_audit_subject_identifiers.sql`
 
-The first automatically backfills existing profiles as completed `existing` onboarding; no manual backfill is expected. The final migration adds reset containment/serialization. If its unique index finds duplicate active resets, reconcile them instead of weakening the migration.
+The first automatically backfills existing profiles as completed `existing` onboarding; no manual backfill is expected. The third migration adds reset containment/serialization. If its unique index finds duplicate active resets, reconcile them instead of weakening the migration. The fourth preserves immutable audit subject identifiers when a profile or Auth user is erased.
 
 Run [phase1_introspection.sql](../supabase/tests/hosted/phase1_introspection.sql) read-only in SQL Editor or via a database URL held only in the current process:
 
@@ -103,7 +115,7 @@ Verify exactly one intended active Owner. Create every Dealer Admin/Staff accoun
 
 Deploy the reviewed feature branch and exact reported SHA—not `main`—to the existing DealerShot testing app serving `https://dealershot.studiogecko.dev`. Do not modify unrelated apps or DNS. Keep Autodeploy off.
 
-Web: root `Dockerfile`, default `node .output/server/index.mjs`, port 8080, `/health`, one `basic-xxs` instance.
+Web: root `Dockerfile`, default `node .output/server/index.mjs`, port 8080, `/health`, one `basic-xs` instance.
 
 Worker: same branch/SHA/image, `node .worker/index.mjs`, one `basic-xxs`, no HTTP port/route/ingress/hostname, Autodeploy off.
 
@@ -121,7 +133,7 @@ Worker: same branch/SHA/image, `node .worker/index.mjs`, one `basic-xxs`, no HTT
 | `WORKER_LEASE_SECONDS=60`          |        no |          no |            yes |      no |
 | `WORKER_METRICS_INTERVAL_MS=60000` |        no |          no |            yes |      no |
 
-All Supabase values must belong to one disposable reference. Never use a `VITE_` service key or pass it as a Docker build argument.
+All Supabase values must belong to the explicitly authorized DealerShot reference (or to a separately authorized disposable reference for a future run). Never use a `VITE_` service key or pass it as a Docker build argument.
 
 ## 7. Manual acceptance checklist
 
@@ -160,4 +172,4 @@ Do not write destructive down migrations during an incident. Phase 1 is additive
 
 ## 10. End of testing
 
-Remove the temporary DigitalOcean app, destroy the disposable Supabase environment, clear environment variables, unlink the checkout, and verify no keys/credentials remain in files, profiles, logs, screenshots, clipboard history, or stashes. Triage/fix Phase 1 findings and repeat hosted acceptance before merging `main`. Phase 2 remains blocked until Priority #1 and Phase 1 have hosted evidence-backed approval.
+For the authorized DealerShot testing environment, keep the DigitalOcean app, worker, and additive Supabase migrations in place so product testing can continue. Remove only task-created fixtures that are no longer needed, clear local process variables, remove linked-project metadata, and verify no keys or credentials remain in files, build output, logs, screenshots, clipboard history, or stashes. For a separately created disposable project, destroy that project after evidence capture. Triage any new Phase 1 finding and repeat hosted acceptance before merging `main`. Phase 2 remains out of scope until Phase 1 manual testing is accepted.
