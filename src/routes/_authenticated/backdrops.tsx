@@ -110,15 +110,20 @@ function BackdropsPage() {
       </div>
 
       {loading ? (
-        <div className="text-sm text-muted-foreground text-center py-16">Loading…</div>
+        <div className="motion-content text-sm text-muted-foreground text-center py-16">
+          Loading…
+        </div>
       ) : items.length === 0 ? (
-        <div className="text-sm text-muted-foreground text-center py-16 rounded-xl border border-dashed border-border">
+        <div className="motion-empty text-sm text-muted-foreground text-center py-16 rounded-xl border border-dashed border-border">
           No backdrops yet. Upload a background image to get started.
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="motion-content grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {items.map((b) => (
-            <div key={b.id} className="rounded-xl border border-border bg-card overflow-hidden">
+            <div
+              key={b.id}
+              className="motion-card rounded-xl border border-border bg-card overflow-hidden"
+            >
               <div className="aspect-[16/9] bg-secondary overflow-hidden">
                 <img
                   src={b.image_url}
@@ -201,8 +206,8 @@ function BackdropForm({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
+    <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+      <div className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
         <h2 className="text-lg font-semibold text-card-foreground mb-1">Add Backdrop</h2>
         <p className="text-xs text-muted-foreground mb-5">Upload a JPG or PNG background image</p>
         <form onSubmit={handleSubmit} className="space-y-4">

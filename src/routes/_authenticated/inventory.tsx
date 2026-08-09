@@ -201,19 +201,21 @@ function InventoryPage() {
       </div>
 
       {loading ? (
-        <div className="text-sm text-muted-foreground text-center py-16">Loading…</div>
+        <div className="motion-content text-sm text-muted-foreground text-center py-16">
+          Loading…
+        </div>
       ) : filtered.length === 0 ? (
-        <div className="text-sm text-muted-foreground text-center py-16 rounded-xl border border-dashed border-border">
+        <div className="motion-empty text-sm text-muted-foreground text-center py-16 rounded-xl border border-dashed border-border">
           No vehicles match your filters.
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="motion-content grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((v) => (
             <Link
               key={v.id}
               to="/vehicles/$id"
               params={{ id: v.id }}
-              className="group rounded-xl border border-border bg-card overflow-hidden hover:border-primary/60 transition-colors"
+              className="motion-card group rounded-xl border border-border bg-card overflow-hidden hover:border-primary/60"
             >
               <div className="aspect-[4/3] bg-secondary flex items-center justify-center text-muted-foreground text-xs overflow-hidden">
                 {v.thumbnail_url ? (
@@ -241,7 +243,7 @@ function InventoryPage() {
                   {v.condition && <span>· {v.condition}</span>}
                 </div>
                 <div className="mt-3">
-                  <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide text-secondary-foreground">
+                  <span className="motion-status inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide text-secondary-foreground">
                     {v.status || "—"}
                   </span>
                 </div>

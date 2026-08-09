@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { AppNav } from "@/components/AppNav";
@@ -12,6 +12,7 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
   const { session, profile, loading, authorizationError, retryAuthorization, signOut } = useAuth();
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   useEffect(() => {
     if (!loading && !session) {
@@ -63,7 +64,9 @@ function AuthenticatedLayout() {
       <div className="min-h-screen bg-background">
         <ImpersonationBanner />
         <AppNav />
-        <Outlet />
+        <div key={pathname} className="motion-page">
+          <Outlet />
+        </div>
       </div>
     </ImpersonationProvider>
   );

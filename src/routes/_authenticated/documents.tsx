@@ -48,7 +48,7 @@ function DocumentThumb({ doc }: { doc: { id: string; image_url: string; name: st
 
   if (state.kind === "loading") {
     return (
-      <div className="h-full w-full animate-pulse bg-secondary/60" aria-label="Loading preview" />
+      <div className="motion-skeleton h-full w-full bg-secondary/60" aria-label="Loading preview" />
     );
   }
   if (state.kind === "error") {
@@ -211,17 +211,19 @@ function DocumentsPage() {
       </div>
 
       {loading ? (
-        <div className="text-sm text-muted-foreground text-center py-16">Loading…</div>
+        <div className="motion-content text-sm text-muted-foreground text-center py-16">
+          Loading…
+        </div>
       ) : documents.length === 0 ? (
-        <div className="text-sm text-muted-foreground text-center py-16 rounded-xl border border-dashed border-border">
+        <div className="motion-empty text-sm text-muted-foreground text-center py-16 rounded-xl border border-dashed border-border">
           No documents yet. Upload one to get started.
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="motion-content grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {documents.map((d) => (
             <div
               key={d.id}
-              className="rounded-xl border border-border bg-card overflow-hidden flex flex-col"
+              className="motion-card rounded-xl border border-border bg-card overflow-hidden flex flex-col"
             >
               <div className="aspect-[16/9] bg-secondary flex items-center justify-center overflow-hidden">
                 <DocumentThumb doc={d} />
@@ -572,7 +574,9 @@ function BulkAttachModal({
 
         <div className="max-h-[50vh] overflow-y-auto rounded-md border border-border divide-y divide-border">
           {loading ? (
-            <div className="p-6 text-sm text-muted-foreground text-center">Loading…</div>
+            <div className="motion-content p-6 text-sm text-muted-foreground text-center">
+              Loading…
+            </div>
           ) : filtered.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground text-center">No vehicles match.</div>
           ) : (
@@ -582,7 +586,7 @@ function BulkAttachModal({
               return (
                 <label
                   key={v.id}
-                  className={`flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/40 cursor-pointer ${isAttached ? "opacity-60" : ""}`}
+                  className={`motion-row flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/40 cursor-pointer ${isAttached ? "opacity-60" : ""}`}
                 >
                   <input
                     type="checkbox"
@@ -639,11 +643,11 @@ function Modal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+      className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
-        className={`w-full ${wide ? "max-w-3xl" : "max-w-lg"} rounded-xl border border-border bg-card p-6 shadow-2xl`}
+        className={`motion-panel-static w-full ${wide ? "max-w-3xl" : "max-w-lg"} rounded-xl border border-border bg-card p-6 shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold text-card-foreground mb-1">{title}</h2>

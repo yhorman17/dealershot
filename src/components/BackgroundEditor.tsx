@@ -1020,9 +1020,9 @@ export function BackgroundEditor({
   const overlayCrop = pendingCrop ?? adjustCrop;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-background/80 backdrop-blur-sm">
+    <div className="motion-overlay-static fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-background/80 backdrop-blur-sm">
       <div className="min-h-full w-full flex items-stretch sm:items-start justify-center p-0 sm:p-4">
-        <div className="w-full sm:max-w-3xl sm:rounded-xl border-0 sm:border border-border bg-card p-4 sm:p-6 shadow-2xl sm:my-8">
+        <div className="motion-panel-static w-full sm:max-w-3xl sm:rounded-xl border-0 sm:border border-border bg-card p-4 sm:p-6 shadow-2xl sm:my-8">
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-card-foreground">Change Background</h2>
@@ -1166,7 +1166,7 @@ export function BackgroundEditor({
               <TabBar tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
               {/* Tab content */}
-              <div className="mt-4">
+              <div key={activeTab} className="motion-content mt-4">
                 <div className="flex items-center justify-end gap-3 mb-2">
                   <button
                     type="button"
@@ -1204,7 +1204,7 @@ export function BackgroundEditor({
                         </span>
                       </button>
                       {carPosOpen && (
-                        <div className="px-3 pb-3 space-y-3">
+                        <div className="motion-content px-3 pb-3 space-y-3">
                           <SliderRow
                             label="Position X"
                             value={carX}
@@ -1617,13 +1617,13 @@ function TabBar<T extends string>({
               data-tab-key={t.key}
               type="button"
               onClick={() => onChange(t.key)}
-              className={`relative shrink-0 px-4 py-3 text-sm font-medium transition-colors min-h-[44px] ${
+              className={`motion-tab relative shrink-0 px-4 py-3 text-sm font-medium min-h-[44px] ${
                 active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {t.label}
               {active && (
-                <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-primary rounded-full" />
+                <span className="motion-content absolute left-2 right-2 -bottom-px h-0.5 bg-primary rounded-full" />
               )}
             </button>
           );

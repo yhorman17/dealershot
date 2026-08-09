@@ -202,13 +202,13 @@ function UsersPage() {
         <div className="flex rounded-md border border-border bg-card p-1 self-start">
           <button
             onClick={() => setTab("active")}
-            className={`px-3 py-1.5 text-sm rounded ${tab === "active" ? "bg-secondary text-foreground" : "text-muted-foreground"}`}
+            className={`motion-tab px-3 py-1.5 text-sm rounded ${tab === "active" ? "bg-secondary text-foreground" : "text-muted-foreground"}`}
           >
             Active users ({filteredUsers.length})
           </button>
           <button
             onClick={() => setTab("pending")}
-            className={`px-3 py-1.5 text-sm rounded ${tab === "pending" ? "bg-secondary text-foreground" : "text-muted-foreground"}`}
+            className={`motion-tab px-3 py-1.5 text-sm rounded ${tab === "pending" ? "bg-secondary text-foreground" : "text-muted-foreground"}`}
           >
             Pending invitations ({pendingInvites.length})
           </button>
@@ -216,7 +216,7 @@ function UsersPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
+        <div className="motion-content rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
           Loading…
         </div>
       ) : tab === "active" ? (
@@ -288,14 +288,14 @@ function ActiveUsersTab({
 }) {
   if (users.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
+      <div className="motion-empty rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
         No users found.
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="motion-content rounded-xl border border-border bg-card overflow-hidden">
       {/* Desktop table */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
@@ -314,7 +314,7 @@ function ActiveUsersTab({
               const d = u.dealership_id ? dealershipById.get(u.dealership_id) : null;
               const isSelf = u.id === currentUserId;
               return (
-                <tr key={u.id} className="border-t border-border hover:bg-secondary/20">
+                <tr key={u.id} className="motion-row border-t border-border hover:bg-secondary/20">
                   <td className="px-4 py-3 text-card-foreground">
                     <div className="flex items-center gap-2">
                       <span>{u.full_name || "—"}</span>
@@ -372,7 +372,7 @@ function ActiveUsersTab({
           const d = u.dealership_id ? dealershipById.get(u.dealership_id) : null;
           const isSelf = u.id === currentUserId;
           return (
-            <div key={u.id} className="p-4">
+            <div key={u.id} className="motion-row p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-medium text-card-foreground truncate">
@@ -383,7 +383,7 @@ function ActiveUsersTab({
                     <RoleBadge role={u.role} />
                     {d && <span className="text-[10px] text-muted-foreground">{d.name}</span>}
                     {u.status === "deactivated" && (
-                      <span className="text-[10px] uppercase tracking-wide rounded-full bg-destructive/15 text-destructive px-1.5 py-0.5">
+                      <span className="motion-status text-[10px] uppercase tracking-wide rounded-full bg-destructive/15 text-destructive px-1.5 py-0.5">
                         Deactivated
                       </span>
                     )}
@@ -444,14 +444,14 @@ function PendingInvitesTab({
 }) {
   if (invites.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
+      <div className="motion-empty rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
         No pending invitations. Click "Invite user" to add someone.
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="motion-content rounded-xl border border-border bg-card overflow-hidden">
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-secondary/40 text-left text-xs uppercase text-muted-foreground">
@@ -469,7 +469,7 @@ function PendingInvitesTab({
             {invites.map((i) => {
               const d = i.dealership_id ? dealershipById.get(i.dealership_id) : null;
               return (
-                <tr key={i.id} className="border-t border-border hover:bg-secondary/20">
+                <tr key={i.id} className="motion-row border-t border-border hover:bg-secondary/20">
                   <td className="px-4 py-3 text-card-foreground">{i.email}</td>
                   <td className="px-4 py-3 text-muted-foreground">{i.full_name}</td>
                   <td className="px-4 py-3">
@@ -603,7 +603,7 @@ function RoleBadge({ role }: { role: string }) {
         : "bg-secondary text-secondary-foreground border-border";
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}
+      className={`motion-status inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}
     >
       {label}
     </span>
@@ -661,8 +661,8 @@ function EditUserModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
+    <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+      <div className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-card-foreground">Edit user</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -763,8 +763,8 @@ function ConfirmRemove({
 }) {
   const [text, setText] = useState("");
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
+    <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+      <div className="motion-panel-static w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
         <h2 className="text-lg font-semibold text-card-foreground mb-1">Remove user</h2>
         <p className="text-sm text-muted-foreground mb-4">
           This permanently deletes <span className="text-foreground font-medium">{user.email}</span>{" "}

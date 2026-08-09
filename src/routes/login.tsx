@@ -65,7 +65,7 @@ function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="motion-control w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 placeholder="you@dealership.com"
               />
             </div>
@@ -82,7 +82,7 @@ function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="motion-control w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 placeholder="••••••••"
               />
             </div>
@@ -94,7 +94,7 @@ function LoginPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+              className="motion-button w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
             >
               {submitting ? "Signing in…" : "Sign in"}
             </button>
@@ -102,7 +102,7 @@ function LoginPage() {
               <button
                 type="button"
                 onClick={() => setForgotOpen(true)}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="motion-button text-xs text-muted-foreground hover:text-foreground"
               >
                 Forgot password?
               </button>
@@ -120,6 +120,15 @@ function ForgotPasswordDialog({ onClose }: { onClose: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
 
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -131,11 +140,22 @@ function ForgotPasswordDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
+    <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reset-password-title"
+        className="motion-panel-static w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+      >
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-lg font-semibold text-card-foreground">Reset password</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <h2 id="reset-password-title" className="text-lg font-semibold text-card-foreground">
+            Reset password
+          </h2>
+          <button
+            onClick={onClose}
+            aria-label="Close password reset dialog"
+            className="motion-icon-button text-muted-foreground hover:text-foreground"
+          >
             ✕
           </button>
         </div>
@@ -147,7 +167,7 @@ function ForgotPasswordDialog({ onClose }: { onClose: () => void }) {
             <div className="mt-6 flex justify-end">
               <button
                 onClick={onClose}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                className="motion-button rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
                 Done
               </button>
@@ -164,20 +184,20 @@ function ForgotPasswordDialog({ onClose }: { onClose: () => void }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@dealership.com"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="motion-control w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+                className="motion-button px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                className="motion-button rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
               >
                 {submitting ? "Sending…" : "Send reset link"}
               </button>

@@ -223,7 +223,9 @@ export function OwnerDashboard() {
         </div>
         <div className="max-h-96 overflow-y-auto divide-y divide-border">
           {loading ? (
-            <div className="px-5 py-8 text-sm text-muted-foreground text-center">Loading…</div>
+            <div className="motion-content px-5 py-8 text-sm text-muted-foreground text-center">
+              Loading…
+            </div>
           ) : events.length === 0 ? (
             <div className="px-5 py-8 text-sm text-muted-foreground text-center">
               No activity yet.
@@ -266,9 +268,13 @@ export function OwnerDashboard() {
         </div>
 
         {loading ? (
-          <div className="p-8 text-sm text-muted-foreground text-center">Loading…</div>
+          <div className="motion-content p-8 text-sm text-muted-foreground text-center">
+            Loading…
+          </div>
         ) : dealerships.length === 0 ? (
-          <div className="p-8 text-sm text-muted-foreground text-center">No dealerships yet.</div>
+          <div className="motion-empty p-8 text-sm text-muted-foreground text-center">
+            No dealerships yet.
+          </div>
         ) : (
           <>
             {/* Desktop table */}
@@ -289,7 +295,10 @@ export function OwnerDashboard() {
                   {dealerships.map((d) => {
                     const s = stats.get(d.id) ?? { users: 0, vehicles: 0, photos: 0 };
                     return (
-                      <tr key={d.id} className="border-t border-border hover:bg-secondary/20">
+                      <tr
+                        key={d.id}
+                        className="motion-row border-t border-border hover:bg-secondary/20"
+                      >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             {d.logo_url ? (
@@ -441,7 +450,7 @@ export function OwnerDashboard() {
 
 function Kpi({ label, value, loading }: { label: string; value: number; loading: boolean }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+    <div className="motion-card rounded-xl border border-border bg-card p-4 sm:p-5">
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-1.5 text-2xl sm:text-3xl font-semibold text-card-foreground tabular-nums">
         {loading ? "—" : value.toLocaleString()}
@@ -463,7 +472,7 @@ function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_STYLES[status] ?? STATUS_STYLES.active;
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}
+      className={`motion-status inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}
     >
       {status}
     </span>
@@ -786,8 +795,8 @@ function Modal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
+    <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+      <div className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-start justify-between mb-4">
           <h2 className="text-lg font-semibold text-card-foreground">{title}</h2>
           <button

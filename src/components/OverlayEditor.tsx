@@ -176,8 +176,8 @@ export function OverlayEditor({
   })();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-auto">
-      <div className="w-full max-w-3xl rounded-xl border border-border bg-card p-6 shadow-2xl my-8">
+    <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-auto">
+      <div className="motion-panel-static w-full max-w-3xl rounded-xl border border-border bg-card p-6 shadow-2xl my-8">
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold text-card-foreground">Add Overlay</h2>

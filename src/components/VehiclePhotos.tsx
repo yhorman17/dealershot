@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { OverlayEditor } from "@/components/OverlayEditor";
 import { BackgroundEditor } from "@/components/BackgroundEditor";
@@ -119,28 +119,42 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
     })();
   }, [vehicleId]);
 
-  const load = async () => {
-    const [{ data: ph }, { data: vd }] = await Promise.all([
-      supabase
-        .from("photos")
-        .select(
-          "id, vehicle_id, image_url, shot_type, created_at, sort_order, is_main, is_cutout, cutout_status",
-        )
-        .eq("vehicle_id", vehicleId),
-      supabase
-        .from("vehicle_documents")
-        .select(
-          "id, vehicle_id, document_id, sort_order, is_main, created_at, document:documents(id, name, image_url)",
-        )
-        .eq("vehicle_id", vehicleId),
-    ]);
-    setPhotos((ph as Photo[]) || []);
-    setDocLinks((vd as unknown as VehicleDocument[]) || []);
-  };
+  const load = useCallback(
+    async ({ animate = false }: { animate?: boolean } = {}) => {
+      const [{ data: ph }, { data: vd }] = await Promise.all([
+        supabase
+          .from("photos")
+          .select(
+            "id, vehicle_id, image_url, shot_type, created_at, sort_order, is_main, is_cutout, cutout_status",
+          )
+          .eq("vehicle_id", vehicleId),
+        supabase
+          .from("vehicle_documents")
+          .select(
+            "id, vehicle_id, document_id, sort_order, is_main, created_at, document:documents(id, name, image_url)",
+          )
+          .eq("vehicle_id", vehicleId),
+      ]);
+      const commit = () => {
+        setPhotos((ph as Photo[]) || []);
+        setDocLinks((vd as unknown as VehicleDocument[]) || []);
+      };
+      const canAnimateLayout =
+        animate &&
+        !window.matchMedia("(prefers-reduced-motion: reduce)").matches &&
+        "startViewTransition" in document;
+      if (canAnimateLayout) {
+        document.startViewTransition(commit);
+      } else {
+        commit();
+      }
+    },
+    [vehicleId],
+  );
 
   useEffect(() => {
     void load();
-  }, [vehicleId]);
+  }, [load]);
 
   // Subscribe to in-memory processing queue so badges update live.
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
@@ -207,10 +221,10 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
     if (!isExteriorShot(photo.shot_type)) return;
     enqueueCutout(photo.id, photo.image_url, (res) => {
       if (res.ok) {
-        void load();
+        void load({ animate: true });
       } else {
         toast.error("Cutout failed — using original");
-        void load();
+        void load({ animate: true });
       }
     });
   };
@@ -221,7 +235,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
     const created = await uploadFile(file, shotName);
     if (created && existing) await deletePhoto(existing, true);
     if (created) {
-      await load();
+      await load({ animate: true });
       queueCutoutIfEligible(created);
     }
     setUploading(null);
@@ -230,7 +244,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
   const handleFreeUpload = async (files: FileList, shotType: string | null) => {
     setUploading("free");
     for (const file of Array.from(files)) await uploadFile(file, shotType);
-    await load();
+    await load({ animate: true });
     setUploading(null);
   };
 
@@ -239,7 +253,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
     if (!label) return;
     setUploading(`custom:${label}`);
     await uploadFile(file, label);
-    await load();
+    await load({ animate: true });
     setUploading(null);
     setCustomLabel("");
     setAddingCustom(false);
@@ -258,7 +272,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
       /* ignore */
     }
     await supabase.from("photos").delete().eq("id", photo.id);
-    if (!skipConfirm) await load();
+    if (!skipConfirm) await load({ animate: true });
   };
 
   const detachDocument = async (link: VehicleDocument) => {
@@ -269,7 +283,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
     )
       return;
     await supabase.from("vehicle_documents").delete().eq("id", link.id);
-    await load();
+    await load({ animate: true });
   };
 
   const clearAllMains = async () => {
@@ -294,7 +308,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
     } else if (item.kind === "document" && item.link) {
       await supabase.from("vehicle_documents").update({ is_main: true }).eq("id", item.link.id);
     }
-    await load();
+    await load({ animate: true });
   };
 
   const moveItem = async (item: GalleryItem, direction: -1 | 1) => {
@@ -316,7 +330,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
     };
     await updateOne(item, newA);
     await updateOne(other, newB);
-    await load();
+    await load({ animate: true });
   };
 
   const attachDocument = async (doc: LibraryDoc) => {
@@ -330,7 +344,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
       return;
     }
     setShowAttachDoc(false);
-    await load();
+    await load({ animate: true });
   };
 
   const completed = SHOT_TYPES.filter((s) => photos.some((p) => p.shot_type === s.name)).length;
@@ -345,7 +359,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
           <button
             key={m}
             onClick={() => setMode(m)}
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+            className={`motion-tab flex-1 px-4 py-3 text-sm font-medium ${
               mode === m
                 ? "bg-secondary text-foreground"
                 : "text-muted-foreground hover:text-foreground"
@@ -357,17 +371,24 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
       </div>
 
       {mode === "guided" ? (
-        <div className="p-6">
+        <div key="guided" className="motion-content p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-card-foreground">Standard Shot Checklist</h3>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground" aria-live="polite">
               {completed} of {SHOT_TYPES.length} shots complete
             </span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden mb-6">
+          <div
+            className="h-1.5 w-full rounded-full bg-secondary overflow-hidden mb-6"
+            role="progressbar"
+            aria-label="Guided shot completion"
+            aria-valuemin={0}
+            aria-valuemax={SHOT_TYPES.length}
+            aria-valuenow={completed}
+          >
             <div
-              className="h-full bg-primary transition-all"
-              style={{ width: `${(completed / SHOT_TYPES.length) * 100}%` }}
+              className="motion-progress-bar h-full w-full origin-left bg-primary"
+              style={{ transform: `scaleX(${completed / SHOT_TYPES.length})` }}
             />
           </div>
           <ul className="space-y-3">
@@ -376,7 +397,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
               return (
                 <li
                   key={shot.name}
-                  className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 p-3 rounded-lg border border-border bg-background"
+                  className={`motion-row flex flex-col sm:flex-row items-start gap-3 sm:gap-4 p-3 rounded-lg border bg-background ${taken ? "border-primary/35" : "border-border"}`}
                 >
                   <div className="flex items-start gap-3 sm:contents w-full">
                     <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-secondary flex items-center justify-center">
@@ -393,7 +414,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         {taken && (
-                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500/20 text-green-400 text-[10px]">
+                          <span className="motion-status inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500/20 text-green-400 text-[10px]">
                             ✓
                           </span>
                         )}
@@ -402,7 +423,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                       <p className="text-xs text-muted-foreground mt-1">{shot.tip}</p>
                     </div>
                   </div>
-                  <label className="w-full sm:w-auto sm:flex-shrink-0 cursor-pointer rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] flex items-center justify-center text-xs font-medium text-secondary-foreground hover:bg-secondary/80">
+                  <label className="motion-upload-target w-full sm:w-auto sm:flex-shrink-0 cursor-pointer rounded-md border border-border bg-secondary px-3 py-2 min-h-[44px] flex items-center justify-center text-xs font-medium text-secondary-foreground hover:bg-secondary/80">
                     {uploading === shot.name ? "..." : taken ? "Replace" : "Capture"}
                     <input
                       type="file"
@@ -433,7 +454,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                 {customShots.map((p) => (
                   <li
                     key={p.id}
-                    className="flex items-center gap-3 p-2 rounded-md border border-border bg-background"
+                    className="motion-content flex items-center gap-3 p-2 rounded-md border border-border bg-background"
                   >
                     <div className="flex-shrink-0 w-12 h-12 rounded overflow-hidden bg-background">
                       <img
@@ -451,7 +472,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
             )}
 
             {addingCustom ? (
-              <div className="space-y-2 p-3 rounded-md border border-border bg-background">
+              <div className="motion-content space-y-2 p-3 rounded-md border border-border bg-background">
                 <label className="block text-xs font-medium text-card-foreground">
                   Custom shot label
                 </label>
@@ -499,7 +520,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
             ) : (
               <button
                 onClick={() => setAddingCustom(true)}
-                className="w-full rounded-md border border-dashed border-border bg-background px-4 py-3 text-sm font-medium text-card-foreground hover:border-primary/60 hover:text-primary transition-colors"
+                className="motion-upload-target w-full rounded-md border border-dashed border-border bg-background px-4 py-3 text-sm font-medium text-card-foreground hover:border-primary/60 hover:text-primary"
               >
                 + Add Custom Shot
               </button>
@@ -507,7 +528,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
 
             <button
               onClick={() => setShowAttachDoc(true)}
-              className="mt-3 w-full rounded-md border border-dashed border-border bg-background px-4 py-3 text-sm font-medium text-card-foreground hover:border-primary/60 hover:text-primary transition-colors"
+              className="motion-upload-target mt-3 w-full rounded-md border border-dashed border-border bg-background px-4 py-3 text-sm font-medium text-card-foreground hover:border-primary/60 hover:text-primary"
             >
               + Attach Document from Library
             </button>
@@ -541,7 +562,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                 eligible.forEach((p) => {
                   enqueueCutout(p.id, p.image_url, (res) => {
                     if (!res.ok) toast.error(`Cutout failed for ${p.shot_type ?? "photo"}`);
-                    void load();
+                    void load({ animate: true });
                   });
                 });
               }}
@@ -552,9 +573,11 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
           )}
         </div>
         {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">No photos yet.</p>
+          <p className="motion-empty text-sm text-muted-foreground text-center py-8">
+            No photos yet.
+          </p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <div className="motion-content grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {sortItems(items).map((it) => {
               const nonMainIdx = it.is_main
                 ? -1
@@ -570,7 +593,10 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
               return (
                 <div
                   key={it.key}
-                  className={`group relative rounded-md overflow-hidden bg-background ${it.is_main ? "ring-2 ring-primary" : ""}`}
+                  className={`motion-gallery-item group relative rounded-md overflow-hidden bg-background ${it.is_main ? "ring-2 ring-primary" : ""}`}
+                  style={{
+                    viewTransitionName: `ds-gallery-${it.key.replace(/[^a-zA-Z0-9-]/g, "-")}`,
+                  }}
                 >
                   <div
                     className="aspect-square relative"
@@ -599,7 +625,10 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
 
                     {processing && (
                       <div className="absolute inset-0 flex items-end justify-center pb-2 pointer-events-none">
-                        <span className="inline-flex items-center gap-1.5 rounded bg-black/70 backdrop-blur-sm px-2 py-1 text-[10px] font-medium text-white animate-pulse">
+                        <span
+                          className="motion-processing inline-flex items-center gap-1.5 rounded bg-black/70 backdrop-blur-sm px-2 py-1 text-[10px] font-medium text-white"
+                          role="status"
+                        >
                           <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary" />
                           Processing cutout…
                         </span>
@@ -608,19 +637,19 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
 
                     <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1">
                       {it.is_main && (
-                        <span className="inline-flex items-center rounded bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">
+                        <span className="motion-status inline-flex items-center rounded bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">
                           MAIN
                         </span>
                       )}
                       {isDoc && (
-                        <span className="inline-flex items-center rounded bg-primary/90 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-primary-foreground">
+                        <span className="motion-status inline-flex items-center rounded bg-primary/90 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-primary-foreground">
                           DOCUMENT
                         </span>
                       )}
                       {isCutout && !isDoc && (
                         <span
                           title="Background removed"
-                          className="inline-flex items-center justify-center rounded bg-primary/90 w-5 h-5 text-[11px] text-primary-foreground"
+                          className="motion-status inline-flex items-center justify-center rounded bg-primary/90 w-5 h-5 text-[11px] text-primary-foreground"
                         >
                           ✂
                         </span>
@@ -705,7 +734,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
           onClose={() => setOverlayPhoto(null)}
           onSaved={() => {
             setOverlayPhoto(null);
-            void load();
+            void load({ animate: true });
           }}
         />
       )}
@@ -717,7 +746,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
           onClose={() => setBgPhoto(null)}
           onSaved={() => {
             setBgPhoto(null);
-            void load();
+            void load({ animate: true });
           }}
         />
       )}
@@ -747,7 +776,7 @@ function FreeUploadPanel({
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="p-6">
+    <div key="free" className="motion-content p-6">
       <div className="grid sm:grid-cols-2 gap-3 mb-4">
         <div>
           <label className="block text-xs font-medium text-card-foreground mb-1.5">
@@ -767,7 +796,7 @@ function FreeUploadPanel({
           </select>
         </div>
       </div>
-      <label className="block cursor-pointer rounded-lg border-2 border-dashed border-border bg-background p-10 text-center hover:border-primary/60 transition-colors">
+      <label className="motion-upload-target block cursor-pointer rounded-lg border-2 border-dashed border-border bg-background p-10 text-center hover:border-primary/60">
         <p className="text-sm font-medium text-card-foreground">
           {uploading ? "Uploading…" : "Tap to take a photo or select images"}
         </p>
@@ -788,7 +817,7 @@ function FreeUploadPanel({
       </label>
       <button
         onClick={onAttachDocument}
-        className="mt-3 w-full rounded-md border border-dashed border-border bg-background px-4 py-3 text-sm font-medium text-card-foreground hover:border-primary/60 hover:text-primary transition-colors"
+        className="motion-upload-target mt-3 w-full rounded-md border border-dashed border-border bg-background px-4 py-3 text-sm font-medium text-card-foreground hover:border-primary/60 hover:text-primary"
       >
         + Attach Document from Library
       </button>
@@ -824,11 +853,11 @@ function PickDocumentModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+      className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl rounded-xl border border-border bg-card p-6 shadow-2xl max-h-[85vh] overflow-y-auto"
+        className="motion-panel-static w-full max-w-3xl rounded-xl border border-border bg-card p-6 shadow-2xl max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
@@ -852,7 +881,7 @@ function PickDocumentModal({
                   key={d.id}
                   disabled={attached}
                   onClick={() => onPick(d)}
-                  className={`text-left rounded-lg border border-border bg-background overflow-hidden hover:border-primary transition-colors ${attached ? "opacity-50 cursor-not-allowed" : ""}`}
+                  className={`motion-card text-left rounded-lg border border-border bg-background overflow-hidden hover:border-primary ${attached ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
                   <div className="aspect-[16/9] bg-secondary flex items-center justify-center">
                     <img

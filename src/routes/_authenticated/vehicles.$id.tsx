@@ -89,7 +89,9 @@ function VehicleDetailPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-5xl px-6 py-10 text-sm text-muted-foreground">Loading…</main>
+      <main className="motion-content mx-auto max-w-5xl px-6 py-10 text-sm text-muted-foreground">
+        Loading…
+      </main>
     );
   }
   if (!vehicle) {
@@ -164,7 +166,7 @@ function VehicleDetailPage() {
       </div>
 
       {heroUrl && (
-        <div className="mt-6 aspect-[16/9] rounded-xl overflow-hidden bg-background border border-border">
+        <div className="motion-content mt-6 aspect-[16/9] rounded-xl overflow-hidden bg-background border border-border">
           <img
             src={heroUrl}
             alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}

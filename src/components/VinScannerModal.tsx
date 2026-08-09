@@ -175,7 +175,7 @@ export function VinScannerModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black flex flex-col">
+    <div className="motion-content fixed inset-0 z-[100] bg-black flex flex-col">
       <video
         ref={videoRef}
         autoPlay

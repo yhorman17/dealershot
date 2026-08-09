@@ -235,15 +235,15 @@ function ExportPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground text-center py-16">Loading…</p>
+        <p className="motion-content text-sm text-muted-foreground text-center py-16">Loading…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-16 rounded-xl border border-dashed border-border">
+        <p className="motion-empty text-sm text-muted-foreground text-center py-16 rounded-xl border border-dashed border-border">
           No vehicles match.
         </p>
       ) : (
         <ul className="divide-y divide-border rounded-xl border border-border bg-card overflow-hidden">
           {filtered.map((v) => (
-            <li key={v.id} className="flex items-center gap-3 p-3 hover:bg-secondary/40">
+            <li key={v.id} className="motion-row flex items-center gap-3 p-3 hover:bg-secondary/40">
               <input
                 type="checkbox"
                 checked={selected.has(v.id)}
@@ -265,7 +265,7 @@ function ExportPage() {
                   {v.stock_number || v.vin || "—"}
                 </p>
               </div>
-              <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide text-secondary-foreground">
+              <span className="motion-status inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide text-secondary-foreground">
                 {v.photo_count || 0} photo{v.photo_count === 1 ? "" : "s"}
               </span>
             </li>
@@ -274,14 +274,18 @@ function ExportPage() {
       )}
 
       {progress && (
-        <div className="fixed bottom-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-96 rounded-xl border border-border bg-card p-4 shadow-2xl z-40">
+        <div
+          className="motion-content fixed bottom-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-96 rounded-xl border border-border bg-card p-4 shadow-2xl z-40"
+          role="status"
+          aria-live="polite"
+        >
           <p className="text-xs mb-2">
             Preparing {progress.cur} of {progress.total} photos…
           </p>
           <div className="h-1.5 bg-secondary rounded overflow-hidden">
             <div
-              className="h-full bg-primary transition-all"
-              style={{ width: `${(progress.cur / progress.total) * 100}%` }}
+              className="motion-progress-bar h-full w-full origin-left bg-primary"
+              style={{ transform: `scaleX(${progress.cur / Math.max(progress.total, 1)})` }}
             />
           </div>
         </div>

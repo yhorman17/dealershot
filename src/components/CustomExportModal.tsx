@@ -104,8 +104,8 @@ export function CustomExportModal({ vehicles, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-stretch sm:items-center justify-center sm:p-4">
-      <div className="bg-card text-card-foreground w-full sm:max-w-3xl sm:rounded-xl border border-border flex flex-col max-h-screen sm:max-h-[90vh]">
+    <div className="motion-overlay-static fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-stretch sm:items-center justify-center sm:p-4">
+      <div className="motion-panel-static bg-card text-card-foreground w-full sm:max-w-3xl sm:rounded-xl border border-border flex flex-col max-h-screen sm:max-h-[90vh]">
         <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between gap-3">
           <h2 className="text-base sm:text-lg font-semibold">Custom Export</h2>
           <button
@@ -205,8 +205,8 @@ export function CustomExportModal({ vehicles, onClose }: Props) {
             </p>
             <div className="h-1.5 bg-secondary rounded overflow-hidden">
               <div
-                className="h-full bg-primary transition-all"
-                style={{ width: `${(progress.cur / progress.total) * 100}%` }}
+                className="motion-progress-bar h-full w-full origin-left bg-primary"
+                style={{ transform: `scaleX(${progress.cur / progress.total})` }}
               />
             </div>
           </div>

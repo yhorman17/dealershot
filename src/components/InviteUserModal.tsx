@@ -62,8 +62,8 @@ export function InviteUserModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
+    <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+      <div className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-lg font-semibold text-card-foreground">Invite user</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">

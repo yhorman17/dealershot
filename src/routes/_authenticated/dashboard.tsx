@@ -129,7 +129,7 @@ function StaffDashboard({
           <h1 className="text-3xl font-semibold tracking-tight text-foreground mt-1">
             {displayName}
           </h1>
-          <div className="mt-2 inline-flex items-center rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
+          <div className="motion-status mt-2 inline-flex items-center rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
             {roleLabel}
           </div>
         </div>
@@ -181,9 +181,9 @@ function StaffDashboard({
           </Link>
         </div>
         {loading ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+          <p className="motion-content text-sm text-muted-foreground py-8 text-center">Loading…</p>
         ) : recent.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border p-8 text-center">
+          <div className="motion-empty rounded-lg border border-dashed border-border p-8 text-center">
             <p className="text-sm text-muted-foreground mb-3">No vehicles yet.</p>
             <Link
               to="/vehicles/new"
@@ -194,13 +194,13 @@ function StaffDashboard({
             </Link>
           </div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="motion-content grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {recent.map((v) => (
               <Link
                 key={v.id}
                 to="/vehicles/$id"
                 params={{ id: v.id }}
-                className="group rounded-lg border border-border bg-background overflow-hidden hover:border-primary/60 transition-colors"
+                className="motion-card group rounded-lg border border-border bg-background overflow-hidden hover:border-primary/60"
               >
                 <div className="aspect-[4/3] bg-secondary flex items-center justify-center text-muted-foreground text-xs overflow-hidden">
                   {v.thumbnail_url ? (
@@ -234,7 +234,7 @@ function StaffDashboard({
 
       {/* Needs photos quick-list */}
       {!loading && needsPhotosIds.length > 0 && (
-        <section className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/5 p-6">
+        <section className="motion-content mt-6 rounded-xl border border-amber-500/30 bg-amber-500/5 p-6">
           <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
             <div>
               <h2 className="text-sm font-semibold text-card-foreground">
@@ -273,7 +273,7 @@ function StatCard({
 }) {
   const inner = (
     <div
-      className={`rounded-xl border bg-card p-6 h-full transition-colors ${
+      className={`motion-card rounded-xl border bg-card p-6 h-full ${
         accent
           ? "border-amber-500/40 hover:border-amber-500/70"
           : "border-border hover:border-primary/60"

@@ -74,11 +74,11 @@ function DealershipsPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
+        <div className="motion-content rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
           Loading…
         </div>
       ) : dealerships.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
+        <div className="motion-empty rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground text-center">
           No dealerships yet.
         </div>
       ) : (
@@ -86,7 +86,7 @@ function DealershipsPage() {
           {/* Mobile: card stack */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
             {dealerships.map((d) => (
-              <div key={d.id} className="rounded-xl border border-border bg-card p-4">
+              <div key={d.id} className="motion-card rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center gap-3">
                   {d.logo_url ? (
                     <img
@@ -101,7 +101,7 @@ function DealershipsPage() {
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-card-foreground truncate">{d.name}</p>
-                    <span className="inline-flex mt-0.5 items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide text-secondary-foreground">
+                    <span className="motion-status inline-flex mt-0.5 items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide text-secondary-foreground">
                       {d.subscription_status}
                     </span>
                   </div>
@@ -153,7 +153,7 @@ function DealershipsPage() {
               </thead>
               <tbody>
                 {dealerships.map((d) => (
-                  <tr key={d.id} className="border-t border-border">
+                  <tr key={d.id} className="motion-row border-t border-border">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {d.logo_url ? (
@@ -173,7 +173,7 @@ function DealershipsPage() {
                     <td className="px-4 py-3 text-muted-foreground">{d.address || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{d.phone || "—"}</td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-xs">
+                      <span className="motion-status inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-xs">
                         {d.subscription_status}
                       </span>
                     </td>
@@ -276,8 +276,8 @@ function DealershipForm({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
+    <div className="motion-overlay-static fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+      <div className="motion-panel-static w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
         <h2 className="text-lg font-semibold text-card-foreground mb-1">
           {dealership ? "Edit Dealership" : "Add Dealership"}
         </h2>
