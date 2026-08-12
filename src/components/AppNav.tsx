@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   PackageSearch,
+  Camera,
   PanelLeftClose,
   Plus,
   ScanLine,
@@ -52,6 +53,7 @@ export function AppNav({ children }: { children: ReactNode }) {
   const items: NavItem[] = [
     { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
     { to: "/inventory", label: "Inventory", icon: PackageSearch },
+    { to: "/bulk-photos", label: "Bulk Photos", icon: Camera },
     { to: "/overlays", label: "Overlays", icon: Images },
     { to: "/backdrops", label: "Backdrops", icon: Aperture },
     { to: "/documents", label: "Documents", icon: FileImage },
@@ -291,9 +293,11 @@ export function AppNav({ children }: { children: ReactNode }) {
 function pageTitle(pathname: string) {
   if (pathname.startsWith("/vehicles/new")) return "Add vehicle";
   if (pathname.startsWith("/vehicles/")) return "Vehicle workspace";
+  if (pathname.startsWith("/bulk-photos")) return "Bulk Photos";
   const labels: Record<string, string> = {
     "/dashboard": "Overview",
     "/inventory": "Inventory",
+    "/bulk-photos": "Bulk Photos",
     "/overlays": "Overlays",
     "/backdrops": "Backdrops",
     "/documents": "Documents",

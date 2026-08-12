@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { CONDITIONS, STATUSES, formatPrice, formatMiles } from "@/lib/vehicle-options";
-import { CarFront, Plus, SlidersHorizontal, X } from "lucide-react";
+import { Camera, CarFront, Plus, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -158,12 +158,19 @@ function InventoryPage() {
         title="Inventory"
         description="Find vehicles quickly, review retail readiness, and move directly into the photo workspace."
         actions={
-          <Button asChild>
-            <Link to="/vehicles/new" search={{ dealership: selectedDealershipId ?? undefined }}>
-              <Plus aria-hidden className="size-4" />
-              Add vehicle
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link to="/bulk-photos">
+                <Camera aria-hidden className="size-4" /> Bulk Photos
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link to="/vehicles/new" search={{ dealership: selectedDealershipId ?? undefined }}>
+                <Plus aria-hidden className="size-4" />
+                Add vehicle
+              </Link>
+            </Button>
+          </div>
         }
       />
 

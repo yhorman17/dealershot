@@ -16,6 +16,7 @@ import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthenticatedBackdropsRouteImport } from './routes/_authenticated/backdrops'
+import { Route as AuthenticatedBulkPhotosRouteImport } from './routes/_authenticated/bulk-photos'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDealershipsRouteImport } from './routes/_authenticated/dealerships'
 import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authenticated/documents'
@@ -23,6 +24,7 @@ import { Route as AuthenticatedExportRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
 import { Route as AuthenticatedOverlaysRouteImport } from './routes/_authenticated/overlays'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
+import { Route as AuthenticatedBulkPhotosIdRouteImport } from './routes/_authenticated/bulk-photos.$id'
 import { Route as AuthenticatedVehiclesIdRouteImport } from './routes/_authenticated/vehicles.$id'
 import { Route as AuthenticatedVehiclesNewRouteImport } from './routes/_authenticated/vehicles.new'
 import { Route as AuthenticatedVehiclesIdEditRouteImport } from './routes/_authenticated/vehicles.$id.edit'
@@ -61,6 +63,11 @@ const AuthenticatedBackdropsRoute = AuthenticatedBackdropsRouteImport.update({
   path: '/backdrops',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedBulkPhotosRoute = AuthenticatedBulkPhotosRouteImport.update({
+  id: '/bulk-photos',
+  path: '/bulk-photos',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -97,6 +104,12 @@ const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedBulkPhotosIdRoute =
+  AuthenticatedBulkPhotosIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedBulkPhotosRoute,
+  } as any)
 const AuthenticatedVehiclesIdRoute = AuthenticatedVehiclesIdRouteImport.update({
   id: '/vehicles/$id',
   path: '/vehicles/$id',
@@ -122,6 +135,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/backdrops': typeof AuthenticatedBackdropsRoute
+  '/bulk-photos': typeof AuthenticatedBulkPhotosRouteWithChildren
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dealerships': typeof AuthenticatedDealershipsRoute
   '/documents': typeof AuthenticatedDocumentsRoute
@@ -129,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/inventory': typeof AuthenticatedInventoryRoute
   '/overlays': typeof AuthenticatedOverlaysRoute
   '/users': typeof AuthenticatedUsersRoute
+  '/bulk-photos/$id': typeof AuthenticatedBulkPhotosIdRoute
   '/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
@@ -140,6 +155,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/backdrops': typeof AuthenticatedBackdropsRoute
+  '/bulk-photos': typeof AuthenticatedBulkPhotosRouteWithChildren
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dealerships': typeof AuthenticatedDealershipsRoute
   '/documents': typeof AuthenticatedDocumentsRoute
@@ -147,6 +163,7 @@ export interface FileRoutesByTo {
   '/inventory': typeof AuthenticatedInventoryRoute
   '/overlays': typeof AuthenticatedOverlaysRoute
   '/users': typeof AuthenticatedUsersRoute
+  '/bulk-photos/$id': typeof AuthenticatedBulkPhotosIdRoute
   '/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
@@ -160,6 +177,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/backdrops': typeof AuthenticatedBackdropsRoute
+  '/_authenticated/bulk-photos': typeof AuthenticatedBulkPhotosRouteWithChildren
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/dealerships': typeof AuthenticatedDealershipsRoute
   '/_authenticated/documents': typeof AuthenticatedDocumentsRoute
@@ -167,6 +185,7 @@ export interface FileRoutesById {
   '/_authenticated/inventory': typeof AuthenticatedInventoryRoute
   '/_authenticated/overlays': typeof AuthenticatedOverlaysRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
+  '/_authenticated/bulk-photos/$id': typeof AuthenticatedBulkPhotosIdRoute
   '/_authenticated/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/_authenticated/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/_authenticated/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
@@ -180,6 +199,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/backdrops'
+    | '/bulk-photos'
     | '/dashboard'
     | '/dealerships'
     | '/documents'
@@ -187,6 +207,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/overlays'
     | '/users'
+    | '/bulk-photos/$id'
     | '/vehicles/$id'
     | '/vehicles/new'
     | '/vehicles/$id/edit'
@@ -198,6 +219,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/backdrops'
+    | '/bulk-photos'
     | '/dashboard'
     | '/dealerships'
     | '/documents'
@@ -205,6 +227,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/overlays'
     | '/users'
+    | '/bulk-photos/$id'
     | '/vehicles/$id'
     | '/vehicles/new'
     | '/vehicles/$id/edit'
@@ -217,6 +240,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/_authenticated/backdrops'
+    | '/_authenticated/bulk-photos'
     | '/_authenticated/dashboard'
     | '/_authenticated/dealerships'
     | '/_authenticated/documents'
@@ -224,6 +248,7 @@ export interface FileRouteTypes {
     | '/_authenticated/inventory'
     | '/_authenticated/overlays'
     | '/_authenticated/users'
+    | '/_authenticated/bulk-photos/$id'
     | '/_authenticated/vehicles/$id'
     | '/_authenticated/vehicles/new'
     | '/_authenticated/vehicles/$id/edit'
@@ -289,6 +314,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBackdropsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/bulk-photos': {
+      id: '/_authenticated/bulk-photos'
+      path: '/bulk-photos'
+      fullPath: '/bulk-photos'
+      preLoaderRoute: typeof AuthenticatedBulkPhotosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
@@ -338,6 +370,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/bulk-photos/$id': {
+      id: '/_authenticated/bulk-photos/$id'
+      path: '/$id'
+      fullPath: '/bulk-photos/$id'
+      preLoaderRoute: typeof AuthenticatedBulkPhotosIdRouteImport
+      parentRoute: typeof AuthenticatedBulkPhotosRoute
+    }
     '/_authenticated/vehicles/$id': {
       id: '/_authenticated/vehicles/$id'
       path: '/vehicles/$id'
@@ -362,6 +401,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedBulkPhotosRouteChildren {
+  AuthenticatedBulkPhotosIdRoute: typeof AuthenticatedBulkPhotosIdRoute
+}
+
+const AuthenticatedBulkPhotosRouteChildren: AuthenticatedBulkPhotosRouteChildren =
+  {
+    AuthenticatedBulkPhotosIdRoute: AuthenticatedBulkPhotosIdRoute,
+  }
+
+const AuthenticatedBulkPhotosRouteWithChildren =
+  AuthenticatedBulkPhotosRoute._addFileChildren(
+    AuthenticatedBulkPhotosRouteChildren,
+  )
+
 interface AuthenticatedVehiclesIdRouteChildren {
   AuthenticatedVehiclesIdEditRoute: typeof AuthenticatedVehiclesIdEditRoute
 }
@@ -378,6 +431,7 @@ const AuthenticatedVehiclesIdRouteWithChildren =
 
 interface AuthenticatedRouteChildren {
   AuthenticatedBackdropsRoute: typeof AuthenticatedBackdropsRoute
+  AuthenticatedBulkPhotosRoute: typeof AuthenticatedBulkPhotosRouteWithChildren
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDealershipsRoute: typeof AuthenticatedDealershipsRoute
   AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRoute
@@ -391,6 +445,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedBackdropsRoute: AuthenticatedBackdropsRoute,
+  AuthenticatedBulkPhotosRoute: AuthenticatedBulkPhotosRouteWithChildren,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDealershipsRoute: AuthenticatedDealershipsRoute,
   AuthenticatedDocumentsRoute: AuthenticatedDocumentsRoute,
