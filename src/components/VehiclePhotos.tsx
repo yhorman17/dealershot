@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { enqueueCutout, isExteriorShot, subscribeProcessing } from "@/lib/cutout-queue";
 import { toast } from "sonner";
 import {
   ArrowDown,
@@ -11,20 +10,13 @@ import {
   ImagePlus,
   Plus,
   RefreshCw,
-  Sparkles,
   Trash2,
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import {
-  EmptyState,
-  InlineLoading,
-  ProductSelect,
-  SectionHeader,
-  StatusBadge,
-} from "@/components/product-ui";
+import { EmptyState, ProductSelect, SectionHeader, StatusBadge } from "@/components/product-ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,10 +34,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useAuth } from "@/hooks/use-auth";
+import { createUploadQueue, type UploadEntry } from "@/lib/upload-queue";
+import { EditorLoading, PhotoEditorBoundary } from "@/components/PhotoEditorBoundary";
 
-const OverlayEditor = lazy(() =>
-  import("@/components/OverlayEditor").then((module) => ({ default: module.OverlayEditor })),
-);
 const BackgroundEditor = lazy(() =>
   import("@/components/BackgroundEditor").then((module) => ({ default: module.BackgroundEditor })),
 );
@@ -106,7 +98,13 @@ type Photo = {
   is_main: boolean;
   is_cutout?: boolean;
   cutout_status?: string;
+  original_image_url?: string;
+  cutout_image_url?: string | null;
+  corrected_cutout_url?: string | null;
+  photo_state?: "raw" | "cutout" | "customized";
 };
+
+type CaptureUpload = { file: File; shotType: string | null; replacePhotoId?: string };
 
 type VehicleDocument = {
   id: string;
@@ -139,33 +137,60 @@ function sortItems(items: GalleryItem[]): GalleryItem[] {
   });
 }
 
+async function deleteStoredPhoto(photo: Photo) {
+  try {
+    const url = new URL(photo.image_url);
+    const index = url.pathname.indexOf("/vehicle-photos/");
+    if (index !== -1) {
+      const path = url.pathname.slice(index + "/vehicle-photos/".length);
+      await supabase.storage.from("vehicle-photos").remove([path]);
+    }
+  } catch {
+    // A malformed legacy URL should not prevent removal of its database row.
+  }
+  await supabase.from("photos").delete().eq("id", photo.id);
+}
+
 type LibraryDoc = { id: string; name: string; image_url: string };
 
-export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
+export function VehiclePhotos({
+  vehicleId,
+  initialCustomizePhotoId,
+}: {
+  vehicleId: string;
+  initialCustomizePhotoId?: string;
+}) {
+  const { user } = useAuth();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [docLinks, setDocLinks] = useState<VehicleDocument[]>([]);
   const [mode, setMode] = useState<"guided" | "free">("guided");
-  const [uploading, setUploading] = useState<string | null>(null);
   const [customLabel, setCustomLabel] = useState("");
   const [addingCustom, setAddingCustom] = useState(false);
   const [dealershipId, setDealershipId] = useState<string | null>(null);
-  const [overlayPhoto, setOverlayPhoto] = useState<Photo | null>(null);
+  const [vehicleVin, setVehicleVin] = useState<string | null>(null);
+  const [captureStatus, setCaptureStatus] = useState<"in_progress" | "completed">("in_progress");
+  const [queueEntries, setQueueEntries] = useState<UploadEntry<CaptureUpload>[]>([]);
+  const [completing, setCompleting] = useState(false);
+  const captureSessionRef = useRef<string | null>(null);
+  const photosRef = useRef<Photo[]>([]);
+  const nextSortRef = useRef(0);
+  const initialCustomizeOpenedRef = useRef(false);
   const [bgPhoto, setBgPhoto] = useState<Photo | null>(null);
   const [showAttachDoc, setShowAttachDoc] = useState(false);
   const [activeShotName, setActiveShotName] =
     useState<(typeof SHOT_TYPES)[number]["name"]>("Front");
   const [pendingDelete, setPendingDelete] = useState<Photo | null>(null);
   const [pendingDetach, setPendingDetach] = useState<VehicleDocument | null>(null);
-  const [processAllOpen, setProcessAllOpen] = useState(false);
 
   useEffect(() => {
     void (async () => {
       const { data } = await supabase
         .from("vehicles")
-        .select("dealership_id")
+        .select("dealership_id, vin")
         .eq("id", vehicleId)
         .maybeSingle();
       setDealershipId((data?.dealership_id as string) || null);
+      setVehicleVin((data?.vin as string) || null);
     })();
   }, [vehicleId]);
 
@@ -175,7 +200,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
         supabase
           .from("photos")
           .select(
-            "id, vehicle_id, image_url, shot_type, created_at, sort_order, is_main, is_cutout, cutout_status",
+            "id, vehicle_id, image_url, shot_type, created_at, sort_order, is_main, is_cutout, cutout_status, original_image_url, cutout_image_url, corrected_cutout_url, photo_state",
           )
           .eq("vehicle_id", vehicleId),
         supabase
@@ -186,8 +211,15 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
           .eq("vehicle_id", vehicleId),
       ]);
       const commit = () => {
-        setPhotos((ph as Photo[]) || []);
-        setDocLinks((vd as unknown as VehicleDocument[]) || []);
+        const nextPhotos = (ph as Photo[]) || [];
+        const nextDocuments = (vd as unknown as VehicleDocument[]) || [];
+        nextSortRef.current = Math.max(
+          nextSortRef.current,
+          ...nextPhotos.map((photo) => photo.sort_order + 1),
+          ...nextDocuments.map((document) => document.sort_order + 1),
+        );
+        setPhotos(nextPhotos);
+        setDocLinks(nextDocuments);
       };
       const canAnimateLayout =
         animate &&
@@ -206,9 +238,15 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
     void load();
   }, [load]);
 
-  // Subscribe to in-memory processing queue so badges update live.
-  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
-  useEffect(() => subscribeProcessing(setProcessingIds), []);
+  useEffect(() => {
+    if (!initialCustomizePhotoId || initialCustomizeOpenedRef.current || photos.length === 0)
+      return;
+    const requestedPhoto = photos.find((photo) => photo.id === initialCustomizePhotoId);
+    initialCustomizeOpenedRef.current = true;
+    if (!requestedPhoto) return;
+    setBgPhoto(requestedPhoto);
+    window.history.replaceState(window.history.state, "", window.location.pathname);
+  }, [initialCustomizePhotoId, photos]);
 
   const items: GalleryItem[] = useMemo(() => {
     const all: GalleryItem[] = [
@@ -235,98 +273,120 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
     ];
     return sortItems(all);
   }, [photos, docLinks]);
+  photosRef.current = photos;
 
   const maxSort = () => items.reduce((m, i) => Math.max(m, i.sort_order), -1);
 
-  const uploadFile = async (file: File, shotType: string | null): Promise<Photo | null> => {
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${vehicleId}/${crypto.randomUUID()}.${ext}`;
-    const { error: upErr } = await supabase.storage.from("vehicle-photos").upload(path, file, {
-      contentType: file.type || "image/jpeg",
-      upsert: false,
-    });
-    if (upErr) {
-      toast.error("Photo upload failed", { description: upErr.message });
-      return null;
+  const ensureCaptureSession = useCallback(async () => {
+    if (!user || !dealershipId) throw new Error("Your dealership access is unavailable.");
+    if (captureSessionRef.current) return captureSessionRef.current;
+    const { data: existing } = await supabase
+      .from("photo_capture_sessions")
+      .select("id, status")
+      .eq("vehicle_id", vehicleId)
+      .eq("created_by", user.id)
+      .eq("mode", "guided")
+      .eq("status", "in_progress")
+      .maybeSingle();
+    if (existing?.id) {
+      captureSessionRef.current = existing.id;
+      return existing.id;
     }
-    const { data: pub } = supabase.storage.from("vehicle-photos").getPublicUrl(path);
     const { data, error } = await supabase
-      .from("photos")
+      .from("photo_capture_sessions")
       .insert({
+        dealership_id: dealershipId,
         vehicle_id: vehicleId,
-        image_url: pub.publicUrl,
-        shot_type: shotType,
-        sort_order: maxSort() + 1,
+        vin: vehicleVin,
+        mode: "guided",
+        created_by: user.id,
       })
-      .select("id, vehicle_id, image_url, shot_type, created_at, sort_order, is_main")
+      .select("id")
       .single();
     if (error) {
-      toast.error("Photo could not be saved", { description: error.message });
-      return null;
+      const { data: raced } = await supabase
+        .from("photo_capture_sessions")
+        .select("id")
+        .eq("vehicle_id", vehicleId)
+        .eq("created_by", user.id)
+        .eq("mode", "guided")
+        .eq("status", "in_progress")
+        .maybeSingle();
+      if (!raced?.id) throw error;
+      captureSessionRef.current = raced.id;
+      return raced.id;
     }
-    return data as Photo;
-  };
+    captureSessionRef.current = data.id;
+    return data.id;
+  }, [dealershipId, user, vehicleId, vehicleVin]);
 
-  const queueCutoutIfEligible = (photo: Photo) => {
-    if (!isExteriorShot(photo.shot_type)) return;
-    enqueueCutout(photo.id, photo.image_url, (res) => {
-      if (res.ok) {
-        void load({ animate: true });
-      } else {
-        toast.error("Cutout failed — using original");
-        void load({ animate: true });
-      }
-    });
-  };
+  const uploadQueue = useMemo(
+    () =>
+      createUploadQueue<CaptureUpload>(async ({ file, shotType, replacePhotoId }) => {
+        const sessionId = await ensureCaptureSession();
+        const extension = file.name.split(".").pop() || "jpg";
+        const path = `${vehicleId}/originals/${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage
+          .from("vehicle-photos")
+          .upload(path, file, { contentType: file.type || "image/jpeg", upsert: false });
+        if (uploadError) throw uploadError;
+        const imageUrl = supabase.storage.from("vehicle-photos").getPublicUrl(path).data.publicUrl;
+        const sortOrder = nextSortRef.current;
+        nextSortRef.current += 1;
+        const { error: photoError } = await supabase.from("photos").insert({
+          vehicle_id: vehicleId,
+          image_url: imageUrl,
+          original_image_url: imageUrl,
+          shot_type: shotType,
+          sort_order: sortOrder,
+          capture_session_id: sessionId,
+          photo_state: "raw",
+          is_cutout: false,
+          cutout_status: "none",
+        });
+        if (photoError) {
+          await supabase.storage.from("vehicle-photos").remove([path]);
+          throw photoError;
+        }
+        if (replacePhotoId) {
+          const replaced = photosRef.current.find((photo) => photo.id === replacePhotoId);
+          if (replaced) await deleteStoredPhoto(replaced);
+        }
+        await load({ animate: true });
+      }),
+    [ensureCaptureSession, load, vehicleId],
+  );
+
+  useEffect(() => uploadQueue.subscribe(setQueueEntries), [uploadQueue]);
 
   const handleGuidedUpload = async (shotName: string, file: File) => {
-    setUploading(shotName);
+    setCaptureStatus("in_progress");
     const existing = photos.find((p) => p.shot_type === shotName);
-    const created = await uploadFile(file, shotName);
-    if (created && existing) await deletePhoto(existing, true);
-    if (created) {
-      await load({ animate: true });
-      queueCutoutIfEligible(created);
-      const currentIndex = SHOT_TYPES.findIndex((shot) => shot.name === shotName);
-      const next = SHOT_TYPES.slice(currentIndex + 1).find(
-        (shot) => !photos.some((photo) => photo.shot_type === shot.name),
-      );
-      if (next) setActiveShotName(next.name);
-      toast.success(`${shotName} captured`);
-    }
-    setUploading(null);
+    uploadQueue.add({ file, shotType: shotName, replacePhotoId: existing?.id });
+    const currentIndex = SHOT_TYPES.findIndex((shot) => shot.name === shotName);
+    const next = SHOT_TYPES.slice(currentIndex + 1).find(
+      (shot) => !photos.some((photo) => photo.shot_type === shot.name),
+    );
+    if (next) setActiveShotName(next.name);
+    toast.success(`${shotName} queued`, { description: "You can take the next photo now." });
   };
 
   const handleFreeUpload = async (files: FileList, shotType: string | null) => {
-    setUploading("free");
-    for (const file of Array.from(files)) await uploadFile(file, shotType);
-    await load({ animate: true });
-    setUploading(null);
+    setCaptureStatus("in_progress");
+    Array.from(files).forEach((file) => uploadQueue.add({ file, shotType }));
   };
 
   const handleCustomUpload = async (file: File) => {
     const label = customLabel.trim();
     if (!label) return;
-    setUploading(`custom:${label}`);
-    await uploadFile(file, label);
-    await load({ animate: true });
-    setUploading(null);
+    setCaptureStatus("in_progress");
+    uploadQueue.add({ file, shotType: label });
     setCustomLabel("");
     setAddingCustom(false);
   };
 
   const deletePhoto = async (photo: Photo, skipConfirm = false) => {
-    try {
-      const url = new URL(photo.image_url);
-      const idx = url.pathname.indexOf("/vehicle-photos/");
-      if (idx !== -1) {
-        const path = url.pathname.slice(idx + "/vehicle-photos/".length);
-        await supabase.storage.from("vehicle-photos").remove([path]);
-      }
-    } catch {
-      /* ignore */
-    }
-    await supabase.from("photos").delete().eq("id", photo.id);
+    await deleteStoredPhoto(photo);
     if (!skipConfirm) {
       await load({ animate: true });
       toast.success("Photo deleted");
@@ -406,6 +466,41 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
   const attachedDocIds = new Set(docLinks.map((l) => l.document_id));
   const activeShot = SHOT_TYPES.find((shot) => shot.name === activeShotName) ?? SHOT_TYPES[0];
   const activePhoto = photos.find((photo) => photo.shot_type === activeShot.name);
+  const pendingUploads = queueEntries.filter(
+    (entry) => entry.state === "queued" || entry.state === "uploading",
+  ).length;
+  const failedUploads = queueEntries.filter((entry) => entry.state === "failed").length;
+
+  const completePhotos = async () => {
+    setCompleting(true);
+    await uploadQueue.waitForIdle();
+    const failures = uploadQueue.getSnapshot().filter((entry) => entry.state === "failed").length;
+    if (failures > 0) {
+      toast.error(`${failures} photo${failures === 1 ? "" : "s"} still need to upload`, {
+        description: "Retry failed uploads before completing this vehicle.",
+      });
+      setCompleting(false);
+      return;
+    }
+    try {
+      const sessionId = await ensureCaptureSession();
+      const { error } = await supabase.rpc("complete_photo_capture_session", {
+        _session_id: sessionId,
+      });
+      if (error) throw error;
+      setCaptureStatus("completed");
+      captureSessionRef.current = null;
+      toast.success("Vehicle photos completed", {
+        description: `${photos.length} photo${photos.length === 1 ? "" : "s"} captured.`,
+      });
+    } catch (reason) {
+      toast.error("Photos could not be completed", {
+        description: reason instanceof Error ? reason.message : "Try again.",
+      });
+    } finally {
+      setCompleting(false);
+    }
+  };
 
   return (
     <div className="ds-surface overflow-hidden">
@@ -454,6 +549,35 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
               className="mt-4 h-1.5"
               aria-label={`${completed} of ${SHOT_TYPES.length} guided shots complete`}
             />
+            <div className="mt-4 flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div aria-live="polite">
+                <p className="text-sm font-semibold">{photos.length} photos captured</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {failedUploads > 0
+                    ? `${failedUploads} failed — tap retry before completing`
+                    : pendingUploads > 0
+                      ? `${pendingUploads} uploading while you continue`
+                      : captureStatus === "completed"
+                        ? "Vehicle photos completed"
+                        : "All raw originals are safely uploaded"}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {failedUploads > 0 && (
+                  <Button variant="outline" onClick={() => uploadQueue.retryFailed()}>
+                    <RefreshCw className="size-4" /> Retry Uploads
+                  </Button>
+                )}
+                <Button
+                  className="min-h-12 flex-1 sm:flex-none"
+                  onClick={() => void completePhotos()}
+                  disabled={completing || photos.length + pendingUploads + failedUploads === 0}
+                >
+                  <Check className="size-4" />
+                  {completing ? "Completing…" : "Complete Photos"}
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className="grid lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)]">
@@ -489,9 +613,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                 preview, then DealerShot advances to the next unfinished angle.
               </div>
               <label className="motion-upload-target mt-auto flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-                {uploading === activeShot.name ? (
-                  <InlineLoading label="Uploading…" />
-                ) : activePhoto ? (
+                {activePhoto ? (
                   <>
                     <RefreshCw className="size-4" />
                     Replace {activeShot.name}
@@ -507,7 +629,6 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                   accept="image/*"
                   capture="environment"
                   className="hidden"
-                  disabled={uploading !== null}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) void handleGuidedUpload(activeShot.name, file);
@@ -619,13 +740,13 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                         : "bg-secondary text-muted-foreground cursor-not-allowed"
                     }`}
                   >
-                    {uploading?.startsWith("custom:") ? "Uploading…" : "Capture / Upload"}
+                    Capture / Upload
                     <input
                       type="file"
                       accept="image/*"
                       capture="environment"
                       className="hidden"
-                      disabled={!customLabel.trim() || uploading !== null}
+                      disabled={!customLabel.trim()}
                       onChange={(e) => {
                         const f = e.target.files?.[0];
                         if (f) void handleCustomUpload(f);
@@ -670,7 +791,6 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
         </div>
       ) : (
         <FreeUploadPanel
-          uploading={uploading === "free"}
           onUpload={handleFreeUpload}
           onAttachDocument={() => setShowAttachDoc(true)}
         />
@@ -680,28 +800,13 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
       <div className="border-t border-border">
         <SectionHeader
           title={`Gallery · ${items.length}`}
-          description="Choose the lead image, arrange the retail order, and open processing tools."
-          action={
-            photos.some((p) => isExteriorShot(p.shot_type)) ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setProcessAllOpen(true)}
-              >
-                <Sparkles className="size-3.5" />
-                Reprocess exteriors
-              </Button>
-            ) : undefined
-          }
+          description="Raw originals upload first. Office users can prepare each photo later in Customize."
         />
         <div className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-            {photos.some((p) => isExteriorShot(p.shot_type)) && (
-              <p className="text-xs text-muted-foreground">
-                Main image stays pinned first; arrow controls change the remaining order.
-              </p>
-            )}
+            <p className="hidden text-xs text-muted-foreground md:block">
+              Main image stays pinned first; office controls change the remaining order.
+            </p>
           </div>
           {items.length === 0 ? (
             <EmptyState
@@ -721,9 +826,13 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                   !it.is_main && nonMainIdx !== -1 && nonMainIdx < orderedNonMain.length - 1;
                 const isDoc = it.kind === "document";
                 const photo = it.photo;
-                const processing =
-                  !!photo && (processingIds.has(photo.id) || photo.cutout_status === "pending");
                 const isCutout = !!photo?.is_cutout;
+                const photoState =
+                  photo?.photo_state === "customized"
+                    ? "Customized"
+                    : photo?.photo_state === "cutout" || isCutout
+                      ? "Cutout Ready"
+                      : "Raw";
                 return (
                   <div
                     key={it.key}
@@ -757,18 +866,6 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                         </span>
                       )}
 
-                      {processing && (
-                        <div className="absolute inset-0 flex items-end justify-center pb-2 pointer-events-none">
-                          <span
-                            className="motion-processing inline-flex items-center gap-1.5 rounded bg-black/70 backdrop-blur-sm px-2 py-1 text-[10px] font-medium text-white"
-                            role="status"
-                          >
-                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary" />
-                            Processing cutout…
-                          </span>
-                        </div>
-                      )}
-
                       <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1">
                         {it.is_main && (
                           <span className="motion-status inline-flex items-center rounded bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">
@@ -780,12 +877,9 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                             DOCUMENT
                           </span>
                         )}
-                        {isCutout && !isDoc && (
-                          <span
-                            title="Background removed"
-                            className="motion-status inline-flex items-center justify-center rounded bg-primary/90 w-5 h-5 text-[11px] text-primary-foreground"
-                          >
-                            ✂
+                        {!isDoc && (
+                          <span className="motion-status inline-flex items-center rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            {photoState}
                           </span>
                         )}
                       </div>
@@ -793,7 +887,7 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
 
                     <div className="flex flex-col gap-2 p-2 bg-background border-t border-border">
                       {!it.is_main && (
-                        <div className="flex items-center gap-1">
+                        <div className="hidden items-center gap-1 md:flex">
                           <Button
                             type="button"
                             variant="secondary"
@@ -820,25 +914,17 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
                       )}
                       <div className="flex flex-wrap items-stretch gap-1.5">
                         {!isDoc && dealershipId && it.photo && (
-                          <>
-                            <button
-                              onClick={() => setOverlayPhoto(it.photo!)}
-                              className="flex-1 min-w-[6.5rem] min-h-[44px] rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80"
-                            >
-                              Add Overlay
-                            </button>
-                            <button
-                              onClick={() => setBgPhoto(it.photo!)}
-                              className="flex-1 min-w-[6.5rem] min-h-[44px] rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80"
-                            >
-                              Change BG
-                            </button>
-                          </>
+                          <button
+                            onClick={() => setBgPhoto(it.photo!)}
+                            className="hidden min-h-[44px] min-w-[6.5rem] flex-1 rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80 md:block"
+                          >
+                            Customize
+                          </button>
                         )}
                         {!it.is_main && (
                           <button
                             onClick={() => void setAsMain(it)}
-                            className="flex-1 min-w-[6.5rem] min-h-[44px] rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80"
+                            className="hidden min-h-[44px] min-w-[6.5rem] flex-1 rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80 md:block"
                           >
                             Set as main
                           </button>
@@ -868,32 +954,20 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
         </div>
       </div>
 
-      {overlayPhoto && dealershipId && (
-        <Suspense fallback={<EditorLoading />}>
-          <OverlayEditor
-            photo={overlayPhoto}
-            dealershipId={dealershipId}
-            onClose={() => setOverlayPhoto(null)}
-            onSaved={() => {
-              setOverlayPhoto(null);
-              void load({ animate: true });
-            }}
-          />
-        </Suspense>
-      )}
-
       {bgPhoto && dealershipId && (
-        <Suspense fallback={<EditorLoading />}>
-          <BackgroundEditor
-            photo={bgPhoto}
-            dealershipId={dealershipId}
-            onClose={() => setBgPhoto(null)}
-            onSaved={() => {
-              setBgPhoto(null);
-              void load({ animate: true });
-            }}
-          />
-        </Suspense>
+        <PhotoEditorBoundary onClose={() => setBgPhoto(null)}>
+          <Suspense fallback={<EditorLoading onClose={() => setBgPhoto(null)} />}>
+            <BackgroundEditor
+              photo={bgPhoto}
+              dealershipId={dealershipId}
+              onClose={() => setBgPhoto(null)}
+              onSaved={() => {
+                setBgPhoto(null);
+                void load({ animate: true });
+              }}
+            />
+          </Suspense>
+        </PhotoEditorBoundary>
       )}
 
       {showAttachDoc && dealershipId && (
@@ -949,57 +1023,14 @@ export function VehiclePhotos({ vehicleId }: { vehicleId: string }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <AlertDialog open={processAllOpen} onOpenChange={setProcessAllOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reprocess exterior photos?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Background removal will run again for{" "}
-              {photos.filter((photo) => isExteriorShot(photo.shot_type)).length} exterior photos.
-              Originals remain available if processing fails.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                const eligible = photos.filter((photo) => isExteriorShot(photo.shot_type));
-                eligible.forEach((photo) =>
-                  enqueueCutout(photo.id, photo.image_url, (result) => {
-                    if (!result.ok) toast.error(`Cutout failed for ${photo.shot_type ?? "photo"}`);
-                    void load({ animate: true });
-                  }),
-                );
-              }}
-            >
-              Reprocess photos
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
-
-function EditorLoading() {
-  return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-4 backdrop-blur-sm"
-      role="status"
-    >
-      <div className="ds-surface px-5 py-4 text-sm font-medium">
-        <InlineLoading label="Opening photo editor…" />
-      </div>
     </div>
   );
 }
 
 function FreeUploadPanel({
-  uploading,
   onUpload,
   onAttachDocument,
 }: {
-  uploading: boolean;
   onUpload: (files: FileList, shotType: string | null) => Promise<void>;
   onAttachDocument: () => void;
 }) {
@@ -1035,9 +1066,7 @@ function FreeUploadPanel({
         <span className="mb-4 grid size-12 place-items-center rounded-lg border border-border bg-card text-primary shadow-sm">
           <Upload className="size-5" />
         </span>
-        <p className="text-sm font-semibold text-card-foreground">
-          {uploading ? <InlineLoading label="Uploading photos…" /> : "Take photos or choose files"}
-        </p>
+        <p className="text-sm font-semibold text-card-foreground">Take photos or choose files</p>
         <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
           JPG, PNG, or HEIC from your device · multiple files supported
         </p>
@@ -1047,7 +1076,6 @@ function FreeUploadPanel({
           accept="image/*"
           multiple
           className="hidden"
-          disabled={uploading}
           onChange={(e) => {
             if (e.target.files && e.target.files.length > 0)
               void onUpload(e.target.files, shotType || null);

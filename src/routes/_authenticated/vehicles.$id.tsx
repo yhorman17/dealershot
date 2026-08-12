@@ -24,6 +24,9 @@ import {
 import { EmptyState, PageHeader, PageSkeleton, StatusBadge } from "@/components/product-ui";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id")({
+  validateSearch: (search: Record<string, unknown>): { customize?: string } => ({
+    customize: typeof search.customize === "string" ? search.customize : undefined,
+  }),
   head: () => ({ meta: [{ title: "Vehicle — DealerShot" }] }),
   component: VehicleDetailPage,
 });
@@ -32,6 +35,7 @@ type Vehicle = Record<string, string | number | null> & { id: string };
 
 function VehicleDetailPage() {
   const { id } = Route.useParams();
+  const { customize } = Route.useSearch();
   const navigate = useNavigate();
   const { profile } = useAuth();
   const canDelete = profile?.role === "owner" || profile?.role === "dealer_admin";
@@ -257,7 +261,7 @@ function VehicleDetailPage() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="photos" className="motion-tab-panel mt-0">
-          <VehiclePhotos vehicleId={id} />
+          <VehiclePhotos vehicleId={id} initialCustomizePhotoId={customize} />
         </TabsContent>
         <TabsContent value="specifications" className="motion-tab-panel mt-0">
           <section className="ds-surface overflow-hidden">
