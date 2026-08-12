@@ -885,6 +885,134 @@ SELECT test.assert_true(
     AND has_function_privilege('authenticated', 'private.current_user_is_active_owner()', 'EXECUTE'),
   'private helper execution is granted only to the policy role'
 );
+
+-- Photo capture sessions exercise ordinary-user grants, RLS checks, Storage
+-- paths, completion RPC authorization, and cross-tenant isolation.
+INSERT INTO public.photo_capture_sessions (
+  id, dealership_id, vehicle_id, vin, mode, created_by
+) VALUES (
+  '40000000-0000-0000-0000-000000000002',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000002',
+  '1M8GDM9AXKP042788',
+  'guided',
+  '00000000-0000-0000-0000-000000000004'
+);
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+INSERT INTO public.photo_capture_sessions (
+  id, dealership_id, vehicle_id, vin, mode, created_by
+) VALUES (
+  '40000000-0000-0000-0000-000000000001',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  '1HGCM82633A004352',
+  'bulk',
+  '00000000-0000-0000-0000-000000000003'
+);
+SELECT test.expect_sqlstate(
+  $$INSERT INTO public.photo_capture_sessions (
+      dealership_id, vin, mode, created_by
+    ) VALUES (
+      'bbbbbbbb-0000-0000-0000-000000000001', '1M8GDM9AXKP042788', 'bulk',
+      '00000000-0000-0000-0000-000000000003'
+    )$$,
+  '42501',
+  'staff cannot create a bulk package in another tenant'
+);
+SELECT test.expect_sqlstate(
+  $$INSERT INTO public.photos (
+      vehicle_id, image_url, capture_session_id
+    ) VALUES (
+      '10000000-0000-0000-0000-000000000001',
+      'https://example.test/forged-session.jpg',
+      '40000000-0000-0000-0000-000000000002'
+    )$$,
+  '42501',
+  'photo rows cannot attach an authorized vehicle to another tenant capture session'
+);
+INSERT INTO storage.objects (bucket_id, name)
+VALUES ('vehicle-photos', '40000000-0000-0000-0000-000000000001/originals/raw.jpg');
+INSERT INTO public.bulk_photo_items (
+  id, session_id, image_url, storage_path, created_by
+) VALUES (
+  '41000000-0000-0000-0000-000000000001',
+  '40000000-0000-0000-0000-000000000001',
+  'https://example.test/raw.jpg',
+  '40000000-0000-0000-0000-000000000001/originals/raw.jpg',
+  '00000000-0000-0000-0000-000000000003'
+);
+SELECT test.expect_sqlstate(
+  $$UPDATE public.photo_capture_sessions SET status = 'completed'
+    WHERE id = '40000000-0000-0000-0000-000000000001'$$,
+  '42501',
+  'browser cannot forge capture-session completion metadata'
+);
+SELECT public.complete_photo_capture_session('40000000-0000-0000-0000-000000000001');
+SELECT test.assert_true(
+  (SELECT status = 'completed'
+     AND completed_by = '00000000-0000-0000-0000-000000000003'
+     AND completed_at IS NOT NULL
+   FROM public.photo_capture_sessions
+   WHERE id = '40000000-0000-0000-0000-000000000001'),
+  'completion RPC records trusted actor and timestamp'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.complete_photo_capture_session(
+      '40000000-0000-0000-0000-000000000001'
+    )$$,
+  '42501',
+  'completed capture sessions cannot be replayed'
+);
+SELECT test.expect_sqlstate(
+  $$INSERT INTO public.bulk_photo_items (
+      session_id, image_url, storage_path, created_by
+    ) VALUES (
+      '40000000-0000-0000-0000-000000000001', 'https://example.test/late.jpg',
+      '40000000-0000-0000-0000-000000000001/originals/late.jpg',
+      '00000000-0000-0000-0000-000000000003'
+    )$$,
+  '42501',
+  'staff cannot append photos after completion'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000004';
+SELECT test.assert_true(
+  (SELECT count(*) = 0 FROM public.photo_capture_sessions
+   WHERE id = '40000000-0000-0000-0000-000000000001')
+  AND (SELECT count(*) = 0 FROM public.bulk_photo_items
+   WHERE session_id = '40000000-0000-0000-0000-000000000001'),
+  'other-tenant staff cannot read capture packages or their items'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT public.associate_bulk_photo_session(
+  '40000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001'
+);
+SELECT test.assert_true(
+  (SELECT status = 'prepared' AND vehicle_id = '10000000-0000-0000-0000-000000000001'
+   FROM public.photo_capture_sessions
+   WHERE id = '40000000-0000-0000-0000-000000000001')
+  AND (SELECT image_url = 'https://example.test/raw.jpg'
+   FROM public.photos
+   WHERE capture_session_id = '40000000-0000-0000-0000-000000000001'),
+  'dealer admin associates the package without changing its physical image URL'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.associate_bulk_photo_session(
+      '40000000-0000-0000-0000-000000000001',
+      '10000000-0000-0000-0000-000000000001'
+    )$$,
+  '42501',
+  'prepared bulk associations cannot be replayed'
+);
+RESET ROLE;
+
 SELECT test.assert_true(
   (
     SELECT bool_and(array_to_string(p.proconfig, ',') = 'search_path=""')
@@ -897,13 +1025,13 @@ SELECT test.assert_true(
 );
 SELECT test.assert_true(
   (
-    SELECT count(*) = 39
+    SELECT count(*) = 45
     FROM pg_policies
     WHERE schemaname = 'public'
       AND tablename IN (
         'profiles', 'dealerships', 'vehicles', 'photos', 'overlay_templates',
         'documents', 'vehicle_documents', 'backdrops', 'impersonation_logs',
-        'user_invitations'
+        'user_invitations', 'photo_capture_sessions', 'bulk_photo_items'
       )
   ),
   'repository tables have only the reviewed policy set'

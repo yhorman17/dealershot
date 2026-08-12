@@ -215,39 +215,120 @@ export type Database = {
         };
         Relationships: [];
       };
-      photos: {
+      photo_capture_sessions: {
+        Row: {
+          completed_at: string | null;
+          completed_by: string | null;
+          created_at: string;
+          created_by: string | null;
+          dealership_id: string;
+          id: string;
+          mode: "guided" | "bulk";
+          prepared_at: string | null;
+          prepared_by: string | null;
+          status: "in_progress" | "completed" | "prepared";
+          updated_at: string;
+          vehicle_id: string | null;
+          vin: string | null;
+        };
+        Insert: {
+          completed_at?: string | null;
+          completed_by?: string | null;
+          created_at?: string;
+          created_by: string;
+          dealership_id: string;
+          id?: string;
+          mode: "guided" | "bulk";
+          prepared_at?: string | null;
+          prepared_by?: string | null;
+          status?: "in_progress" | "completed" | "prepared";
+          updated_at?: string;
+          vehicle_id?: string | null;
+          vin?: string | null;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      bulk_photo_items: {
         Row: {
           created_at: string;
+          created_by: string | null;
+          id: string;
+          image_url: string;
+          is_main: boolean;
+          photo_id: string | null;
+          session_id: string;
+          shot_type: string | null;
+          sort_order: number;
+          storage_path: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          image_url: string;
+          is_main?: boolean;
+          photo_id?: string | null;
+          session_id: string;
+          shot_type?: string | null;
+          sort_order?: number;
+          storage_path: string;
+        };
+        Update: {
+          is_main?: boolean;
+          shot_type?: string | null;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
+      photos: {
+        Row: {
+          capture_session_id: string | null;
+          created_at: string;
+          corrected_cutout_url: string | null;
+          cutout_image_url: string | null;
           cutout_status: string;
           id: string;
           image_url: string;
           is_cutout: boolean;
           is_main: boolean;
           overlay_id: string | null;
+          original_image_url: string;
+          photo_state: "raw" | "cutout" | "customized";
           shot_type: string | null;
           sort_order: number;
           vehicle_id: string;
         };
         Insert: {
+          capture_session_id?: string | null;
           created_at?: string;
+          corrected_cutout_url?: string | null;
+          cutout_image_url?: string | null;
           cutout_status?: string;
           id?: string;
           image_url: string;
           is_cutout?: boolean;
           is_main?: boolean;
           overlay_id?: string | null;
+          original_image_url?: string;
+          photo_state?: "raw" | "cutout" | "customized";
           shot_type?: string | null;
           sort_order?: number;
           vehicle_id: string;
         };
         Update: {
+          capture_session_id?: string | null;
           created_at?: string;
+          corrected_cutout_url?: string | null;
+          cutout_image_url?: string | null;
           cutout_status?: string;
           id?: string;
           image_url?: string;
           is_cutout?: boolean;
           is_main?: boolean;
           overlay_id?: string | null;
+          original_image_url?: string;
+          photo_state?: "raw" | "cutout" | "customized";
           shot_type?: string | null;
           sort_order?: number;
           vehicle_id?: string;
@@ -637,6 +718,14 @@ export type Database = {
     };
     Functions: {
       accept_invitation: { Args: { _token: string }; Returns: Json };
+      associate_bulk_photo_session: {
+        Args: { _session_id: string; _vehicle_id: string };
+        Returns: Database["public"]["Tables"]["photo_capture_sessions"]["Row"];
+      };
+      complete_photo_capture_session: {
+        Args: { _session_id: string };
+        Returns: Database["public"]["Tables"]["photo_capture_sessions"]["Row"];
+      };
       begin_temporary_password_reset_operation: {
         Args: { _actor_id: string; _idempotency_key: string; _target_profile_id: string };
         Returns: Json;
