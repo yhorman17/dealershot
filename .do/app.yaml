@@ -14,7 +14,7 @@ services:
   - name: dealershot
     github:
       repo: yhorman17/dealershot
-      branch: feature/expansion-phase-1-foundation
+      branch: feature/photo-workflow-optimization
       deploy_on_push: false
     dockerfile_path: Dockerfile
     source_dir: /
@@ -45,7 +45,7 @@ workers:
   - name: background-worker
     github:
       repo: yhorman17/dealershot
-      branch: feature/expansion-phase-1-foundation
+      branch: feature/photo-workflow-optimization
       deploy_on_push: false
     dockerfile_path: Dockerfile
     source_dir: /
