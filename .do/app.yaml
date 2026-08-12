@@ -14,7 +14,7 @@ services:
   - name: dealershot
     github:
       repo: yhorman17/dealershot
-      branch: feature/photo-workflow-optimization
+      branch: fix/fix-cutout-rendering
       deploy_on_push: false
     dockerfile_path: Dockerfile
     source_dir: /
@@ -45,7 +45,7 @@ workers:
   - name: background-worker
     github:
       repo: yhorman17/dealershot
-      branch: feature/photo-workflow-optimization
+      branch: fix/fix-cutout-rendering
       deploy_on_push: false
     dockerfile_path: Dockerfile
     source_dir: /
