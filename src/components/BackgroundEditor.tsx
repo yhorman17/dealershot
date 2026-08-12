@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { removeBackground } from "@imgly/background-removal";
 import { supabase } from "@/integrations/supabase/client";
 import { ProductSelect } from "@/components/product-ui";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { MaskEditor } from "@/components/MaskEditor";
+import { Button } from "@/components/ui/button";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Scissors, X } from "lucide-react";
 
 export type Position = "top" | "bottom" | "tl" | "tr" | "bl" | "br";
 
@@ -35,6 +28,9 @@ type Photo = {
   sort_order: number;
   is_main: boolean;
   is_cutout?: boolean;
+  original_image_url?: string;
+  cutout_image_url?: string | null;
+  corrected_cutout_url?: string | null;
 };
 
 type TabKey = "background" | "adjust" | "shadow" | "reflection" | "overlay";
@@ -458,13 +454,14 @@ export function BackgroundEditor({
   const [backdropImg, setBackdropImg] = useState<HTMLImageElement | null>(null);
   const [overlayImg, setOverlayImg] = useState<HTMLImageElement | null>(null);
   const [baseSize, setBaseSize] = useState<{ w: number; h: number } | null>(null);
-  const [removing, setRemoving] = useState(true);
+  const [removing, setRemoving] = useState(false);
   const [removeErr, setRemoveErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [comparing, setComparing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("background");
+  const [maskOpen, setMaskOpen] = useState(false);
+  const pendingCutoutBlobRef = useRef<Blob | null>(null);
 
   // Compositing state
   const [shadowEnabled, setShadowEnabled] = useState(DEFAULTS.shadowEnabled);
@@ -687,56 +684,69 @@ export function BackgroundEditor({
     })();
   }, [dealershipId]);
 
-  // Load the actual original once (for compare)
-  useEffect(() => {
-    void loadImage(photo.image_url).then(setOriginalImg);
-  }, [photo.image_url]);
+  const originalUrl = photo.original_image_url || photo.image_url;
+  const persistedCutoutUrl =
+    photo.corrected_cutout_url ||
+    photo.cutout_image_url ||
+    (photo.is_cutout ? photo.image_url : null);
 
-  // Lock background page scroll while the editor is open so scrolling stays in the modal.
+  // Load the immutable source once for compare and mask restoration.
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+    void loadImage(originalUrl)
+      .then(setOriginalImg)
+      .catch(() => setError("Original photo could not be loaded."));
+  }, [originalUrl]);
 
-  // Run background removal ONCE per photo. Adjust transforms (crop/straighten/fit)
-  // operate on the cached cutout PNG below — they never re-invoke the model.
+  // Load an existing cutout when present. Background removal itself is only
+  // imported and invoked by the explicit Remove Background action below.
   useEffect(() => {
     let cancelled = false;
-    setRemoving(true);
     setRemoveErr(null);
     void (async () => {
       try {
-        const base = await loadImage(photo.image_url);
-        if (cancelled) return;
-        if (photo.is_cutout) {
-          setRawCutoutImg(base);
+        if (!persistedCutoutUrl) {
+          setRawCutoutImg(null);
           return;
         }
-        const blob = await removeBackground(photo.image_url, {
-          model: "isnet_quint8",
-          debug: true,
-        });
-        if (cancelled) return;
-        const url = URL.createObjectURL(blob);
-        if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
-        cutoutUrlRef.current = url;
-        const img = await loadImage(url);
-        if (cancelled) return;
-        setRawCutoutImg(img);
+        const image = await loadImage(persistedCutoutUrl);
+        if (!cancelled) setRawCutoutImg(image);
       } catch (err) {
         if (!cancelled)
-          setRemoveErr(err instanceof Error ? err.message : "Background removal failed");
-      } finally {
-        if (!cancelled) setRemoving(false);
+          setRemoveErr(
+            err instanceof Error ? err.message : "The saved cutout could not be loaded.",
+          );
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [photo.image_url, photo.is_cutout]);
+  }, [persistedCutoutUrl]);
+
+  const createCutout = async () => {
+    setRemoving(true);
+    setRemoveErr(null);
+    try {
+      const { removeBackground } = await import("@imgly/background-removal");
+      const blob = await removeBackground(originalUrl, { model: "isnet_quint8", debug: false });
+      pendingCutoutBlobRef.current = blob;
+      const url = URL.createObjectURL(blob);
+      if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
+      cutoutUrlRef.current = url;
+      setRawCutoutImg(await loadImage(url));
+    } catch (reason) {
+      setRemoveErr(reason instanceof Error ? reason.message : "Background removal failed.");
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const applyCorrectedMask = async (blob: Blob) => {
+    pendingCutoutBlobRef.current = blob;
+    const url = URL.createObjectURL(blob);
+    if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
+    cutoutUrlRef.current = url;
+    setRawCutoutImg(await loadImage(url));
+  };
 
   useEffect(() => {
     return () => {
@@ -772,11 +782,9 @@ export function BackgroundEditor({
           })
           .catch((err) => {
             // Don't tear down the editor on a bad transform — log and keep the last good cutout.
-            // eslint-disable-next-line no-console
             console.warn("[bg-editor] adjust bake failed", err);
           });
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("[bg-editor] adjust bake failed", err);
       }
     }, 150);
@@ -958,51 +966,76 @@ export function BackgroundEditor({
   };
   const clearPending = () => setPendingCrop(null);
 
-  const save = async (mode: "new" | "overwrite") => {
+  const save = async () => {
     const canvas = canvasRef.current;
-    if (!canvas || !cutoutImg || !backdropImg || !baseSize) return;
+    if (!cutoutImg) return;
     setSaving(true);
     setError(null);
     try {
+      let cutoutUrl = persistedCutoutUrl;
+      if (pendingCutoutBlobRef.current) {
+        const cutoutPath = `${photo.vehicle_id}/cutouts/${crypto.randomUUID()}.png`;
+        const { error: cutoutUploadError } = await supabase.storage
+          .from("vehicle-photos")
+          .upload(cutoutPath, pendingCutoutBlobRef.current, {
+            contentType: "image/png",
+            upsert: false,
+          });
+        if (cutoutUploadError) throw cutoutUploadError;
+        cutoutUrl = supabase.storage.from("vehicle-photos").getPublicUrl(cutoutPath).data.publicUrl;
+      }
+
+      if (!backdropImg || !baseSize) {
+        if (!cutoutUrl) throw new Error("Create a cutout before saving.");
+        const { error: cutoutSaveError } = await supabase
+          .from("photos")
+          .update({
+            image_url: cutoutUrl,
+            cutout_image_url: cutoutUrl,
+            corrected_cutout_url: pendingCutoutBlobRef.current
+              ? cutoutUrl
+              : photo.corrected_cutout_url,
+            is_cutout: true,
+            cutout_status: "done",
+            photo_state: "cutout",
+          })
+          .eq("id", photo.id);
+        if (cutoutSaveError) throw cutoutSaveError;
+        onSaved();
+        return;
+      }
+
+      if (!canvas) throw new Error("The customized preview is not ready yet.");
+
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
-          (b) => (b ? resolve(b) : reject(new Error("Failed to render"))),
+          (value) => (value ? resolve(value) : reject(new Error("Failed to render"))),
           "image/jpeg",
           0.92,
         );
       });
-      const path = `${photo.vehicle_id}/${crypto.randomUUID()}.jpg`;
+
+      const path = `${photo.vehicle_id}/customized/${crypto.randomUUID()}.jpg`;
       const { error: upErr } = await supabase.storage
         .from("vehicle-photos")
         .upload(path, blob, { contentType: "image/jpeg", upsert: false });
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from("vehicle-photos").getPublicUrl(path);
 
-      if (mode === "new") {
-        const { error: insErr } = await supabase.from("photos").insert({
-          vehicle_id: photo.vehicle_id,
+      const { error: updErr } = await supabase
+        .from("photos")
+        .update({
           image_url: pub.publicUrl,
-          shot_type: photo.shot_type,
-          sort_order: (photo.sort_order ?? 0) + 1,
-        });
-        if (insErr) throw insErr;
-      } else {
-        try {
-          const url = new URL(photo.image_url);
-          const idx = url.pathname.indexOf("/vehicle-photos/");
-          if (idx !== -1) {
-            const oldPath = url.pathname.slice(idx + "/vehicle-photos/".length);
-            await supabase.storage.from("vehicle-photos").remove([oldPath]);
-          }
-        } catch {
-          /* ignore */
-        }
-        const { error: updErr } = await supabase
-          .from("photos")
-          .update({ image_url: pub.publicUrl })
-          .eq("id", photo.id);
-        if (updErr) throw updErr;
-      }
+          cutout_image_url: cutoutUrl,
+          corrected_cutout_url: pendingCutoutBlobRef.current
+            ? cutoutUrl
+            : photo.corrected_cutout_url,
+          is_cutout: Boolean(cutoutUrl),
+          cutout_status: cutoutUrl ? "done" : "none",
+          photo_state: "customized",
+        })
+        .eq("id", photo.id);
+      if (updErr) throw updErr;
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -1011,7 +1044,7 @@ export function BackgroundEditor({
     }
   };
 
-  const ready = !!cutoutImg && !!backdropImg && !!baseSize && !removing;
+  const ready = !!cutoutImg && !removing;
   const adjusting = activeTab === "adjust";
 
   const TABS: { key: TabKey; label: string }[] = [
@@ -1032,513 +1065,534 @@ export function BackgroundEditor({
   const overlayCrop = pendingCrop ?? adjustCrop;
 
   return (
-    <div className="motion-overlay-static fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-background/80 backdrop-blur-sm">
-      <div className="min-h-full w-full flex items-stretch sm:items-start justify-center p-0 sm:p-4">
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Background editor"
-          className="motion-panel-static w-full sm:max-w-3xl sm:rounded-xl border-0 sm:border border-border bg-card p-4 sm:p-6 shadow-2xl sm:my-8"
-        >
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-semibold text-card-foreground">Change Background</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Remove the original background and composite onto a backdrop
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              ✕
-            </button>
-          </div>
-
-          {backdrops.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-8 text-sm text-muted-foreground text-center">
-              No backdrops available for this dealership. Create one on the Backdrops page first.
-            </div>
-          ) : (
-            <>
-              <div className="mb-4">
-                <label className="block text-xs font-medium text-card-foreground mb-1.5">
-                  Backdrop
-                </label>
-                <ProductSelect
-                  value={backdropId}
-                  onValueChange={track(setBackdropId)}
-                  ariaLabel="Backdrop"
-                  options={backdrops.map((backdrop) => ({
-                    value: backdrop.id,
-                    label: backdrop.name,
-                  }))}
-                />
-              </div>
-
-              <div
-                ref={previewWrapRef}
-                className="relative w-full rounded-lg overflow-hidden bg-background border border-border select-none"
-                style={{ aspectRatio: previewAspect }}
-              >
-                {/* Composite canvas — visible on every tab except Adjust */}
-                <canvas
-                  ref={canvasRef}
-                  className="absolute inset-0 w-full h-full"
-                  style={{ visibility: comparing || adjusting ? "hidden" : "visible" }}
-                />
-
-                {/* Adjust live preview canvas */}
-                <canvas
-                  ref={adjustPreviewRef}
-                  className="absolute inset-0 w-full h-full object-contain"
-                  style={{ display: adjusting && !comparing ? "block" : "none" }}
-                />
-
-                {/* Straighten grid overlay */}
-                {adjusting && adjustStraighten !== 0 && (
-                  <div
-                    aria-hidden
-                    className="absolute inset-0 pointer-events-none"
-                    style={{
-                      backgroundImage:
-                        "linear-gradient(to right, rgba(255,255,255,0.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.18) 1px, transparent 1px)",
-                      backgroundSize: "10% 10%",
-                    }}
-                  />
-                )}
-
-                {/* Crop drag layer */}
-                {adjusting && (
-                  <div
-                    className="absolute inset-0 cursor-crosshair"
-                    onPointerDown={onCropPointerDown}
-                    onPointerMove={onCropPointerMove}
-                    onPointerUp={onCropPointerUp}
-                    onPointerCancel={onCropPointerUp}
-                  >
-                    {overlayCrop && (
-                      <div
-                        className="absolute border-2 border-primary"
-                        style={{
-                          left: `${overlayCrop.x * 100}%`,
-                          top: `${overlayCrop.y * 100}%`,
-                          width: `${overlayCrop.w * 100}%`,
-                          height: `${overlayCrop.h * 100}%`,
-                          boxShadow: "0 0 0 9999px rgba(0,0,0,0.4)",
-                        }}
-                      />
-                    )}
-                  </div>
-                )}
-
-                {comparing && originalImg && (
-                  <img
-                    src={originalImg.src}
-                    alt="Original"
-                    className="absolute inset-0 w-full h-full object-contain"
-                  />
-                )}
-
-                {ready && (
-                  <button
-                    type="button"
-                    onMouseDown={() => setComparing(true)}
-                    onMouseUp={() => setComparing(false)}
-                    onMouseLeave={() => setComparing(false)}
-                    onTouchStart={(e) => {
-                      e.preventDefault();
-                      setComparing(true);
-                    }}
-                    onTouchEnd={() => setComparing(false)}
-                    onTouchCancel={() => setComparing(false)}
-                    className="absolute top-2 right-2 select-none rounded-md bg-background/80 backdrop-blur px-2.5 py-1.5 text-[11px] font-medium text-foreground border border-border hover:bg-background"
-                    title="Hold to view original"
-                  >
-                    {comparing ? "Showing original" : "Hold to compare"}
-                  </button>
-                )}
-
-                {removing && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
-                    <div className="text-center">
-                      <div className="h-8 w-8 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                      <p className="text-sm font-medium text-foreground">Cutting out the car…</p>
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        First use downloads a ~12MB model. This happens entirely in your browser.
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {removeErr && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-background/80 p-6">
-                    <p className="text-sm text-destructive text-center">{removeErr}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Tab bar */}
-              <TabBar tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
-
-              {/* Tab content */}
-              <div key={activeTab} className="motion-content mt-4">
-                <div className="flex items-center justify-end gap-3 mb-2">
-                  <button
-                    type="button"
-                    onClick={undo}
-                    disabled={historyLen === 0}
-                    className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline disabled:opacity-40 disabled:hover:no-underline disabled:cursor-not-allowed"
-                  >
-                    Undo{historyLen > 0 ? ` (${historyLen})` : ""}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={resetCurrentTab}
-                    className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                  >
-                    Reset to defaults
-                  </button>
+    <DialogPrimitive.Root open onOpenChange={(open) => !open && onClose()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="motion-overlay-static fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" />
+        <DialogPrimitive.Content className="fixed inset-0 z-50 overflow-y-auto overscroll-contain focus:outline-none">
+          <div className="min-h-full w-full flex items-stretch sm:items-start justify-center p-0 sm:p-4">
+            <div className="motion-panel-static w-full sm:max-w-3xl sm:rounded-xl border-0 sm:border border-border bg-card p-4 sm:p-6 shadow-2xl sm:my-8">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <DialogPrimitive.Title className="text-lg font-semibold text-card-foreground">
+                    Customize Photo
+                  </DialogPrimitive.Title>
+                  <DialogPrimitive.Description className="text-xs text-muted-foreground mt-0.5">
+                    Prepare this photo while preserving its original source
+                  </DialogPrimitive.Description>
                 </div>
-
-                {activeTab === "background" && (
-                  <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
-                    <p className="text-xs text-muted-foreground">
-                      Choose a backdrop above. The preview updates instantly.
-                    </p>
-                    <div className="rounded-md border border-border/60 bg-background/30">
-                      <button
-                        type="button"
-                        onClick={() => setCarPosOpen((v) => !v)}
-                        className="w-full flex items-center justify-between px-3 py-2 min-h-[44px] text-left"
-                      >
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Car Position
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {carPosOpen ? "−" : "+"}
-                        </span>
-                      </button>
-                      {carPosOpen && (
-                        <div className="motion-content px-3 pb-3 space-y-3">
-                          <SliderRow
-                            label="Position X"
-                            value={carX}
-                            min={-50}
-                            max={50}
-                            suffix="%"
-                            onChange={track(setCarX)}
-                          />
-                          <SliderRow
-                            label="Position Y"
-                            value={carY}
-                            min={-50}
-                            max={50}
-                            suffix="%"
-                            onChange={track(setCarY)}
-                          />
-                          <SliderRow
-                            label="Scale"
-                            value={carScale}
-                            min={50}
-                            max={150}
-                            suffix="%"
-                            onChange={track(setCarScale)}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === "adjust" && (
-                  <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Crop
-                        </label>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={applyCrop}
-                            disabled={!pendingCrop || pendingCrop.w < 0.02}
-                            className="text-[11px] rounded-md bg-primary px-2.5 py-1 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                          >
-                            Apply Crop
-                          </button>
-                          <button
-                            type="button"
-                            onClick={clearPending}
-                            disabled={!pendingCrop}
-                            className="text-[11px] rounded-md border border-border bg-background px-2.5 py-1 text-foreground hover:bg-secondary disabled:opacity-50"
-                          >
-                            Clear
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mb-2">
-                        Drag on the preview to draw a selection.
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(Object.keys(ASPECT_VALUE) as AspectKey[]).map((a) => (
-                          <button
-                            key={a}
-                            type="button"
-                            onClick={() => track(setAdjustAspect)(a)}
-                            className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
-                              adjustAspect === a
-                                ? "border-primary bg-primary/10 text-foreground"
-                                : "border-border bg-background text-muted-foreground hover:text-foreground"
-                            }`}
-                          >
-                            {a === "free" ? "Free" : a}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="rounded-md border border-border/60 bg-background/30 p-3">
-                      <SliderRow
-                        label="Straighten"
-                        value={adjustStraighten}
-                        min={-15}
-                        max={15}
-                        suffix="°"
-                        onChange={track(setAdjustStraighten)}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
-                        Fit / Expand
-                      </label>
-                      {[
-                        { key: "none" as FitMode, label: "None" },
-                        { key: "fit" as FitMode, label: "Fit (letterbox)" },
-                        { key: "fill" as FitMode, label: "Fill (crop)" },
-                        { key: "expand" as FitMode, label: "Expand canvas" },
-                      ].map(({ key, label }) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => track(setAdjustFit)(key)}
-                          className={`mr-1.5 mb-1.5 text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
-                            adjustFit === key
-                              ? "border-primary bg-primary/10 text-foreground"
-                              : "border-border bg-background text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                      <p className="text-[11px] text-muted-foreground mt-1.5">
-                        Fit/Fill/Expand use the selected aspect ratio above.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === "shadow" && (
-                  <div className="rounded-lg border border-border bg-secondary/30 p-4">
-                    <div className="rounded-md border border-border/60 bg-background/30 p-3">
-                      <label className="flex items-center justify-between cursor-pointer min-h-[44px] mb-1">
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Contact Shadow
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={shadowEnabled}
-                          onChange={(e) => track(setShadowEnabled)(e.target.checked)}
-                          className="h-4 w-4 accent-primary"
-                        />
-                      </label>
-                      <p className="text-[11px] text-muted-foreground mb-3">
-                        Soft oval contact shadow auto-placed under the car. Turn off for interiors
-                        or detail shots.
-                      </p>
-                      {shadowEnabled && (
-                        <div className="space-y-3">
-                          <SliderRow
-                            label="Opacity"
-                            value={shadowOpacity}
-                            min={0}
-                            max={100}
-                            suffix="%"
-                            onChange={track(setShadowOpacity)}
-                          />
-                          <SliderRow
-                            label="Size"
-                            value={shadowScale}
-                            min={40}
-                            max={180}
-                            suffix="%"
-                            onChange={track(setShadowScale)}
-                          />
-                          <SliderRow
-                            label="Position X"
-                            value={shadowX}
-                            min={-200}
-                            max={200}
-                            suffix="px"
-                            onChange={track(setShadowX)}
-                          />
-                          <SliderRow
-                            label="Position Y"
-                            value={shadowY}
-                            min={-100}
-                            max={100}
-                            suffix="px"
-                            onChange={track(setShadowY)}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === "reflection" && (
-                  <div className="rounded-lg border border-border bg-secondary/30 p-4">
-                    <div className="rounded-md border border-border/60 bg-background/30 p-3">
-                      <label className="flex items-center justify-between cursor-pointer min-h-[44px] mb-1">
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Floor Reflection
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={reflectionEnabled}
-                          onChange={(e) => track(setReflectionEnabled)(e.target.checked)}
-                          className="h-4 w-4 accent-primary"
-                        />
-                      </label>
-                      <p className="text-[11px] text-muted-foreground mb-3">
-                        Mirror reflection under the car. Nudge to align if you move or resize it.
-                      </p>
-                      {reflectionEnabled && (
-                        <div className="space-y-3">
-                          <SliderRow
-                            label="Strength"
-                            value={reflectionOpacity}
-                            min={0}
-                            max={100}
-                            suffix="%"
-                            onChange={track(setReflectionOpacity)}
-                          />
-                          <SliderRow
-                            label="Size"
-                            value={reflectionScale}
-                            min={50}
-                            max={150}
-                            suffix="%"
-                            onChange={track(setReflectionScale)}
-                          />
-                          <SliderRow
-                            label="Position X"
-                            value={reflectionX}
-                            min={-200}
-                            max={200}
-                            suffix="px"
-                            onChange={track(setReflectionX)}
-                          />
-                          <SliderRow
-                            label="Position Y"
-                            value={reflectionY}
-                            min={-100}
-                            max={100}
-                            suffix="px"
-                            onChange={track(setReflectionY)}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === "overlay" && (
-                  <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
-                    <div>
-                      <label className="block text-xs font-medium text-card-foreground mb-1.5">
-                        Overlay
-                      </label>
-                      <ProductSelect
-                        value={overlayId}
-                        onValueChange={track(setOverlayId)}
-                        ariaLabel="Overlay"
-                        emptyLabel="None"
-                        options={overlays.map((overlay) => ({
-                          value: overlay.id,
-                          label: `${overlay.name}${overlay.category ? ` — ${overlay.category}` : ""}`,
-                        }))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-card-foreground mb-1.5">
-                        Overlay position
-                      </label>
-                      <ProductSelect
-                        value={overlayPos}
-                        onValueChange={(value) => track(setOverlayPos)(value as Position)}
-                        disabled={!overlayId}
-                        ariaLabel="Overlay position"
-                        options={POSITIONS}
-                      />
-                    </div>
-                  </div>
-                )}
+                <DialogPrimitive.Close asChild>
+                  <button
+                    className="grid size-11 place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label="Close Customize"
+                  >
+                    <X className="size-5" />
+                  </button>
+                </DialogPrimitive.Close>
               </div>
 
-              {error && (
-                <div className="mt-4 rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
-                  {error}
+              <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-secondary/30 p-3">
+                <Button type="button" onClick={() => void createCutout()} disabled={removing}>
+                  <Scissors className="size-4" />
+                  {rawCutoutImg ? "Create New Cutout" : "Remove Background"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setMaskOpen(true)}
+                  disabled={!rawCutoutImg || removing}
+                >
+                  Fix Cutout
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {rawCutoutImg
+                    ? "Cutout ready for non-destructive correction."
+                    : "Original photo preserved."}
+                </span>
+              </div>
+              {removeErr && (
+                <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  Cutout failed: {removeErr} You can close Customize or retry.
                 </div>
               )}
 
-              <div className="mt-5 flex flex-wrap justify-end gap-2">
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => void save("new")}
-                  disabled={saving || !ready}
-                  className="rounded-md border border-border bg-secondary px-4 py-2 text-sm text-secondary-foreground hover:bg-secondary/80 disabled:opacity-60"
-                >
-                  {saving ? "Saving…" : "Save as new photo"}
-                </button>
-                <button
-                  onClick={() => setOverwriteOpen(true)}
-                  disabled={saving || !ready}
-                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                >
-                  {saving ? "Saving…" : "Overwrite original"}
-                </button>
-              </div>
-              <AlertDialog open={overwriteOpen} onOpenChange={setOverwriteOpen}>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Overwrite the original photo?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      The current photo file will be replaced with this edited version. This cannot
-                      be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Keep original</AlertDialogCancel>
-                    <AlertDialogAction
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      onClick={() => void save("overwrite")}
+              {backdrops.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border p-8 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No backdrops are available. You can still create, correct, and save a
+                    transparent cutout.
+                  </p>
+                  <div className="mt-5 flex justify-center gap-2">
+                    <Button variant="outline" onClick={onClose}>
+                      Cancel
+                    </Button>
+                    <Button onClick={() => void save()} disabled={saving || !ready}>
+                      {saving ? "Saving…" : "Save Changes"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-4">
+                    <label className="block text-xs font-medium text-card-foreground mb-1.5">
+                      Backdrop
+                    </label>
+                    <ProductSelect
+                      value={backdropId}
+                      onValueChange={track(setBackdropId)}
+                      ariaLabel="Backdrop"
+                      options={backdrops.map((backdrop) => ({
+                        value: backdrop.id,
+                        label: backdrop.name,
+                      }))}
+                    />
+                  </div>
+
+                  <div
+                    ref={previewWrapRef}
+                    className="relative w-full rounded-lg overflow-hidden bg-background border border-border select-none"
+                    style={{ aspectRatio: previewAspect }}
+                  >
+                    {/* Composite canvas — visible on every tab except Adjust */}
+                    <canvas
+                      ref={canvasRef}
+                      className="absolute inset-0 w-full h-full"
+                      style={{ visibility: comparing || adjusting ? "hidden" : "visible" }}
+                    />
+
+                    {/* Adjust live preview canvas */}
+                    <canvas
+                      ref={adjustPreviewRef}
+                      className="absolute inset-0 w-full h-full object-contain"
+                      style={{ display: adjusting && !comparing ? "block" : "none" }}
+                    />
+
+                    {/* Straighten grid overlay */}
+                    {adjusting && adjustStraighten !== 0 && (
+                      <div
+                        aria-hidden
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(to right, rgba(255,255,255,0.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.18) 1px, transparent 1px)",
+                          backgroundSize: "10% 10%",
+                        }}
+                      />
+                    )}
+
+                    {/* Crop drag layer */}
+                    {adjusting && (
+                      <div
+                        className="absolute inset-0 cursor-crosshair"
+                        onPointerDown={onCropPointerDown}
+                        onPointerMove={onCropPointerMove}
+                        onPointerUp={onCropPointerUp}
+                        onPointerCancel={onCropPointerUp}
+                      >
+                        {overlayCrop && (
+                          <div
+                            className="absolute border-2 border-primary"
+                            style={{
+                              left: `${overlayCrop.x * 100}%`,
+                              top: `${overlayCrop.y * 100}%`,
+                              width: `${overlayCrop.w * 100}%`,
+                              height: `${overlayCrop.h * 100}%`,
+                              boxShadow: "0 0 0 9999px rgba(0,0,0,0.4)",
+                            }}
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {comparing && originalImg && (
+                      <img
+                        src={originalImg.src}
+                        alt="Original"
+                        className="absolute inset-0 w-full h-full object-contain"
+                      />
+                    )}
+
+                    {ready && (
+                      <button
+                        type="button"
+                        onMouseDown={() => setComparing(true)}
+                        onMouseUp={() => setComparing(false)}
+                        onMouseLeave={() => setComparing(false)}
+                        onTouchStart={(e) => {
+                          e.preventDefault();
+                          setComparing(true);
+                        }}
+                        onTouchEnd={() => setComparing(false)}
+                        onTouchCancel={() => setComparing(false)}
+                        className="absolute top-2 right-2 select-none rounded-md bg-background/80 backdrop-blur px-2.5 py-1.5 text-[11px] font-medium text-foreground border border-border hover:bg-background"
+                        title="Hold to view original"
+                      >
+                        {comparing ? "Showing original" : "Hold to compare"}
+                      </button>
+                    )}
+
+                    {removing && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+                        <div className="text-center">
+                          <div className="h-8 w-8 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                          <p className="text-sm font-medium text-foreground">
+                            Cutting out the car…
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-1">
+                            First use downloads a ~12MB model. This happens entirely in your
+                            browser.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tab bar */}
+                  <TabBar tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+
+                  {/* Tab content */}
+                  <div key={activeTab} className="motion-content mt-4">
+                    <div className="flex items-center justify-end gap-3 mb-2">
+                      <button
+                        type="button"
+                        onClick={undo}
+                        disabled={historyLen === 0}
+                        className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline disabled:opacity-40 disabled:hover:no-underline disabled:cursor-not-allowed"
+                      >
+                        Undo{historyLen > 0 ? ` (${historyLen})` : ""}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetCurrentTab}
+                        className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                      >
+                        Reset to defaults
+                      </button>
+                    </div>
+
+                    {activeTab === "background" && (
+                      <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
+                        <p className="text-xs text-muted-foreground">
+                          Choose a backdrop above. The preview updates instantly.
+                        </p>
+                        <div className="rounded-md border border-border/60 bg-background/30">
+                          <button
+                            type="button"
+                            onClick={() => setCarPosOpen((v) => !v)}
+                            className="w-full flex items-center justify-between px-3 py-2 min-h-[44px] text-left"
+                          >
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Car Position
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {carPosOpen ? "−" : "+"}
+                            </span>
+                          </button>
+                          {carPosOpen && (
+                            <div className="motion-content px-3 pb-3 space-y-3">
+                              <SliderRow
+                                label="Position X"
+                                value={carX}
+                                min={-50}
+                                max={50}
+                                suffix="%"
+                                onChange={track(setCarX)}
+                              />
+                              <SliderRow
+                                label="Position Y"
+                                value={carY}
+                                min={-50}
+                                max={50}
+                                suffix="%"
+                                onChange={track(setCarY)}
+                              />
+                              <SliderRow
+                                label="Scale"
+                                value={carScale}
+                                min={50}
+                                max={150}
+                                suffix="%"
+                                onChange={track(setCarScale)}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === "adjust" && (
+                      <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Crop
+                            </label>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={applyCrop}
+                                disabled={!pendingCrop || pendingCrop.w < 0.02}
+                                className="text-[11px] rounded-md bg-primary px-2.5 py-1 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                              >
+                                Apply Crop
+                              </button>
+                              <button
+                                type="button"
+                                onClick={clearPending}
+                                disabled={!pendingCrop}
+                                className="text-[11px] rounded-md border border-border bg-background px-2.5 py-1 text-foreground hover:bg-secondary disabled:opacity-50"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mb-2">
+                            Drag on the preview to draw a selection.
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(Object.keys(ASPECT_VALUE) as AspectKey[]).map((a) => (
+                              <button
+                                key={a}
+                                type="button"
+                                onClick={() => track(setAdjustAspect)(a)}
+                                className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+                                  adjustAspect === a
+                                    ? "border-primary bg-primary/10 text-foreground"
+                                    : "border-border bg-background text-muted-foreground hover:text-foreground"
+                                }`}
+                              >
+                                {a === "free" ? "Free" : a}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-md border border-border/60 bg-background/30 p-3">
+                          <SliderRow
+                            label="Straighten"
+                            value={adjustStraighten}
+                            min={-15}
+                            max={15}
+                            suffix="°"
+                            onChange={track(setAdjustStraighten)}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                            Fit / Expand
+                          </label>
+                          {[
+                            { key: "none" as FitMode, label: "None" },
+                            { key: "fit" as FitMode, label: "Fit (letterbox)" },
+                            { key: "fill" as FitMode, label: "Fill (crop)" },
+                            { key: "expand" as FitMode, label: "Expand canvas" },
+                          ].map(({ key, label }) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => track(setAdjustFit)(key)}
+                              className={`mr-1.5 mb-1.5 text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+                                adjustFit === key
+                                  ? "border-primary bg-primary/10 text-foreground"
+                                  : "border-border bg-background text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                          <p className="text-[11px] text-muted-foreground mt-1.5">
+                            Fit/Fill/Expand use the selected aspect ratio above.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === "shadow" && (
+                      <div className="rounded-lg border border-border bg-secondary/30 p-4">
+                        <div className="rounded-md border border-border/60 bg-background/30 p-3">
+                          <label className="flex items-center justify-between cursor-pointer min-h-[44px] mb-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Contact Shadow
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={shadowEnabled}
+                              onChange={(e) => track(setShadowEnabled)(e.target.checked)}
+                              className="h-4 w-4 accent-primary"
+                            />
+                          </label>
+                          <p className="text-[11px] text-muted-foreground mb-3">
+                            Soft oval contact shadow auto-placed under the car. Turn off for
+                            interiors or detail shots.
+                          </p>
+                          {shadowEnabled && (
+                            <div className="space-y-3">
+                              <SliderRow
+                                label="Opacity"
+                                value={shadowOpacity}
+                                min={0}
+                                max={100}
+                                suffix="%"
+                                onChange={track(setShadowOpacity)}
+                              />
+                              <SliderRow
+                                label="Size"
+                                value={shadowScale}
+                                min={40}
+                                max={180}
+                                suffix="%"
+                                onChange={track(setShadowScale)}
+                              />
+                              <SliderRow
+                                label="Position X"
+                                value={shadowX}
+                                min={-200}
+                                max={200}
+                                suffix="px"
+                                onChange={track(setShadowX)}
+                              />
+                              <SliderRow
+                                label="Position Y"
+                                value={shadowY}
+                                min={-100}
+                                max={100}
+                                suffix="px"
+                                onChange={track(setShadowY)}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === "reflection" && (
+                      <div className="rounded-lg border border-border bg-secondary/30 p-4">
+                        <div className="rounded-md border border-border/60 bg-background/30 p-3">
+                          <label className="flex items-center justify-between cursor-pointer min-h-[44px] mb-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Floor Reflection
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={reflectionEnabled}
+                              onChange={(e) => track(setReflectionEnabled)(e.target.checked)}
+                              className="h-4 w-4 accent-primary"
+                            />
+                          </label>
+                          <p className="text-[11px] text-muted-foreground mb-3">
+                            Mirror reflection under the car. Nudge to align if you move or resize
+                            it.
+                          </p>
+                          {reflectionEnabled && (
+                            <div className="space-y-3">
+                              <SliderRow
+                                label="Strength"
+                                value={reflectionOpacity}
+                                min={0}
+                                max={100}
+                                suffix="%"
+                                onChange={track(setReflectionOpacity)}
+                              />
+                              <SliderRow
+                                label="Size"
+                                value={reflectionScale}
+                                min={50}
+                                max={150}
+                                suffix="%"
+                                onChange={track(setReflectionScale)}
+                              />
+                              <SliderRow
+                                label="Position X"
+                                value={reflectionX}
+                                min={-200}
+                                max={200}
+                                suffix="px"
+                                onChange={track(setReflectionX)}
+                              />
+                              <SliderRow
+                                label="Position Y"
+                                value={reflectionY}
+                                min={-100}
+                                max={100}
+                                suffix="px"
+                                onChange={track(setReflectionY)}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === "overlay" && (
+                      <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-card-foreground mb-1.5">
+                            Overlay
+                          </label>
+                          <ProductSelect
+                            value={overlayId}
+                            onValueChange={track(setOverlayId)}
+                            ariaLabel="Overlay"
+                            emptyLabel="None"
+                            options={overlays.map((overlay) => ({
+                              value: overlay.id,
+                              label: `${overlay.name}${overlay.category ? ` — ${overlay.category}` : ""}`,
+                            }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-card-foreground mb-1.5">
+                            Overlay position
+                          </label>
+                          <ProductSelect
+                            value={overlayPos}
+                            onValueChange={(value) => track(setOverlayPos)(value as Position)}
+                            disabled={!overlayId}
+                            ariaLabel="Overlay position"
+                            options={POSITIONS}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {error && (
+                    <div className="mt-4 rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="mt-5 flex flex-wrap justify-end gap-2">
+                    <button
+                      onClick={onClose}
+                      className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
                     >
-                      Overwrite photo
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => void save()}
+                      disabled={saving || !ready}
+                      className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                    >
+                      {saving ? "Saving…" : "Save Changes"}
+                    </button>
+                  </div>
+                </>
+              )}
+              {rawCutoutImg && (
+                <MaskEditor
+                  open={maskOpen}
+                  onOpenChange={setMaskOpen}
+                  originalUrl={originalUrl}
+                  cutoutUrl={rawCutoutImg.src}
+                  onApply={(blob) => void applyCorrectedMask(blob)}
+                />
+              )}
+            </div>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
