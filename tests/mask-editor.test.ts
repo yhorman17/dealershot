@@ -2,9 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   compositeOriginalWithMask,
+  getEditorImageLayout,
   getContainedImageRect,
+  isPointInsideImage,
   mapPointerToImage,
+  mapViewportPointToImage,
   paintMask,
+  paintMaskStrokeInPlace,
 } from "../src/lib/mask-editor.ts";
 
 test("erase and restore change only alpha mask state", () => {
@@ -57,4 +61,67 @@ test("object-contain letterboxing is excluded from pointer mapping", () => {
     ),
     { x: 800, y: 450 },
   );
+});
+
+test("a non-zero viewport produces a centered valid initial fit", () => {
+  const layout = getEditorImageLayout(
+    { width: 960, height: 640 },
+    { width: 1600, height: 900 },
+    { zoom: 1, panX: 0, panY: 0 },
+  );
+  assert.ok(layout);
+  assert.ok(Math.abs(layout.width - 912) < 0.0001);
+  assert.ok(Math.abs(layout.height - 513) < 0.0001);
+  assert.ok(Math.abs(layout.left - 24) < 0.0001);
+  assert.ok(Math.abs(layout.top - 63.5) < 0.0001);
+  assert.equal(
+    getEditorImageLayout(
+      { width: 0, height: 640 },
+      { width: 1600, height: 900 },
+      { zoom: 1, panX: 0, panY: 0 },
+    ),
+    null,
+  );
+});
+
+test("resize, zoom, and pan preserve exact viewport-to-image mapping", () => {
+  const image = { width: 2400, height: 1600 };
+  const view = { zoom: 2.25, panX: 73, panY: -41 };
+  const before = getEditorImageLayout({ width: 900, height: 600 }, image, view)!;
+  const after = getEditorImageLayout({ width: 1200, height: 760 }, image, view)!;
+  const sourcePoint = { x: 1333, y: 711 };
+  for (const layout of [before, after]) {
+    const viewportPoint = {
+      x: layout.left + (sourcePoint.x / image.width) * layout.width,
+      y: layout.top + (sourcePoint.y / image.height) * layout.height,
+    };
+    const mapped = mapViewportPointToImage(viewportPoint, layout, image);
+    assert.ok(Math.abs(mapped.x - sourcePoint.x) < 0.0001);
+    assert.ok(Math.abs(mapped.y - sourcePoint.y) < 0.0001);
+    assert.equal(isPointInsideImage(mapped, image), true);
+  }
+});
+
+test("continuous erase and restore strokes update every crossed mask region", () => {
+  const mask = new Uint8ClampedArray(30 * 12).fill(255);
+  const erasedBounds = paintMaskStrokeInPlace(
+    mask,
+    30,
+    12,
+    { x: 3, y: 6 },
+    { x: 26, y: 6 },
+    2,
+    "erase",
+    1,
+  );
+  assert.ok(erasedBounds);
+  for (let x = 3; x <= 26; x += 1) assert.equal(mask[6 * 30 + x], 0);
+  paintMaskStrokeInPlace(mask, 30, 12, { x: 8, y: 6 }, { x: 15, y: 6 }, 2, "restore", 1);
+  for (let x = 8; x <= 15; x += 1) assert.equal(mask[6 * 30 + x], 255);
+});
+
+test("transparent borders remain transparent in the live cutout composite", () => {
+  const original = new Uint8ClampedArray([10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255]);
+  const result = compositeOriginalWithMask(original, new Uint8ClampedArray([0, 255, 0]));
+  assert.deepEqual(Array.from(result), [10, 20, 30, 0, 40, 50, 60, 255, 70, 80, 90, 0]);
 });

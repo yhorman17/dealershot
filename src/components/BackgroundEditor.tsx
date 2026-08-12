@@ -741,11 +741,18 @@ export function BackgroundEditor({
   };
 
   const applyCorrectedMask = async (blob: Blob) => {
-    pendingCutoutBlobRef.current = blob;
     const url = URL.createObjectURL(blob);
-    if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
-    cutoutUrlRef.current = url;
-    setRawCutoutImg(await loadImage(url));
+    try {
+      const correctedImage = await loadImage(url);
+      const previousUrl = cutoutUrlRef.current;
+      pendingCutoutBlobRef.current = blob;
+      cutoutUrlRef.current = url;
+      setRawCutoutImg(correctedImage);
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+    } catch (reason) {
+      URL.revokeObjectURL(url);
+      throw reason;
+    }
   };
 
   useEffect(() => {
@@ -1585,7 +1592,7 @@ export function BackgroundEditor({
                   onOpenChange={setMaskOpen}
                   originalUrl={originalUrl}
                   cutoutUrl={rawCutoutImg.src}
-                  onApply={(blob) => void applyCorrectedMask(blob)}
+                  onApply={applyCorrectedMask}
                 />
               )}
             </div>

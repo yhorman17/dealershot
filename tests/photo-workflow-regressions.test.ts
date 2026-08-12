@@ -94,3 +94,60 @@ test("capture-session migration preserves originals and enforces tenant-scoped s
   assert.match(migration, /REVOKE ALL ON public\.photo_capture_sessions/);
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.complete_photo_capture_session/);
 });
+
+test("Fix Cutout waits for decoded assets and a measurable viewport", () => {
+  const editor = read("src/components/MaskEditor.tsx");
+
+  assert.match(editor, /type EditorPhase = "loading" \| "ready" \| "error" \| "applying"/);
+  assert.match(editor, /await fetch\(source/);
+  assert.match(editor, /mode: "cors"/);
+  assert.match(editor, /await createImageBitmap\(blob\)/);
+  assert.match(editor, /took too long to decode/);
+  assert.match(editor, /const setViewportNode = useCallback/);
+  assert.match(editor, /ref=\{setViewportNode\}/);
+  assert.match(editor, /\[open, viewportElement\]/);
+  assert.match(editor, /new ResizeObserver\(measure\)/);
+  assert.match(editor, /if \(next\.width <= 0 \|\| next\.height <= 0\) return/);
+  assert.match(editor, /Loading photo and cutout…/);
+  assert.match(editor, /disabled=\{controlsDisabled/);
+  assert.match(editor, /disabled=\{phase !== "ready"\}/);
+});
+
+test("Fix Cutout renders source RGB and editable alpha in a DPR canvas", () => {
+  const editor = read("src/components/MaskEditor.tsx");
+
+  assert.match(editor, /Math\.round\(width \* dpr\)/);
+  assert.match(editor, /context\.setTransform\(dpr, 0, 0, dpr, 0, 0\)/);
+  assert.match(editor, /context\.drawImage\(source, layout\.left/);
+  assert.match(editor, /context\.globalCompositeOperation = "destination-in"/);
+  assert.match(editor, /context\.drawImage\(mask, layout\.left/);
+  assert.match(editor, /data-testid="mask-editor-canvas"/);
+  assert.match(editor, /\[background-image:linear-gradient\(45deg/);
+});
+
+test("Fix Cutout has recoverable loading, apply, resize, and tab-return behavior", () => {
+  const editor = read("src/components/MaskEditor.tsx");
+  const backgroundEditor = read("src/components/BackgroundEditor.tsx");
+
+  assert.match(editor, /Fix Cutout couldn't start\./);
+  assert.match(editor, /setRetryNonce\(\(value\) => value \+ 1\)/);
+  assert.match(editor, /document\.addEventListener\("visibilitychange", redraw\)/);
+  assert.match(editor, /await onApply\(blob\)/);
+  assert.match(editor, /if \(!nextOpen && phase === "applying"\) return/);
+  assert.match(editor, /setApplyError\(/);
+  assert.match(editor, /Your edited mask is still open; try Apply Mask again\./);
+  assert.match(backgroundEditor, /onApply=\{applyCorrectedMask\}/);
+  assert.match(
+    backgroundEditor,
+    /catch \(reason\) \{[\s\S]*URL\.revokeObjectURL\(url\);[\s\S]*throw reason/,
+  );
+});
+
+test("mask editor visual fixture covers retained, missing, and transparent regions", () => {
+  const fixture = read("tests/fixtures/mask-editor-harness.tsx");
+
+  assert.match(fixture, /CASE A: a green retained background object/);
+  assert.match(fixture, /CASE B: the mask incorrectly removes part of the vehicle roof/);
+  assert.match(fixture, /CASE C is the transparent border/);
+  assert.match(fixture, /<MaskEditor/);
+});
