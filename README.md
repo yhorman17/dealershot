@@ -59,6 +59,8 @@ See [the authorization model and disposable validation checklist](docs/DEALERSHO
 
 The [Phase 1 expansion foundation](docs/DEALERSHOT_EXPANSION_PHASE_1.md) documents admin-provisioned accounts, forced password onboarding, scoped settings, append-only audit, and durable jobs. Use the [Phase 1 release gate](docs/DEALERSHOT_PHASE_1_RELEASE_GATE.md) for disposable hosted validation, manual deployment, and rollback.
 
+The [photo workflow optimization](docs/DEALERSHOT_PHOTO_WORKFLOW.md) documents fast raw capture, completion sessions, Bulk Photos, lazy desktop Customize, non-destructive Fix Cutout, and the compatibility boundary before the future Media Ledger.
+
 ## Database changes
 
 Database changes are version-controlled under `supabase/migrations`. Review and validate migrations in a disposable environment before applying them through the normal Supabase deployment workflow. Do not edit production data manually.
