@@ -53,6 +53,22 @@ test("guided capture persists raw originals through a bounded retryable queue", 
   assert.match(source, /complete_photo_capture_session/);
 });
 
+test("photo selection remains registered while capture context and uploads resolve", () => {
+  const source = read("src/components/VehiclePhotos.tsx");
+
+  assert.match(source, /captureContextPromiseRef/);
+  assert.match(source, /const context = await getCaptureContext\(\)/);
+  assert.doesNotMatch(source, /\[dealershipId, user, vehicleId, vehicleVin\]/);
+  assert.match(
+    source,
+    /const registeredPhotoCount = photos\.length \+ pendingUploads \+ failedUploads/,
+  );
+  assert.match(source, /photos registered/);
+  assert.match(source, /safely queued or uploading while you continue/);
+  assert.match(source, /Photo upload failed/);
+  assert.match(source, /entry\.error \|\| "The original is still available\. Tap Retry Uploads\."/);
+});
+
 test("phone capture hides office preparation controls below the md breakpoint", () => {
   const source = read("src/components/VehiclePhotos.tsx");
 

@@ -161,17 +161,28 @@ export function VehiclePhotos({
   initialCustomizePhotoId?: string;
 }) {
   const { user } = useAuth();
+  const userId = user?.id;
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [docLinks, setDocLinks] = useState<VehicleDocument[]>([]);
   const [mode, setMode] = useState<"guided" | "free">("guided");
   const [customLabel, setCustomLabel] = useState("");
   const [addingCustom, setAddingCustom] = useState(false);
   const [dealershipId, setDealershipId] = useState<string | null>(null);
-  const [vehicleVin, setVehicleVin] = useState<string | null>(null);
   const [captureStatus, setCaptureStatus] = useState<"in_progress" | "completed">("in_progress");
   const [queueEntries, setQueueEntries] = useState<UploadEntry<CaptureUpload>[]>([]);
   const [completing, setCompleting] = useState(false);
   const captureSessionRef = useRef<string | null>(null);
+  const captureContextRef = useRef<{
+    vehicleId: string;
+    dealershipId: string;
+    vin: string | null;
+  } | null>(null);
+  const captureContextPromiseRef = useRef<Promise<{
+    vehicleId: string;
+    dealershipId: string;
+    vin: string | null;
+  }> | null>(null);
+  const surfacedUploadFailuresRef = useRef(new Set<string>());
   const photosRef = useRef<Photo[]>([]);
   const nextSortRef = useRef(0);
   const initialCustomizeOpenedRef = useRef(false);
@@ -182,17 +193,47 @@ export function VehiclePhotos({
   const [pendingDelete, setPendingDelete] = useState<Photo | null>(null);
   const [pendingDetach, setPendingDetach] = useState<VehicleDocument | null>(null);
 
-  useEffect(() => {
-    void (async () => {
-      const { data } = await supabase
+  const getCaptureContext = useCallback(async () => {
+    if (captureContextRef.current?.vehicleId === vehicleId) return captureContextRef.current;
+    if (captureContextPromiseRef.current) return captureContextPromiseRef.current;
+
+    const request = (async () => {
+      const { data, error } = await supabase
         .from("vehicles")
         .select("dealership_id, vin")
         .eq("id", vehicleId)
         .maybeSingle();
-      setDealershipId((data?.dealership_id as string) || null);
-      setVehicleVin((data?.vin as string) || null);
+      if (error) throw error;
+      if (!data?.dealership_id) {
+        throw new Error("This vehicle is not connected to an available dealership.");
+      }
+      const context = {
+        vehicleId,
+        dealershipId: data.dealership_id as string,
+        vin: (data.vin as string | null) || null,
+      };
+      captureContextRef.current = context;
+      setDealershipId(context.dealershipId);
+      return context;
     })();
+    captureContextPromiseRef.current = request;
+    try {
+      return await request;
+    } finally {
+      captureContextPromiseRef.current = null;
+    }
   }, [vehicleId]);
+
+  useEffect(() => {
+    captureSessionRef.current = null;
+    captureContextRef.current = null;
+    captureContextPromiseRef.current = null;
+    setDealershipId(null);
+    void getCaptureContext().catch(() => {
+      // Capture remains available: the queued job will retry this lookup and
+      // surface an actionable error without dropping the selected File.
+    });
+  }, [getCaptureContext]);
 
   const load = useCallback(
     async ({ animate = false }: { animate?: boolean } = {}) => {
@@ -278,13 +319,14 @@ export function VehiclePhotos({
   const maxSort = () => items.reduce((m, i) => Math.max(m, i.sort_order), -1);
 
   const ensureCaptureSession = useCallback(async () => {
-    if (!user || !dealershipId) throw new Error("Your dealership access is unavailable.");
+    if (!userId) throw new Error("Your signed-in session is unavailable. Sign in and try again.");
     if (captureSessionRef.current) return captureSessionRef.current;
+    const context = await getCaptureContext();
     const { data: existing } = await supabase
       .from("photo_capture_sessions")
       .select("id, status")
       .eq("vehicle_id", vehicleId)
-      .eq("created_by", user.id)
+      .eq("created_by", userId)
       .eq("mode", "guided")
       .eq("status", "in_progress")
       .maybeSingle();
@@ -295,11 +337,11 @@ export function VehiclePhotos({
     const { data, error } = await supabase
       .from("photo_capture_sessions")
       .insert({
-        dealership_id: dealershipId,
+        dealership_id: context.dealershipId,
         vehicle_id: vehicleId,
-        vin: vehicleVin,
+        vin: context.vin,
         mode: "guided",
-        created_by: user.id,
+        created_by: userId,
       })
       .select("id")
       .single();
@@ -308,7 +350,7 @@ export function VehiclePhotos({
         .from("photo_capture_sessions")
         .select("id")
         .eq("vehicle_id", vehicleId)
-        .eq("created_by", user.id)
+        .eq("created_by", userId)
         .eq("mode", "guided")
         .eq("status", "in_progress")
         .maybeSingle();
@@ -318,7 +360,7 @@ export function VehiclePhotos({
     }
     captureSessionRef.current = data.id;
     return data.id;
-  }, [dealershipId, user, vehicleId, vehicleVin]);
+  }, [getCaptureContext, userId, vehicleId]);
 
   const uploadQueue = useMemo(
     () =>
@@ -358,6 +400,18 @@ export function VehiclePhotos({
   );
 
   useEffect(() => uploadQueue.subscribe(setQueueEntries), [uploadQueue]);
+
+  useEffect(() => {
+    queueEntries.forEach((entry) => {
+      if (entry.state !== "failed") return;
+      const failureKey = `${entry.id}:${entry.attempts}`;
+      if (surfacedUploadFailuresRef.current.has(failureKey)) return;
+      surfacedUploadFailuresRef.current.add(failureKey);
+      toast.error("Photo upload failed", {
+        description: entry.error || "The original is still available. Tap Retry Uploads.",
+      });
+    });
+  }, [queueEntries]);
 
   const handleGuidedUpload = async (shotName: string, file: File) => {
     setCaptureStatus("in_progress");
@@ -470,6 +524,10 @@ export function VehiclePhotos({
     (entry) => entry.state === "queued" || entry.state === "uploading",
   ).length;
   const failedUploads = queueEntries.filter((entry) => entry.state === "failed").length;
+  const registeredPhotoCount = photos.length + pendingUploads + failedUploads;
+  const latestUploadError = [...queueEntries]
+    .reverse()
+    .find((entry) => entry.state === "failed")?.error;
 
   const completePhotos = async () => {
     setCompleting(true);
@@ -530,6 +588,40 @@ export function VehiclePhotos({
         ))}
       </div>
 
+      <div className="border-b border-border p-4 sm:p-5">
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div aria-live="polite">
+            <p className="text-sm font-semibold">{registeredPhotoCount} photos registered</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {failedUploads > 0
+                ? `${failedUploads} failed — ${latestUploadError || "tap retry before completing"}`
+                : pendingUploads > 0
+                  ? `${pendingUploads} safely queued or uploading while you continue`
+                  : captureStatus === "completed"
+                    ? "Vehicle photos completed"
+                    : photos.length > 0
+                      ? "All raw originals are safely uploaded"
+                      : "Captured photos will appear here immediately"}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {failedUploads > 0 && (
+              <Button variant="outline" onClick={() => uploadQueue.retryFailed()}>
+                <RefreshCw className="size-4" /> Retry Uploads
+              </Button>
+            )}
+            <Button
+              className="min-h-12 flex-1 sm:flex-none"
+              onClick={() => void completePhotos()}
+              disabled={completing || registeredPhotoCount === 0}
+            >
+              <Check className="size-4" />
+              {completing ? "Completing…" : "Complete Photos"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {mode === "guided" ? (
         <div key="guided" className="motion-content">
           <div className="border-b border-border p-4 sm:p-5">
@@ -549,35 +641,6 @@ export function VehiclePhotos({
               className="mt-4 h-1.5"
               aria-label={`${completed} of ${SHOT_TYPES.length} guided shots complete`}
             />
-            <div className="mt-4 flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div aria-live="polite">
-                <p className="text-sm font-semibold">{photos.length} photos captured</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {failedUploads > 0
-                    ? `${failedUploads} failed — tap retry before completing`
-                    : pendingUploads > 0
-                      ? `${pendingUploads} uploading while you continue`
-                      : captureStatus === "completed"
-                        ? "Vehicle photos completed"
-                        : "All raw originals are safely uploaded"}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                {failedUploads > 0 && (
-                  <Button variant="outline" onClick={() => uploadQueue.retryFailed()}>
-                    <RefreshCw className="size-4" /> Retry Uploads
-                  </Button>
-                )}
-                <Button
-                  className="min-h-12 flex-1 sm:flex-none"
-                  onClick={() => void completePhotos()}
-                  disabled={completing || photos.length + pendingUploads + failedUploads === 0}
-                >
-                  <Check className="size-4" />
-                  {completing ? "Completing…" : "Complete Photos"}
-                </Button>
-              </div>
-            </div>
           </div>
 
           <div className="grid lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)]">
