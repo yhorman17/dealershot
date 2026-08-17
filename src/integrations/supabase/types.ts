@@ -327,6 +327,7 @@ export type Database = {
           id: string;
           image_url: string;
           is_main: boolean;
+          media_asset_id: string | null;
           photo_id: string | null;
           session_id: string;
           shot_type: string | null;
@@ -339,6 +340,7 @@ export type Database = {
           id?: string;
           image_url: string;
           is_main?: boolean;
+          media_asset_id?: string | null;
           photo_id?: string | null;
           session_id: string;
           shot_type?: string | null;
@@ -347,6 +349,7 @@ export type Database = {
         };
         Update: {
           is_main?: boolean;
+          media_asset_id?: string | null;
           shot_type?: string | null;
           sort_order?: number;
         };
@@ -364,6 +367,7 @@ export type Database = {
           image_url: string;
           is_cutout: boolean;
           is_main: boolean;
+          media_asset_id: string | null;
           media_category:
             | "exterior"
             | "interior"
@@ -405,6 +409,7 @@ export type Database = {
           image_url: string;
           is_cutout?: boolean;
           is_main?: boolean;
+          media_asset_id?: string;
           media_category?:
             | "exterior"
             | "interior"
@@ -446,6 +451,7 @@ export type Database = {
           image_url?: string;
           is_cutout?: boolean;
           is_main?: boolean;
+          media_asset_id?: string;
           media_category?:
             | "exterior"
             | "interior"
@@ -867,17 +873,26 @@ export type Database = {
       }>;
       media_variants: TableDefinition<{
         id: string;
-        photo_id: string;
+        photo_id: string | null;
+        media_asset_id: string | null;
         variant_type:
           | "original"
+          | "thumbnail"
+          | "preview"
           | "cutout"
           | "corrected_cutout"
           | "customized"
           | "enhanced"
+          | "dealer_render"
           | "published";
         source_variant_id: string | null;
         image_url: string;
+        storage_bucket: string | null;
         storage_path: string | null;
+        content_type: string | null;
+        original_filename: string | null;
+        variant_role: string | null;
+        archived_at: string | null;
         processing_provider: string | null;
         processing_status: "queued" | "processing" | "completed" | "failed";
         width: number | null;
@@ -887,6 +902,40 @@ export type Database = {
         metadata: Json;
         created_by: string | null;
         created_at: string;
+      }>;
+      media_assets: TableDefinition<{
+        id: string;
+        organization_id: string;
+        dealership_id: string;
+        vehicle_id: string | null;
+        capture_session_id: string | null;
+        source_media_id: string | null;
+        uploaded_by: string | null;
+        source_type: "capture" | "upload" | "bulk" | "legacy" | "retake" | "derived";
+        media_kind: "photo" | "video" | "exterior_360" | "interior_360";
+        media_category:
+          | "exterior"
+          | "interior"
+          | "detail"
+          | "odometer"
+          | "vin"
+          | "document"
+          | "misc";
+        shot_label: string | null;
+        original_filename: string | null;
+        content_type: string;
+        byte_size: number;
+        width: number | null;
+        height: number | null;
+        checksum_sha256: string;
+        storage_provider: string;
+        storage_bucket: string;
+        storage_object_path: string;
+        lifecycle_state: "active" | "superseded" | "archived";
+        migration_state: "legacy" | "copying" | "verified" | "private" | "failed";
+        archived_at: string | null;
+        created_at: string;
+        updated_at: string;
       }>;
       readiness_rules: TableDefinition<{
         id: string;
@@ -1215,6 +1264,112 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      get_media_upload_scope: {
+        Args: { _vehicle_id?: string; _capture_session_id?: string };
+        Returns: Json;
+      };
+      get_media_delivery_manifest: {
+        Args: { _media_asset_id: string; _purpose?: string; _variant_id?: string };
+        Returns: Json;
+      };
+      get_media_delivery_manifests: {
+        Args: { _media_asset_ids: string[]; _purpose?: string };
+        Returns: Json;
+      };
+      finalize_private_photo_upload: {
+        Args: {
+          _actor_id: string;
+          _media_asset_id: string;
+          _vehicle_id: string;
+          _capture_session_id?: string;
+          _storage_bucket: string;
+          _storage_path: string;
+          _original_filename: string;
+          _content_type: string;
+          _byte_size: number;
+          _width: number;
+          _height: number;
+          _checksum_sha256: string;
+          _shot_label?: string;
+          _sort_order: number;
+          _source_type?: string;
+        };
+        Returns: Json;
+      };
+      finalize_private_bulk_upload: {
+        Args: {
+          _actor_id: string;
+          _media_asset_id: string;
+          _session_id: string;
+          _storage_bucket: string;
+          _storage_path: string;
+          _original_filename: string;
+          _content_type: string;
+          _byte_size: number;
+          _width: number;
+          _height: number;
+          _checksum_sha256: string;
+          _sort_order: number;
+        };
+        Returns: Json;
+      };
+      commit_private_photo_variant: {
+        Args: {
+          _actor_id: string;
+          _photo_id: string;
+          _variant_id: string;
+          _variant_type: string;
+          _source_variant_id: string;
+          _storage_bucket: string;
+          _storage_path: string;
+          _content_type: string;
+          _byte_size: number;
+          _width: number;
+          _height: number;
+          _checksum_sha256: string;
+          _processing_provider: string;
+        };
+        Returns: Json;
+      };
+      archive_private_media_asset: {
+        Args: { _actor_id: string; _media_asset_id: string };
+        Returns: boolean;
+      };
+      worker_get_media_migration: { Args: { _migration_id: string }; Returns: Json };
+      worker_complete_media_migration: {
+        Args: {
+          _migration_id: string;
+          _checksum_sha256: string;
+          _byte_size: number;
+          _content_type: string;
+          _width: number;
+          _height: number;
+        };
+        Returns: boolean;
+      };
+      worker_fail_media_migration: {
+        Args: { _migration_id: string; _safe_error_code: string };
+        Returns: boolean;
+      };
+      worker_get_media_asset_source: { Args: { _media_asset_id: string }; Returns: Json };
+      worker_get_media_migration_status: { Args: Record<PropertyKey, never>; Returns: Json };
+      worker_register_media_derivative: {
+        Args: {
+          _media_asset_id: string;
+          _variant_type: string;
+          _variant_role: string;
+          _storage_bucket: string;
+          _storage_path: string;
+          _content_type: string;
+          _byte_size: number;
+          _width: number;
+          _height: number;
+          _checksum_sha256: string;
+          _processing_provider: string;
+          _metadata?: Json;
+        };
+        Returns: string;
+      };
       accept_invitation: { Args: { _token: string }; Returns: Json };
       associate_bulk_photo_session: {
         Args: { _session_id: string; _vehicle_id: string };

@@ -3,6 +3,7 @@ import { hostname } from "node:os";
 import { createClient } from "@supabase/supabase-js";
 import type { Database, Json } from "../src/integrations/supabase/types";
 import { runOneJob, type BackgroundJob, type QueueAdapter } from "./runtime";
+import { createMediaJobHandlers, ensurePrivateMediaBucket } from "./media";
 
 function requiredEnv(name: string) {
   const value = process.env[name]?.trim();
@@ -81,6 +82,7 @@ const queue: QueueAdapter = {
 
 const handlers = {
   "system.noop": async (job: BackgroundJob) => ({ acknowledged: true, trace_id: job.trace_id }),
+  ...createMediaJobHandlers(supabase),
 };
 
 let shuttingDown = false;
@@ -98,6 +100,7 @@ async function reportMetrics() {
 }
 
 async function main() {
+  await ensurePrivateMediaBucket(supabase);
   log({ level: "info", event: "worker.started", worker_id: workerId, lease_seconds: leaseSeconds });
   let nextMetricsAt = 0;
   while (!shuttingDown) {
