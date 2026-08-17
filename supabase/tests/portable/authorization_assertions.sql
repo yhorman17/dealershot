@@ -59,11 +59,17 @@ $$;
 GRANT USAGE ON SCHEMA test TO anon, authenticated, service_role;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA test TO anon, authenticated, service_role;
 
-INSERT INTO public.dealerships (id, name, status, subscription_status) VALUES
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'Dealer A', 'active', 'active'),
-  ('bbbbbbbb-0000-0000-0000-000000000001', 'Dealer B', 'active', 'active'),
-  ('cccccccc-0000-0000-0000-000000000001', 'Suspended Dealer', 'suspended', 'active'),
-  ('dddddddd-0000-0000-0000-000000000001', 'Inactive Subscription', 'active', 'past_due');
+INSERT INTO public.organizations (id, name, status) VALUES
+  ('11111111-aaaa-4000-8000-000000000001', 'Organization A', 'active'),
+  ('22222222-bbbb-4000-8000-000000000001', 'Organization B', 'active'),
+  ('33333333-cccc-4000-8000-000000000001', 'Suspended Organization', 'active'),
+  ('44444444-dddd-4000-8000-000000000001', 'Inactive Subscription Organization', 'active');
+
+INSERT INTO public.dealerships (id, organization_id, name, status, subscription_status) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-aaaa-4000-8000-000000000001', 'Dealer A', 'active', 'active'),
+  ('bbbbbbbb-0000-0000-0000-000000000001', '22222222-bbbb-4000-8000-000000000001', 'Dealer B', 'active', 'active'),
+  ('cccccccc-0000-0000-0000-000000000001', '33333333-cccc-4000-8000-000000000001', 'Suspended Dealer', 'suspended', 'active'),
+  ('dddddddd-0000-0000-0000-000000000001', '44444444-dddd-4000-8000-000000000001', 'Inactive Subscription', 'active', 'past_due');
 
 INSERT INTO auth.users (id, email, raw_user_meta_data, created_at) VALUES
   ('00000000-0000-0000-0000-000000000001', 'owner@example.test', '{}', now() - interval '1 day'),
@@ -1010,6 +1016,184 @@ SELECT test.expect_sqlstate(
     )$$,
   '42501',
   'prepared bulk associations cannot be replayed'
+);
+RESET ROLE;
+
+-- NetLook-replacement foundation: originals, readiness, role capabilities,
+-- generated documents, durable production activity, and payout isolation.
+SELECT test.assert_true(
+  (SELECT count(*) = 1 FROM public.media_variants
+   WHERE photo_id = '30000000-0000-0000-0000-000000000001'
+     AND variant_type = 'original'
+     AND image_url = 'https://example.test/a.jpg'),
+  'every photo receives exactly one immutable original media variant'
+);
+SELECT test.assert_true(
+  (SELECT status = 'needs_attention'
+     AND reasons @> '[{"key":"vehicle.stock_number"}]'::jsonb
+     AND reasons @> '[{"key":"vehicle.price"}]'::jsonb
+   FROM public.vehicle_readiness
+   WHERE vehicle_id = '10000000-0000-0000-0000-000000000001'),
+  'readiness evaluation stores actionable failure reasons'
+);
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT test.expect_sqlstate(
+  $$INSERT INTO public.vehicles (dealership_id, make)
+    VALUES ('aaaaaaaa-0000-0000-0000-000000000001', 'Photographer forged vehicle')$$,
+  '42501',
+  'photographers cannot create inventory records'
+);
+SELECT test.expect_sqlstate(
+  $$INSERT INTO public.vehicle_equipment (vehicle_id, category, label)
+    VALUES ('10000000-0000-0000-0000-000000000001', 'safety', 'Forged feature')$$,
+  '42501',
+  'photographers cannot edit vehicle specifications'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.generate_vehicle_document(
+      '10000000-0000-0000-0000-000000000001', 'window_sticker')$$,
+  '42501',
+  'photographers cannot generate controlled vehicle documents'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.commit_photo_variant(
+      '30000000-0000-0000-0000-000000000001', 'customized',
+      'https://example.test/forged.jpg', 'forged.jpg', 'browser-forgery')$$,
+  '42501',
+  'photographers cannot commit office media variants'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT public.generate_vehicle_document(
+  '10000000-0000-0000-0000-000000000001', 'window_sticker'
+);
+SELECT public.commit_photo_variant(
+  '30000000-0000-0000-0000-000000000001', 'customized',
+  'https://example.test/customized.jpg', 'customized.jpg', 'test-renderer'
+);
+SELECT test.assert_true(
+  (SELECT count(*) = 1 FROM public.generated_documents
+   WHERE vehicle_id = '10000000-0000-0000-0000-000000000001'
+     AND document_type = 'window_sticker' AND status = 'generated')
+  AND (SELECT count(*) = 1 FROM public.audit_events
+       WHERE event_type = 'vehicle_document.generated'
+         AND payload->>'vehicle_id' = '10000000-0000-0000-0000-000000000001')
+  AND (SELECT count(*) = 1 FROM public.activity_events
+       WHERE event_type = 'vehicle_document.generated'
+         AND vehicle_id = '10000000-0000-0000-0000-000000000001'),
+  'authorized document generation snapshots vehicle data and emits an audit event'
+);
+SELECT test.assert_true(
+  (SELECT image_url = 'https://example.test/customized.jpg'
+     AND original_image_url = 'https://example.test/a.jpg'
+     AND approved_variant_id IS NOT NULL
+   FROM public.photos WHERE id = '30000000-0000-0000-0000-000000000001')
+  AND (SELECT count(*) = 1 FROM public.media_variants
+       WHERE photo_id = '30000000-0000-0000-0000-000000000001'
+         AND variant_type = 'original' AND image_url = 'https://example.test/a.jpg')
+  AND (SELECT count(*) = 1 FROM public.media_variants
+       WHERE photo_id = '30000000-0000-0000-0000-000000000001'
+         AND variant_type = 'customized' AND image_url = 'https://example.test/customized.jpg'),
+  'authorized preparation creates a variant without altering the immutable original'
+);
+SELECT public.create_payout_rule(
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  'Standard photo shoot', 'photo_shoot', 12.50, CURRENT_DATE, '{}'::jsonb
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+INSERT INTO public.photo_capture_sessions (
+  id, dealership_id, vehicle_id, vin, mode, created_by
+) VALUES (
+  '40000000-0000-0000-0000-000000000003',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  '1HGCM82633A004352', 'guided',
+  '00000000-0000-0000-0000-000000000003'
+);
+INSERT INTO public.photos (
+  id, vehicle_id, image_url, original_image_url, capture_session_id,
+  media_category, shot_type
+) VALUES (
+  '30000000-0000-0000-0000-000000000003',
+  '10000000-0000-0000-0000-000000000001',
+  'https://example.test/shoot.jpg', 'https://example.test/shoot.jpg',
+  '40000000-0000-0000-0000-000000000003', 'exterior', 'Front'
+);
+SELECT public.complete_photo_capture_session('40000000-0000-0000-0000-000000000003');
+SELECT test.assert_true(
+  (SELECT photo_count = 1 AND completed_by = '00000000-0000-0000-0000-000000000003'
+     AND duration_seconds >= 0
+   FROM public.photo_capture_sessions
+   WHERE id = '40000000-0000-0000-0000-000000000003')
+  AND (SELECT amount = 12.50 AND status = 'pending'
+       AND rule_snapshot->>'version' = '1'
+       FROM public.payout_entries
+       WHERE photo_shoot_id = '40000000-0000-0000-0000-000000000003')
+  AND (SELECT count(*) = 1 FROM public.activity_events
+       WHERE photo_shoot_id = '40000000-0000-0000-0000-000000000003'
+         AND event_type = 'photo_shoot.completed')
+  AND (SELECT count(*) = 1 FROM public.activity_events
+       WHERE photo_shoot_id = '40000000-0000-0000-0000-000000000003'
+         AND event_type = 'photo.uploaded'),
+  'shoot completion durably snapshots counts, attribution, activity, and payout rule version'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.set_payout_status(
+      (SELECT id FROM public.payout_entries
+       WHERE photo_shoot_id = '40000000-0000-0000-0000-000000000003'),
+      'paid')$$,
+  '42501',
+  'photographers cannot approve or mark payouts paid'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000004';
+SELECT test.assert_true(
+  (SELECT count(*) = 0 FROM public.payout_entries
+   WHERE photo_shoot_id = '40000000-0000-0000-0000-000000000003')
+  AND (SELECT count(*) = 0 FROM public.activity_events
+       WHERE photo_shoot_id = '40000000-0000-0000-0000-000000000003'),
+  'cross-tenant users cannot read production or payout records'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT public.set_payout_status(
+  (SELECT id FROM public.payout_entries
+   WHERE photo_shoot_id = '40000000-0000-0000-0000-000000000003'),
+  'approved'
+);
+SELECT test.assert_true(
+  (SELECT status = 'approved' AND approved_by = '00000000-0000-0000-0000-000000000002'
+   FROM public.payout_entries
+   WHERE photo_shoot_id = '40000000-0000-0000-0000-000000000003'),
+  'authorized administrator can approve a payout with trusted attribution'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000001';
+INSERT INTO public.dealerships (id, name, status, subscription_status)
+VALUES ('eeeeeeee-0000-0000-0000-000000000001', 'New Store', 'active', 'active');
+SELECT test.assert_true(
+  (SELECT organization_id = id FROM public.dealerships
+   WHERE id = 'eeeeeeee-0000-0000-0000-000000000001')
+  AND (SELECT count(*) = 7 FROM public.media_processing_rules
+       WHERE dealership_id = 'eeeeeeee-0000-0000-0000-000000000001')
+  AND (SELECT count(*) = 5 FROM public.readiness_rules
+       WHERE dealership_id = 'eeeeeeee-0000-0000-0000-000000000001')
+  AND (SELECT count(*) = 5 FROM public.document_templates
+       WHERE dealership_id = 'eeeeeeee-0000-0000-0000-000000000001'),
+  'new dealerships receive an organization and operational defaults atomically'
 );
 RESET ROLE;
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -37,6 +37,20 @@ test("background removal is explicit and absent from the capture critical path",
   assert.match(editor, /const createCutout = async/);
   assert.match(editor, /await import\("@imgly\/background-removal"\)/);
   assert.match(editor, /onClick=\{\(\) => void createCutout\(\)\}/);
+  assert.equal(existsSync(path.join(root, "src/lib/cutout-queue.ts")), false);
+});
+
+test("mobile operational controls prevent accidental tap zoom without disabling pinch zoom", () => {
+  const styles = read("src/styles.css");
+  const rootRoute = read("src/routes/__root.tsx");
+
+  assert.match(
+    styles,
+    /:where\(button, \[role="button"\], a\[href\]\) \{[\s\S]*touch-action: manipulation/,
+  );
+  assert.match(styles, /@media \(max-width: 767px\)[\s\S]*font-size: 1rem/);
+  assert.match(rootRoute, /width=device-width, initial-scale=1, viewport-fit=cover/);
+  assert.doesNotMatch(rootRoute, /user-scalable=no|maximum-scale=1/);
 });
 
 test("guided capture persists raw originals through a bounded retryable queue", () => {
