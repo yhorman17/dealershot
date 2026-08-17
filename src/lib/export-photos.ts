@@ -1,8 +1,10 @@
 import JSZip from "jszip";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveAuthorizedMediaUrls } from "@/lib/private-media";
 
 export type ExportPhoto = {
   image_url: string;
+  media_asset_id?: string;
   shot_type: string | null;
   is_document?: boolean;
   doc_name?: string | null;
@@ -113,7 +115,7 @@ export async function buildAndDownloadZip(
         const blob = await fetchAsJpegBlob(photo.image_url);
         folder.file(name, blob);
       } catch (e) {
-        console.error("Failed to fetch photo for export", photo.image_url, e);
+        console.error("Failed to fetch authorized photo for export", e);
       }
       done++;
       onProgress?.(done, totalPhotos);
@@ -168,7 +170,7 @@ export async function loadVehiclePhotos(vehicleId: string): Promise<{
   const [{ data: photos }, { data: docs }] = await Promise.all([
     supabase
       .from("photos")
-      .select("image_url, shot_type, sort_order, created_at, is_main")
+      .select("media_asset_id, shot_type, sort_order, created_at, is_main")
       .eq("vehicle_id", vehicleId),
     supabase
       .from("vehicle_documents")
@@ -182,17 +184,26 @@ export async function loadVehiclePhotos(vehicleId: string): Promise<{
     a.sort_order !== b.sort_order
       ? a.sort_order - b.sort_order
       : a.created_at.localeCompare(b.created_at);
-  const photoList: ExportPhoto[] = (
+  const rawPhotoList = (
     (photos as {
-      image_url: string;
+      media_asset_id: string;
       shot_type: string | null;
       sort_order: number;
       created_at: string;
       is_main: boolean;
     }[]) || []
-  )
-    .sort(sortFn)
-    .map((p) => ({ image_url: p.image_url, shot_type: p.shot_type }));
+  ).sort(sortFn);
+  const mediaUrls = await resolveAuthorizedMediaUrls(
+    rawPhotoList.map((photo) => photo.media_asset_id),
+    "download",
+  );
+  const photoList: ExportPhoto[] = rawPhotoList
+    .filter((photo) => mediaUrls.has(photo.media_asset_id))
+    .map((photo) => ({
+      image_url: mediaUrls.get(photo.media_asset_id)!,
+      media_asset_id: photo.media_asset_id,
+      shot_type: photo.shot_type,
+    }));
   const docList: ExportPhoto[] = (
     (docs as unknown as {
       sort_order: number;

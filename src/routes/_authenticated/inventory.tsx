@@ -20,6 +20,7 @@ import {
   StatusBadge,
 } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
+import { resolveAuthorizedMediaUrls } from "@/lib/private-media";
 import {
   parseReadinessReasons,
   readinessLabel,
@@ -138,11 +139,11 @@ function InventoryPage() {
       if (ids.length > 0) {
         const { data: photoRows } = await supabase
           .from("photos")
-          .select("vehicle_id, image_url, shot_type, created_at, sort_order, is_main")
+          .select("vehicle_id, media_asset_id, shot_type, created_at, sort_order, is_main")
           .in("vehicle_id", ids);
         type PRow = {
           vehicle_id: string;
-          image_url: string;
+          media_asset_id: string;
           shot_type: string | null;
           created_at: string;
           sort_order: number;
@@ -164,8 +165,13 @@ function InventoryPage() {
             byVehicle.set(row.vehicle_id, row);
           }
         }
+        const mediaUrls = await resolveAuthorizedMediaUrls(
+          [...byVehicle.values()].map((row) => row.media_asset_id),
+          "thumbnail",
+        );
         for (const v of list) {
-          v.thumbnail_url = byVehicle.get(v.id)?.image_url ?? null;
+          const assetId = byVehicle.get(v.id)?.media_asset_id;
+          v.thumbnail_url = assetId ? (mediaUrls.get(assetId) ?? null) : null;
         }
       }
       const photographerIds = [

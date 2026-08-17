@@ -37,6 +37,11 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { createUploadQueue, type UploadEntry } from "@/lib/upload-queue";
 import { EditorLoading, PhotoEditorBoundary } from "@/components/PhotoEditorBoundary";
+import {
+  archivePrivateMedia,
+  resolveAuthorizedMediaUrls,
+  uploadPrivateOriginal,
+} from "@/lib/private-media";
 
 const BackgroundEditor = lazy(() =>
   import("@/components/BackgroundEditor").then((module) => ({ default: module.BackgroundEditor })),
@@ -112,6 +117,7 @@ type Photo = {
   id: string;
   vehicle_id: string;
   image_url: string;
+  media_asset_id: string;
   shot_type: string | null;
   created_at: string;
   sort_order: number;
@@ -158,17 +164,7 @@ function sortItems(items: GalleryItem[]): GalleryItem[] {
 }
 
 async function deleteStoredPhoto(photo: Photo) {
-  try {
-    const url = new URL(photo.image_url);
-    const index = url.pathname.indexOf("/vehicle-photos/");
-    if (index !== -1) {
-      const path = url.pathname.slice(index + "/vehicle-photos/".length);
-      await supabase.storage.from("vehicle-photos").remove([path]);
-    }
-  } catch {
-    // A malformed legacy URL should not prevent removal of its database row.
-  }
-  await supabase.from("photos").delete().eq("id", photo.id);
+  await archivePrivateMedia(photo.media_asset_id);
 }
 
 type LibraryDoc = { id: string; name: string; image_url: string };
@@ -218,6 +214,23 @@ export function VehiclePhotos({
   } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Photo | null>(null);
   const [pendingDetach, setPendingDetach] = useState<VehicleDocument | null>(null);
+
+  const openCustomize = useCallback(async (photo: Photo) => {
+    try {
+      const [editorUrls, originalUrls] = await Promise.all([
+        resolveAuthorizedMediaUrls([photo.media_asset_id], "editor"),
+        resolveAuthorizedMediaUrls([photo.media_asset_id], "original"),
+      ]);
+      const editorUrl = editorUrls.get(photo.media_asset_id);
+      const originalUrl = originalUrls.get(photo.media_asset_id);
+      if (!editorUrl || !originalUrl) throw new Error("The private photo is unavailable.");
+      setBgPhoto({ ...photo, image_url: editorUrl, original_image_url: originalUrl });
+    } catch (error) {
+      toast.error("Photo editor could not open", {
+        description: error instanceof Error ? error.message : "Try again.",
+      });
+    }
+  }, []);
 
   const getCaptureContext = useCallback(async () => {
     if (captureContextRef.current?.vehicleId === vehicleId) return captureContextRef.current;
@@ -295,7 +308,7 @@ export function VehiclePhotos({
         supabase
           .from("photos")
           .select(
-            "id, vehicle_id, image_url, shot_type, created_at, sort_order, is_main, is_cutout, cutout_status, original_image_url, cutout_image_url, corrected_cutout_url, photo_state",
+            "id, vehicle_id, image_url, media_asset_id, shot_type, created_at, sort_order, is_main, is_cutout, cutout_status, original_image_url, cutout_image_url, corrected_cutout_url, photo_state",
           )
           .eq("vehicle_id", vehicleId),
         supabase
@@ -305,8 +318,17 @@ export function VehiclePhotos({
           )
           .eq("vehicle_id", vehicleId),
       ]);
+      const rawPhotos = (ph as Photo[]) || [];
+      const authorizedUrls = await resolveAuthorizedMediaUrls(
+        rawPhotos.map((photo) => photo.media_asset_id),
+        "preview",
+      );
       const commit = () => {
-        const nextPhotos = (ph as Photo[]) || [];
+        const nextPhotos = rawPhotos.map((photo) => ({
+          ...photo,
+          image_url: authorizedUrls.get(photo.media_asset_id) ?? "",
+          original_image_url: authorizedUrls.get(photo.media_asset_id) ?? "",
+        }));
         const nextDocuments = (vd as unknown as VehicleDocument[]) || [];
         nextSortRef.current = Math.max(
           nextSortRef.current,
@@ -457,30 +479,15 @@ export function VehiclePhotos({
     () =>
       createUploadQueue<CaptureUpload>(async ({ file, shotType, replacePhotoId }) => {
         const sessionId = await ensureCaptureSession();
-        const extension = file.name.split(".").pop() || "jpg";
-        const path = `${vehicleId}/originals/${crypto.randomUUID()}.${extension}`;
-        const { error: uploadError } = await supabase.storage
-          .from("vehicle-photos")
-          .upload(path, file, { contentType: file.type || "image/jpeg", upsert: false });
-        if (uploadError) throw uploadError;
-        const imageUrl = supabase.storage.from("vehicle-photos").getPublicUrl(path).data.publicUrl;
         const sortOrder = nextSortRef.current;
         nextSortRef.current += 1;
-        const { error: photoError } = await supabase.from("photos").insert({
-          vehicle_id: vehicleId,
-          image_url: imageUrl,
-          original_image_url: imageUrl,
-          shot_type: shotType,
-          sort_order: sortOrder,
-          capture_session_id: sessionId,
-          photo_state: "raw",
-          is_cutout: false,
-          cutout_status: "none",
+        await uploadPrivateOriginal({
+          file,
+          vehicleId,
+          captureSessionId: sessionId,
+          shotLabel: shotType,
+          sortOrder,
         });
-        if (photoError) {
-          await supabase.storage.from("vehicle-photos").remove([path]);
-          throw photoError;
-        }
         if (replacePhotoId) {
           const replaced = photosRef.current.find((photo) => photo.id === replacePhotoId);
           if (replaced) await deleteStoredPhoto(replaced);
@@ -1151,7 +1158,7 @@ export function VehiclePhotos({
                       <div className="flex flex-wrap items-stretch gap-1.5">
                         {!isDoc && dealershipId && it.photo && (
                           <button
-                            onClick={() => setBgPhoto(it.photo!)}
+                            onClick={() => void openCustomize(it.photo!)}
                             className="hidden min-h-[44px] min-w-[6.5rem] flex-1 rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80 md:block"
                           >
                             Customize
@@ -1219,7 +1226,8 @@ export function VehiclePhotos({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this photo?</AlertDialogTitle>
             <AlertDialogDescription>
-              The image will be removed from this vehicle and from storage. This cannot be undone.
+              The image will leave this vehicle, while its immutable original remains retained in
+              the private media ledger for audit and recovery.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

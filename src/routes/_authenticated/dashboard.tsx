@@ -16,6 +16,7 @@ import {
   StatusBadge,
 } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
+import { resolveAuthorizedMediaUrls } from "@/lib/private-media";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — DealerShot" }] }),
@@ -99,7 +100,7 @@ function StaffDashboard({
       const photosByVehicle = new Map<
         string,
         {
-          image_url: string;
+          media_asset_id: string;
           is_main: boolean;
           shot_type: string | null;
           sort_order: number;
@@ -109,11 +110,11 @@ function StaffDashboard({
       if (ids.length > 0) {
         const { data: photoRows } = await supabase
           .from("photos")
-          .select("vehicle_id, image_url, is_main, shot_type, sort_order, created_at")
+          .select("vehicle_id, media_asset_id, is_main, shot_type, sort_order, created_at")
           .in("vehicle_id", ids);
         for (const row of (photoRows as {
           vehicle_id: string;
-          image_url: string;
+          media_asset_id: string;
           is_main: boolean;
           shot_type: string | null;
           sort_order: number;
@@ -139,6 +140,7 @@ function StaffDashboard({
             ),
         )
         .map((item) => item.vehicle_id);
+      const selectedAssets = new Map<string, string>();
       for (const v of list) {
         const photos = photosByVehicle.get(v.id) || [];
         const hasMain = photos.some((p) => p.is_main);
@@ -154,7 +156,16 @@ function StaffDashboard({
             ? a.sort_order - b.sort_order
             : a.created_at.localeCompare(b.created_at),
         )[0];
-        v.thumbnail_url = main?.image_url ?? front?.image_url ?? first?.image_url ?? null;
+        const selected = main ?? front ?? first;
+        if (selected?.media_asset_id) selectedAssets.set(v.id, selected.media_asset_id);
+      }
+      const thumbnailUrls = await resolveAuthorizedMediaUrls(
+        [...selectedAssets.values()],
+        "thumbnail",
+      );
+      for (const v of list) {
+        const mediaAssetId = selectedAssets.get(v.id);
+        v.thumbnail_url = mediaAssetId ? (thumbnailUrls.get(mediaAssetId) ?? null) : null;
       }
       setNeedsPhotosCount(needsIds.length);
       setNeedsPhotosIds(needsIds);

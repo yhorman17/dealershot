@@ -5,6 +5,7 @@ import { MaskEditor } from "@/components/MaskEditor";
 import { Button } from "@/components/ui/button";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Scissors, X } from "lucide-react";
+import { uploadPrivateVariant } from "@/lib/private-media";
 
 export type Position = "top" | "bottom" | "tl" | "tr" | "bl" | "br";
 
@@ -980,38 +981,18 @@ export function BackgroundEditor({
     setError(null);
     try {
       let cutoutUrl = persistedCutoutUrl;
-      let cutoutPath: string | null = null;
       if (pendingCutoutBlobRef.current) {
-        cutoutPath = `${photo.vehicle_id}/cutouts/${crypto.randomUUID()}.png`;
-        const { error: cutoutUploadError } = await supabase.storage
-          .from("vehicle-photos")
-          .upload(cutoutPath, pendingCutoutBlobRef.current, {
-            contentType: "image/png",
-            upsert: false,
-          });
-        if (cutoutUploadError) throw cutoutUploadError;
-        cutoutUrl = supabase.storage.from("vehicle-photos").getPublicUrl(cutoutPath).data.publicUrl;
-        const { error: variantError } = await supabase.rpc("commit_photo_variant", {
-          _photo_id: photo.id,
-          _variant_type: photo.cutout_image_url ? "corrected_cutout" : "cutout",
-          _image_url: cutoutUrl,
-          _storage_path: cutoutPath,
-          _processing_provider: "imgly-client",
+        await uploadPrivateVariant({
+          photoId: photo.id,
+          blob: pendingCutoutBlobRef.current,
+          variantType: photo.cutout_image_url ? "corrected_cutout" : "cutout",
+          processingProvider: "imgly-client",
         });
-        if (variantError) throw variantError;
+        cutoutUrl = URL.createObjectURL(pendingCutoutBlobRef.current);
       }
 
       if (!backdropImg || !baseSize) {
         if (!cutoutUrl) throw new Error("Create a cutout before saving.");
-        if (!pendingCutoutBlobRef.current) {
-          const { error: cutoutSaveError } = await supabase.rpc("commit_photo_variant", {
-            _photo_id: photo.id,
-            _variant_type: photo.corrected_cutout_url ? "corrected_cutout" : "cutout",
-            _image_url: cutoutUrl,
-            _processing_provider: "imgly-client",
-          });
-          if (cutoutSaveError) throw cutoutSaveError;
-        }
         onSaved();
         return;
       }
@@ -1026,21 +1007,12 @@ export function BackgroundEditor({
         );
       });
 
-      const path = `${photo.vehicle_id}/customized/${crypto.randomUUID()}.jpg`;
-      const { error: upErr } = await supabase.storage
-        .from("vehicle-photos")
-        .upload(path, blob, { contentType: "image/jpeg", upsert: false });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("vehicle-photos").getPublicUrl(path);
-
-      const { error: updErr } = await supabase.rpc("commit_photo_variant", {
-        _photo_id: photo.id,
-        _variant_type: "customized",
-        _image_url: pub.publicUrl,
-        _storage_path: path,
-        _processing_provider: "dealershot-canvas",
+      await uploadPrivateVariant({
+        photoId: photo.id,
+        blob,
+        variantType: "customized",
+        processingProvider: "dealershot-canvas",
       });
-      if (updErr) throw updErr;
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");

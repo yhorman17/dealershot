@@ -25,6 +25,7 @@ import { EmptyState, PageHeader, PageSkeleton, StatusBadge } from "@/components/
 import { VehicleOperationsPanel } from "@/components/VehicleOperationsPanel";
 import type { Database } from "@/integrations/supabase/types";
 import { CircleGauge, DollarSign, FileText, History, ListChecks, RadioTower } from "lucide-react";
+import { resolveAuthorizedMediaUrls } from "@/lib/private-media";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id")({
   validateSearch: (search: Record<string, unknown>): { customize?: string } => ({
@@ -55,7 +56,7 @@ function VehicleDetailPage() {
       supabase.from("vehicles").select("*").eq("id", id).maybeSingle(),
       supabase
         .from("photos")
-        .select("image_url, shot_type, sort_order, created_at, is_main")
+        .select("media_asset_id, shot_type, sort_order, created_at, is_main")
         .eq("vehicle_id", id),
       supabase
         .from("vehicle_documents")
@@ -65,7 +66,7 @@ function VehicleDetailPage() {
     setVehicle(data);
     const photoRows =
       (photos as {
-        image_url: string;
+        media_asset_id: string;
         shot_type: string | null;
         sort_order: number;
         created_at: string;
@@ -95,7 +96,13 @@ function VehicleDetailPage() {
         ? a.sort_order - b.sort_order
         : a.created_at.localeCompare(b.created_at),
     )[0];
-    setHeroUrl(main?.image_url ?? front?.image_url ?? first?.image_url ?? null);
+    const selectedPhoto = main ?? front ?? first;
+    if (selectedPhoto && "media_asset_id" in selectedPhoto && selectedPhoto.media_asset_id) {
+      const urls = await resolveAuthorizedMediaUrls([selectedPhoto.media_asset_id], "preview");
+      setHeroUrl(urls.get(selectedPhoto.media_asset_id) ?? null);
+    } else {
+      setHeroUrl(selectedPhoto && "image_url" in selectedPhoto ? selectedPhoto.image_url : null);
+    }
     setLoading(false);
   }, [id]);
 

@@ -11,6 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { uploadPrivateVariant } from "@/lib/private-media";
 
 export type Position = "top" | "bottom" | "tl" | "tr" | "bl" | "br";
 
@@ -128,42 +129,20 @@ export function OverlayEditor({
 
   const selected = overlays.find((o) => o.id === overlayId);
 
-  const save = async (mode: "new" | "overwrite") => {
+  const save = async (_mode: "new" | "overwrite") => {
     if (!selected) return;
     setSaving(true);
     setError(null);
     try {
       const blob = await compositeToBlob(photo.image_url, selected.image_url, pos);
-      const path = `${photo.vehicle_id}/${crypto.randomUUID()}.jpg`;
-      const { error: upErr } = await supabase.storage
-        .from("vehicle-photos")
-        .upload(path, blob, { contentType: "image/jpeg", upsert: false });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("vehicle-photos").getPublicUrl(path);
-
-      if (mode === "new") {
-        const { error: insErr } = await supabase.from("photos").insert({
-          vehicle_id: photo.vehicle_id,
-          image_url: pub.publicUrl,
-          original_image_url: photo.original_image_url ?? photo.image_url,
-          shot_type: photo.shot_type,
-          overlay_id: selected.id,
-          sort_order: (photo.sort_order ?? 0) + 1,
-          photo_state: "customized",
-        });
-        if (insErr) throw insErr;
-      } else {
-        // "Overwrite" selects a new approved variant; the immutable original
-        // and previous variants remain available for restoration and audit.
-        const { error: updErr } = await supabase.rpc("commit_photo_variant", {
-          _photo_id: photo.id,
-          _variant_type: "customized",
-          _image_url: pub.publicUrl,
-          _storage_path: path,
-          _processing_provider: "dealershot-overlay",
-        });
-        if (updErr) throw updErr;
-      }
+      // Both choices append a private derivative. The legacy wording is kept
+      // for compatibility, but neither path overwrites the immutable source.
+      await uploadPrivateVariant({
+        photoId: photo.id,
+        blob,
+        variantType: "customized",
+        processingProvider: "dealershot-overlay",
+      });
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { clearAuthorizedMediaCache } from "@/lib/private-media";
 import {
   createAuthLifecycleController,
   type AuthLifecycleController,
@@ -140,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "SIGNED_OUT" || event === "USER_UPDATED") clearAuthorizedMediaCache();
       setTimeout(() => {
         controller.handleAuthChange(event, nextSession);
       }, 0);
@@ -153,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    clearAuthorizedMediaCache();
     await supabase.auth.signOut();
   };
 

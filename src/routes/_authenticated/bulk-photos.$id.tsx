@@ -19,6 +19,11 @@ import { Button } from "@/components/ui/button";
 import { PageHeader, ProductSelect, StatusBadge } from "@/components/product-ui";
 import { SHOT_TYPES } from "@/components/VehiclePhotos";
 import { toast } from "sonner";
+import {
+  archivePrivateMedia,
+  resolveAuthorizedMediaUrls,
+  uploadPrivateOriginal,
+} from "@/lib/private-media";
 
 export const Route = createFileRoute("/_authenticated/bulk-photos/$id")({
   head: () => ({ meta: [{ title: "Bulk Photo Package — DealerShot" }] }),
@@ -38,6 +43,7 @@ type Item = {
   id: string;
   session_id: string;
   image_url: string;
+  media_asset_id: string;
   storage_path: string;
   shot_type: string | null;
   sort_order: number;
@@ -100,7 +106,7 @@ function BulkPhotoWorkspace() {
         supabase
           .from("bulk_photo_items")
           .select(
-            "id, session_id, image_url, storage_path, shot_type, sort_order, is_main, photo_id, created_at",
+            "id, session_id, image_url, media_asset_id, storage_path, shot_type, sort_order, is_main, photo_id, created_at",
           )
           .eq("session_id", id)
           .order("sort_order")
@@ -111,7 +117,15 @@ function BulkPhotoWorkspace() {
       return;
     }
     setSession(sessionData as Session);
-    const nextItems = (itemData ?? []) as Item[];
+    const rawItems = (itemData ?? []) as Item[];
+    const urls = await resolveAuthorizedMediaUrls(
+      rawItems.map((item) => item.media_asset_id),
+      "thumbnail",
+    );
+    const nextItems = rawItems.map((item) => ({
+      ...item,
+      image_url: urls.get(item.media_asset_id) ?? "",
+    }));
     setItems(nextItems);
     nextSortRef.current = Math.max(
       nextSortRef.current,
@@ -134,27 +148,13 @@ function BulkPhotoWorkspace() {
         async ({ file }) => {
           if (!user || !session || session.status !== "in_progress")
             throw new Error("This package is no longer accepting photos.");
-          const extension = file.name.split(".").pop() || "jpg";
-          const storagePath = `${session.id}/originals/${crypto.randomUUID()}.${extension}`;
-          const { error: uploadError } = await supabase.storage
-            .from("vehicle-photos")
-            .upload(storagePath, file, { contentType: file.type || "image/jpeg", upsert: false });
-          if (uploadError) throw uploadError;
-          const imageUrl = supabase.storage.from("vehicle-photos").getPublicUrl(storagePath)
-            .data.publicUrl;
           const sortOrder = nextSortRef.current;
           nextSortRef.current += 1;
-          const { error: insertError } = await supabase.from("bulk_photo_items").insert({
-            session_id: session.id,
-            image_url: imageUrl,
-            storage_path: storagePath,
-            sort_order: sortOrder,
-            created_by: user.id,
+          await uploadPrivateOriginal({
+            file,
+            bulkSessionId: session.id,
+            sortOrder,
           });
-          if (insertError) {
-            await supabase.storage.from("vehicle-photos").remove([storagePath]);
-            throw insertError;
-          }
           await load();
         },
         { concurrency: 2 },
@@ -229,17 +229,14 @@ function BulkPhotoWorkspace() {
     await load();
   };
   const remove = async (item: Item) => {
-    const { error: itemError } = await supabase.from("bulk_photo_items").delete().eq("id", item.id);
-    if (itemError)
-      return toast.error("Photo could not be removed", { description: itemError.message });
-    const { error: storageError } = await supabase.storage
-      .from("vehicle-photos")
-      .remove([item.storage_path]);
-    if (storageError)
-      toast.warning("Photo removed, but storage cleanup needs attention", {
-        description: storageError.message,
+    try {
+      await archivePrivateMedia(item.media_asset_id);
+      await load();
+    } catch (error) {
+      toast.error("Photo could not be removed", {
+        description: error instanceof Error ? error.message : "Try again.",
       });
-    await load();
+    }
   };
 
   const associate = async (customizeItemId?: string) => {
