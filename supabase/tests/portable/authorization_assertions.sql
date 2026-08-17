@@ -1180,6 +1180,272 @@ SELECT test.assert_true(
 );
 RESET ROLE;
 
+-- Retail Ready acceptance settings are backend-authorized, tenant-scoped, and
+-- immediately reflected in the shared readiness evaluator.
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT test.expect_sqlstate(
+  $$SELECT public.save_readiness_configuration(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    '[{"key":"vehicle.price","label":"Retail price available","severity":"attention","enabled":true,"applies_to":["used"],"config":{},"sort_order":30}]'::jsonb
+  )$$,
+  '42501',
+  'photographers cannot mutate Retail Ready settings'
+);
+SELECT test.expect_sqlstate(
+  $$INSERT INTO public.media_variants
+    (photo_id, variant_type, image_url, processing_status)
+    VALUES ('30000000-0000-0000-0000-000000000001', 'customized',
+            'https://example.test/forged.jpg', 'completed')$$,
+  '42501',
+  'photographers cannot forge processed media variants'
+);
+SELECT test.expect_sqlstate(
+  $$UPDATE public.photos SET image_url = 'https://example.test/forged.jpg'
+    WHERE id = '30000000-0000-0000-0000-000000000001'$$,
+  '42501',
+  'capture users cannot overwrite immutable photo URLs'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.create_manual_payout_adjustment(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000003', 5, 'self bonus', current_date
+  )$$,
+  '42501',
+  'photographers cannot create their own payout adjustments'
+);
+INSERT INTO public.photos (
+  id, vehicle_id, image_url, original_image_url, photo_state, is_main,
+  is_cutout, cutout_status, processing_status, review_status
+) VALUES (
+  '30000000-0000-0000-0000-000000000009',
+  '10000000-0000-0000-0000-000000000001',
+  'https://example.test/raw-upload.jpg', 'https://example.test/forged-original.jpg',
+  'customized', true, true, 'completed', 'completed', 'approved'
+);
+SELECT test.assert_true(
+  (SELECT original_image_url = image_url AND photo_state = 'raw'
+          AND NOT is_main AND NOT is_cutout AND cutout_status = 'none'
+          AND processing_status = 'not_required' AND review_status = 'unreviewed'
+   FROM public.photos WHERE id = '30000000-0000-0000-0000-000000000009'),
+  'raw capture INSERT cannot smuggle processed, approved, or primary state'
+);
+DELETE FROM public.photos WHERE id = '30000000-0000-0000-0000-000000000009';
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT public.save_readiness_configuration(
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '[{"key":"vehicle.price","label":"Retail price available","severity":"attention","enabled":true,"applies_to":["used"],"config":{},"sort_order":30}]'::jsonb
+);
+SELECT test.assert_true(
+  EXISTS (
+    SELECT 1 FROM public.vehicle_readiness,
+      LATERAL jsonb_array_elements(reasons) AS reason
+    WHERE vehicle_id = '10000000-0000-0000-0000-000000000001'
+      AND reason->>'key' = 'vehicle.price'
+  ),
+  'enabling the price rule immediately re-evaluates affected inventory'
+);
+SELECT public.save_readiness_configuration(
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '[{"key":"vehicle.price","label":"Retail price available","severity":"attention","enabled":false,"applies_to":["used"],"config":{},"sort_order":30}]'::jsonb
+);
+SELECT test.assert_true(
+  NOT EXISTS (
+    SELECT 1 FROM public.vehicle_readiness,
+      LATERAL jsonb_array_elements(reasons) AS reason
+    WHERE vehicle_id = '10000000-0000-0000-0000-000000000001'
+      AND reason->>'key' = 'vehicle.price'
+  ),
+  'disabling a store rule removes only that Retail Ready failure reason'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.save_photography_configuration(
+    'cccccccc-0000-0000-0000-000000000001', 'block', '[]'::jsonb
+  )$$,
+  '42501',
+  'administrators cannot configure an unassigned store'
+);
+SELECT public.save_photography_configuration(
+  'aaaaaaaa-0000-0000-0000-000000000001', 'block',
+  '[{"shot_key":"front","label":"Front","guidance":"Centered front view","category":"exterior","required":true,"enabled":true,"minimum_count":1,"applies_to":["new","used","certified"],"sort_order":10}]'::jsonb
+);
+INSERT INTO public.photo_capture_sessions (
+  id, dealership_id, vehicle_id, vin, mode, created_by
+) VALUES (
+  '40000000-0000-0000-0000-000000000004',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  '1HGCM82633A004352', 'guided',
+  '00000000-0000-0000-0000-000000000002'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.complete_photo_capture_session(
+    '40000000-0000-0000-0000-000000000004'
+  )$$,
+  '23514',
+  'block-completion policy prevents a silent short shoot'
+);
+SELECT test.assert_true(
+  (SELECT status = 'in_progress' AND completion_policy = 'block'
+   FROM public.photo_capture_sessions
+   WHERE id = '40000000-0000-0000-0000-000000000004'),
+  'failed completion rolls the capture session back intact'
+);
+SELECT public.save_media_processing_configuration(
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '[{"media_category":"exterior","action":"manual_review","enabled":true,"priority":10,"config":{}},{"media_category":"interior","action":"keep_original","enabled":true,"priority":20,"config":{}}]'::jsonb
+);
+SELECT test.assert_true(
+  (SELECT action = 'manual_review' FROM public.media_processing_rules
+   WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+     AND media_category = 'exterior')
+  AND (SELECT action = 'keep_original' FROM public.media_processing_rules
+       WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+         AND media_category = 'interior'),
+  'selective processing configuration preserves interior originals'
+);
+SELECT public.save_document_requirements(
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '[{"document_type":"buyers_guide","enabled":true,"required":true,"applies_to":["used","certified"]}]'::jsonb
+);
+SELECT test.assert_true(
+  (SELECT enabled AND required AND applies_to @> ARRAY['used']::text[]
+   FROM public.document_requirements
+   WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+     AND document_type = 'buyers_guide'),
+  'store document requirements persist with explicit vehicle applicability'
+);
+
+SELECT public.set_vehicle_primary_asset(
+  '10000000-0000-0000-0000-000000000001', 'photo',
+  '30000000-0000-0000-0000-000000000001'
+);
+SELECT test.assert_true(
+  (SELECT count(*) = 1 FROM (
+    SELECT id FROM public.photos
+      WHERE vehicle_id = '10000000-0000-0000-0000-000000000001' AND is_main
+    UNION ALL
+    SELECT id FROM public.vehicle_documents
+      WHERE vehicle_id = '10000000-0000-0000-0000-000000000001' AND is_main
+  ) AS main_assets),
+  'transactional main-image selection leaves exactly one vehicle primary asset'
+);
+SELECT public.reorder_vehicle_gallery(
+  '10000000-0000-0000-0000-000000000001',
+  (
+    SELECT jsonb_agg(asset ORDER BY requested_position)
+    FROM (
+      SELECT jsonb_build_object('type','photo','id',id) AS asset,
+             CASE WHEN id = '30000000-0000-0000-0000-000000000001' THEN 0 ELSE 1 END AS requested_position
+      FROM public.photos
+      WHERE vehicle_id = '10000000-0000-0000-0000-000000000001'
+      UNION ALL
+      SELECT jsonb_build_object('type','document','id',id), 1000
+      FROM public.vehicle_documents
+      WHERE vehicle_id = '10000000-0000-0000-0000-000000000001'
+    ) AS assets
+  )
+);
+SELECT test.assert_true(
+  (SELECT sort_order = 0 FROM public.photos
+   WHERE id = '30000000-0000-0000-0000-000000000001')
+  AND (SELECT sort_order = (
+         SELECT count(*) FROM public.photos
+         WHERE vehicle_id = '10000000-0000-0000-0000-000000000001'
+       ) FROM public.vehicle_documents
+       WHERE vehicle_id = '10000000-0000-0000-0000-000000000001' LIMIT 1),
+  'gallery reorder commits a complete unique sequence atomically'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.reorder_vehicle_gallery(
+    '10000000-0000-0000-0000-000000000001',
+    '[{"type":"photo","id":"30000000-0000-0000-0000-000000000001"}]'::jsonb
+  )$$,
+  '40001',
+  'stale partial gallery reorder fails without corrupting the current order'
+);
+
+SET ROLE service_role;
+UPDATE public.profile_dealerships
+SET payout_eligible = false
+WHERE profile_id = '00000000-0000-0000-0000-000000000003'
+  AND dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+SET ROLE authenticated;
+SELECT test.expect_sqlstate(
+  $$SELECT public.create_manual_payout_adjustment(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000003', 5.00,
+    'Should not be payable', current_date
+  )$$,
+  '42501',
+  'manual adjustments require an active payout-eligible store assignment'
+);
+SET ROLE service_role;
+UPDATE public.profile_dealerships
+SET payout_eligible = true
+WHERE profile_id = '00000000-0000-0000-0000-000000000003'
+  AND dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+SET ROLE authenticated;
+
+SELECT public.create_manual_payout_adjustment(
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000003', -2.50,
+  'Documented reshoot deduction', current_date
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.set_payout_status(
+    (SELECT id FROM public.payout_entries
+     WHERE task_type = 'manual' ORDER BY created_at DESC LIMIT 1), 'paid'
+  )$$,
+  '55000',
+  'payouts cannot skip the required approval state'
+);
+SELECT public.set_payout_status(
+  (SELECT id FROM public.payout_entries
+   WHERE task_type = 'manual' ORDER BY created_at DESC LIMIT 1), 'approved'
+);
+SELECT public.set_payout_status(
+  (SELECT id FROM public.payout_entries
+   WHERE task_type = 'manual' ORDER BY created_at DESC LIMIT 1), 'paid'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.set_payout_status(
+    (SELECT id FROM public.payout_entries
+     WHERE task_type = 'manual' ORDER BY created_at DESC LIMIT 1), 'void'
+  )$$,
+  '55000',
+  'paid historical payouts are terminal and immutable'
+);
+SELECT test.assert_true(
+  (SELECT status = 'paid' AND rule_snapshot->>'reason' = 'Documented reshoot deduction'
+   FROM public.payout_entries WHERE task_type = 'manual'
+   ORDER BY created_at DESC LIMIT 1),
+  'manual payout adjustments preserve their reason and controlled lifecycle'
+);
+
+UPDATE public.vehicles SET comments = 'Updated after document generation'
+WHERE id = '10000000-0000-0000-0000-000000000001';
+SELECT test.assert_true(
+  EXISTS (SELECT 1 FROM public.generated_documents
+          WHERE vehicle_id = '10000000-0000-0000-0000-000000000001'
+            AND stale_at IS NOT NULL),
+  'vehicle changes visibly mark prior generated-document versions stale'
+);
+SELECT test.assert_true(
+  (SELECT count(*) >= 7 FROM public.audit_events
+   WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+     AND event_type IN (
+       'configuration.readiness_changed','vehicle_media.primary_changed',
+       'vehicle_media.order_changed','payout.manual_adjustment_created',
+       'payout.status_changed'
+     )),
+  'settings, media ordering, and payout transitions emit durable audit events'
+);
+RESET ROLE;
+
 SET ROLE authenticated;
 SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000001';
 INSERT INTO public.dealerships (id, name, status, subscription_status)
@@ -1189,9 +1455,13 @@ SELECT test.assert_true(
    WHERE id = 'eeeeeeee-0000-0000-0000-000000000001')
   AND (SELECT count(*) = 7 FROM public.media_processing_rules
        WHERE dealership_id = 'eeeeeeee-0000-0000-0000-000000000001')
-  AND (SELECT count(*) = 5 FROM public.readiness_rules
+  AND (SELECT count(*) = 14 FROM public.readiness_rules
        WHERE dealership_id = 'eeeeeeee-0000-0000-0000-000000000001')
   AND (SELECT count(*) = 5 FROM public.document_templates
+       WHERE dealership_id = 'eeeeeeee-0000-0000-0000-000000000001')
+  AND (SELECT completion_policy = 'warn' FROM public.photography_settings
+       WHERE dealership_id = 'eeeeeeee-0000-0000-0000-000000000001')
+  AND (SELECT count(*) = 13 FROM public.photo_shot_requirements
        WHERE dealership_id = 'eeeeeeee-0000-0000-0000-000000000001'),
   'new dealerships receive an organization and operational defaults atomically'
 );
@@ -1209,13 +1479,14 @@ SELECT test.assert_true(
 );
 SELECT test.assert_true(
   (
-    SELECT count(*) = 45
+    SELECT count(*) = 47
     FROM pg_policies
     WHERE schemaname = 'public'
       AND tablename IN (
         'profiles', 'dealerships', 'vehicles', 'photos', 'overlay_templates',
         'documents', 'vehicle_documents', 'backdrops', 'impersonation_logs',
-        'user_invitations', 'photo_capture_sessions', 'bulk_photo_items'
+        'user_invitations', 'photo_capture_sessions', 'bulk_photo_items',
+        'photography_settings', 'photo_shot_requirements'
       )
   ),
   'repository tables have only the reviewed policy set'
