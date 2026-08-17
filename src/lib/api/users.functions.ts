@@ -8,6 +8,12 @@ import type { Json } from "@/integrations/supabase/types";
 import { getApplicationOrigin } from "@/lib/api/application-origin.server";
 
 type ManagedRole = "dealer_admin" | "staff";
+const staffAccessRoleSchema = z.enum([
+  "store_manager",
+  "photographer",
+  "inventory_media",
+  "accounting",
+]);
 type ActorScope = { role: "owner" | "dealer_admin"; dealershipIds: string[] };
 type OperationResult = {
   operation_id?: string;
@@ -153,7 +159,7 @@ export const listUsersWithAuth = createServerFn({ method: "GET" })
     let profileQuery = supabaseAdmin
       .from("profiles")
       .select(
-        "id, email, full_name, role, dealership_id, status, created_at, profile_dealerships(dealership_id)",
+        "id, email, full_name, role, dealership_id, status, created_at, profile_dealerships(dealership_id, access_role, payout_eligible)",
       )
       .order("created_at", { ascending: false });
     // Dealer administrators manage staff by the staff account's authoritative
@@ -201,6 +207,12 @@ export const listUsersWithAuth = createServerFn({ method: "GET" })
       return {
         ...userProfile,
         dealership_ids: dealershipIds,
+        access_role:
+          assignments.find((assignment) => assignment.dealership_id === profile.dealership_id)
+            ?.access_role ?? (profile.role === "staff" ? "photographer" : null),
+        payout_eligible:
+          assignments.find((assignment) => assignment.dealership_id === profile.dealership_id)
+            ?.payout_eligible ?? false,
         last_sign_in_at: authMap.get(profile.id) ?? null,
         password_change_required: onboardingMap.get(profile.id) ?? false,
       };
@@ -662,6 +674,7 @@ export const updateUserAccount = createServerFn({ method: "POST" })
         full_name: z.string().trim().min(1).max(120),
         role: z.enum(["dealer_admin", "staff"]).optional(),
         dealership_ids: dealershipIdsSchema,
+        access_role: staffAccessRoleSchema.optional(),
       })
       .parse(input),
   )
@@ -687,6 +700,26 @@ export const updateUserAccount = createServerFn({ method: "POST" })
       _dealership_ids: accountUpdate.dealershipIds,
     });
     if (error) throw new Error(error.message);
+    if (accountUpdate.role === "staff") {
+      const { error: assignmentError } = await supabaseAdmin
+        .from("profile_dealerships")
+        .update({
+          access_role: data.access_role ?? "photographer",
+          payout_eligible: (data.access_role ?? "photographer") === "photographer",
+        })
+        .eq("profile_id", data.user_id)
+        .eq("dealership_id", accountUpdate.dealershipIds[0]);
+      if (assignmentError) throw new Error(assignmentError.message);
+      await writeAuditEvent({
+        event_type: "user.store_access_role_changed",
+        actor_profile_id: context.userId,
+        dealership_id: accountUpdate.dealershipIds[0],
+        payload: {
+          target_profile_id: data.user_id,
+          access_role: data.access_role ?? "photographer",
+        },
+      });
+    }
     return { ok: true };
   });
 

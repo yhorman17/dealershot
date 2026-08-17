@@ -1,5 +1,12 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
+type TableDefinition<Row> = {
+  Row: Row;
+  Insert: Partial<Row>;
+  Update: Partial<Row>;
+  Relationships: [];
+};
+
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
@@ -35,33 +42,48 @@ export type Database = {
       dealerships: {
         Row: {
           address: string | null;
+          branding: Json;
           created_at: string;
           id: string;
           logo_url: string | null;
           name: string;
+          organization_id: string;
           phone: string | null;
           status: string;
           subscription_status: string;
+          timezone: string;
+          updated_at: string;
+          website: string | null;
         };
         Insert: {
           address?: string | null;
+          branding?: Json;
           created_at?: string;
           id?: string;
           logo_url?: string | null;
           name: string;
+          organization_id?: string;
           phone?: string | null;
           status?: string;
           subscription_status?: string;
+          timezone?: string;
+          updated_at?: string;
+          website?: string | null;
         };
         Update: {
           address?: string | null;
+          branding?: Json;
           created_at?: string;
           id?: string;
           logo_url?: string | null;
           name?: string;
+          organization_id?: string;
           phone?: string | null;
           status?: string;
           subscription_status?: string;
+          timezone?: string;
+          updated_at?: string;
+          website?: string | null;
         };
         Relationships: [];
       };
@@ -222,13 +244,24 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           dealership_id: string;
+          detail_count: number;
+          duration_seconds: number | null;
+          exterior_count: number;
           id: string;
+          interior_count: number;
           mode: "guided" | "bulk";
+          notes: string | null;
+          photo_count: number;
           prepared_at: string | null;
           prepared_by: string | null;
+          reshoot_of: string | null;
+          review_status: "unreviewed" | "awaiting_review" | "approved" | "rejected";
+          shoot_type: "standard" | "reshoot" | "bulk";
+          started_at: string;
           status: "in_progress" | "completed" | "prepared";
           updated_at: string;
           vehicle_id: string | null;
+          video_count: number;
           vin: string | null;
         };
         Insert: {
@@ -237,13 +270,24 @@ export type Database = {
           created_at?: string;
           created_by: string;
           dealership_id: string;
+          detail_count?: number;
+          duration_seconds?: number | null;
+          exterior_count?: number;
           id?: string;
+          interior_count?: number;
           mode: "guided" | "bulk";
+          notes?: string | null;
+          photo_count?: number;
           prepared_at?: string | null;
           prepared_by?: string | null;
+          reshoot_of?: string | null;
+          review_status?: "unreviewed" | "awaiting_review" | "approved" | "rejected";
+          shoot_type?: "standard" | "reshoot" | "bulk";
+          started_at?: string;
           status?: "in_progress" | "completed" | "prepared";
           updated_at?: string;
           vehicle_id?: string | null;
+          video_count?: number;
           vin?: string | null;
         };
         Update: never;
@@ -283,6 +327,7 @@ export type Database = {
       };
       photos: {
         Row: {
+          approved_variant_id: string | null;
           capture_session_id: string | null;
           created_at: string;
           corrected_cutout_url: string | null;
@@ -292,14 +337,38 @@ export type Database = {
           image_url: string;
           is_cutout: boolean;
           is_main: boolean;
+          media_category:
+            | "exterior"
+            | "interior"
+            | "detail"
+            | "odometer"
+            | "vin"
+            | "document"
+            | "misc";
+          media_kind: "photo" | "video" | "exterior_360" | "interior_360";
+          metadata: Json;
           overlay_id: string | null;
           original_image_url: string;
           photo_state: "raw" | "cutout" | "customized";
+          processing_action:
+            | "keep_original"
+            | "enhance"
+            | "background_replace"
+            | "background_merchandising"
+            | "manual_review";
+          processing_error: string | null;
+          processing_provider: string | null;
+          processing_status: "not_required" | "queued" | "processing" | "completed" | "failed";
+          publication_status: "unpublished" | "pending" | "published" | "failed";
+          quality_issues: Json;
+          review_status: "unreviewed" | "awaiting_review" | "approved" | "rejected";
           shot_type: string | null;
           sort_order: number;
+          updated_at: string;
           vehicle_id: string;
         };
         Insert: {
+          approved_variant_id?: string | null;
           capture_session_id?: string | null;
           created_at?: string;
           corrected_cutout_url?: string | null;
@@ -309,14 +378,38 @@ export type Database = {
           image_url: string;
           is_cutout?: boolean;
           is_main?: boolean;
+          media_category?:
+            | "exterior"
+            | "interior"
+            | "detail"
+            | "odometer"
+            | "vin"
+            | "document"
+            | "misc";
+          media_kind?: "photo" | "video" | "exterior_360" | "interior_360";
+          metadata?: Json;
           overlay_id?: string | null;
           original_image_url?: string;
           photo_state?: "raw" | "cutout" | "customized";
+          processing_action?:
+            | "keep_original"
+            | "enhance"
+            | "background_replace"
+            | "background_merchandising"
+            | "manual_review";
+          processing_error?: string | null;
+          processing_provider?: string | null;
+          processing_status?: "not_required" | "queued" | "processing" | "completed" | "failed";
+          publication_status?: "unpublished" | "pending" | "published" | "failed";
+          quality_issues?: Json;
+          review_status?: "unreviewed" | "awaiting_review" | "approved" | "rejected";
           shot_type?: string | null;
           sort_order?: number;
+          updated_at?: string;
           vehicle_id: string;
         };
         Update: {
+          approved_variant_id?: string | null;
           capture_session_id?: string | null;
           created_at?: string;
           corrected_cutout_url?: string | null;
@@ -326,11 +419,34 @@ export type Database = {
           image_url?: string;
           is_cutout?: boolean;
           is_main?: boolean;
+          media_category?:
+            | "exterior"
+            | "interior"
+            | "detail"
+            | "odometer"
+            | "vin"
+            | "document"
+            | "misc";
+          media_kind?: "photo" | "video" | "exterior_360" | "interior_360";
+          metadata?: Json;
           overlay_id?: string | null;
           original_image_url?: string;
           photo_state?: "raw" | "cutout" | "customized";
+          processing_action?:
+            | "keep_original"
+            | "enhance"
+            | "background_replace"
+            | "background_merchandising"
+            | "manual_review";
+          processing_error?: string | null;
+          processing_provider?: string | null;
+          processing_status?: "not_required" | "queued" | "processing" | "completed" | "failed";
+          publication_status?: "unpublished" | "pending" | "published" | "failed";
+          quality_issues?: Json;
+          review_status?: "unreviewed" | "awaiting_review" | "approved" | "rejected";
           shot_type?: string | null;
           sort_order?: number;
+          updated_at?: string;
           vehicle_id?: string;
         };
         Relationships: [
@@ -383,18 +499,39 @@ export type Database = {
       };
       profile_dealerships: {
         Row: {
+          access_role:
+            | "dealer_admin"
+            | "store_manager"
+            | "photographer"
+            | "inventory_media"
+            | "accounting";
           created_at: string;
           dealership_id: string;
+          payout_eligible: boolean;
           profile_id: string;
         };
         Insert: {
+          access_role?:
+            | "dealer_admin"
+            | "store_manager"
+            | "photographer"
+            | "inventory_media"
+            | "accounting";
           created_at?: string;
           dealership_id: string;
+          payout_eligible?: boolean;
           profile_id: string;
         };
         Update: {
+          access_role?:
+            | "dealer_admin"
+            | "store_manager"
+            | "photographer"
+            | "inventory_media"
+            | "accounting";
           created_at?: string;
           dealership_id?: string;
+          payout_eligible?: boolean;
           profile_id?: string;
         };
         Relationships: [
@@ -632,11 +769,266 @@ export type Database = {
           },
         ];
       };
+      organizations: TableDefinition<{
+        id: string;
+        name: string;
+        status: "active" | "suspended";
+        created_at: string;
+        updated_at: string;
+      }>;
+      organization_memberships: TableDefinition<{
+        organization_id: string;
+        profile_id: string;
+        role: "group_admin" | "reporting";
+        created_at: string;
+      }>;
+      vehicle_equipment: TableDefinition<{
+        id: string;
+        vehicle_id: string;
+        category:
+          | "safety"
+          | "interior"
+          | "exterior"
+          | "mechanical"
+          | "entertainment"
+          | "convenience";
+        feature_code: string | null;
+        label: string;
+        value: string | null;
+        source: "manual" | "provider" | "import";
+        sort_order: number;
+        created_at: string;
+        updated_at: string;
+      }>;
+      vehicle_warranties: TableDefinition<{
+        vehicle_id: string;
+        basic_years: number | null;
+        basic_miles: number | null;
+        drivetrain_years: number | null;
+        drivetrain_miles: number | null;
+        corrosion_years: number | null;
+        corrosion_miles: number | null;
+        roadside_years: number | null;
+        roadside_miles: number | null;
+        notes: string | null;
+        source: "manual" | "provider" | "import";
+        updated_at: string;
+      }>;
+      media_processing_rules: TableDefinition<{
+        id: string;
+        dealership_id: string;
+        media_category:
+          | "exterior"
+          | "interior"
+          | "detail"
+          | "odometer"
+          | "vin"
+          | "document"
+          | "misc";
+        action:
+          | "keep_original"
+          | "enhance"
+          | "background_replace"
+          | "background_merchandising"
+          | "manual_review";
+        template_id: string | null;
+        enabled: boolean;
+        priority: number;
+        config: Json;
+        created_at: string;
+        updated_at: string;
+      }>;
+      media_variants: TableDefinition<{
+        id: string;
+        photo_id: string;
+        variant_type:
+          | "original"
+          | "cutout"
+          | "corrected_cutout"
+          | "customized"
+          | "enhanced"
+          | "published";
+        source_variant_id: string | null;
+        image_url: string;
+        storage_path: string | null;
+        processing_provider: string | null;
+        processing_status: "queued" | "processing" | "completed" | "failed";
+        width: number | null;
+        height: number | null;
+        byte_size: number | null;
+        checksum: string | null;
+        metadata: Json;
+        created_by: string | null;
+        created_at: string;
+      }>;
+      readiness_rules: TableDefinition<{
+        id: string;
+        dealership_id: string;
+        rule_key: string;
+        label: string;
+        severity: "attention" | "blocked";
+        applies_to: string[];
+        config: Json;
+        enabled: boolean;
+        sort_order: number;
+        created_at: string;
+        updated_at: string;
+      }>;
+      document_templates: TableDefinition<{
+        id: string;
+        organization_id: string | null;
+        dealership_id: string | null;
+        document_type: "window_sticker" | "buyers_guide" | "addendum" | "cpo_sheet" | "placard";
+        name: string;
+        version: number;
+        status: "draft" | "active" | "retired";
+        template_config: Json;
+        created_by: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      document_requirements: TableDefinition<{
+        dealership_id: string;
+        document_type: "window_sticker" | "buyers_guide" | "addendum" | "cpo_sheet" | "placard";
+        applies_to: string[];
+        required: boolean;
+        enabled: boolean;
+        updated_by: string | null;
+        updated_at: string;
+      }>;
+      generated_documents: TableDefinition<{
+        id: string;
+        vehicle_id: string;
+        organization_id: string;
+        dealership_id: string;
+        document_type: "window_sticker" | "buyers_guide" | "addendum" | "cpo_sheet" | "placard";
+        template_id: string | null;
+        template_version: number;
+        vehicle_snapshot: Json;
+        file_url: string | null;
+        storage_path: string | null;
+        status: "generating" | "generated" | "failed" | "superseded";
+        safe_error_code: string | null;
+        generated_by: string | null;
+        generated_at: string;
+        updated_at: string;
+      }>;
+      vehicle_readiness: TableDefinition<{
+        vehicle_id: string;
+        dealership_id: string;
+        status: "retail_ready" | "needs_attention" | "blocked" | "processing" | "awaiting_review";
+        reasons: Json;
+        photo_count: number;
+        video_count: number;
+        completed_document_count: number;
+        evaluated_at: string;
+        evaluator_version: number;
+      }>;
+      activity_events: TableDefinition<{
+        id: number;
+        organization_id: string;
+        dealership_id: string;
+        vehicle_id: string | null;
+        photo_shoot_id: string | null;
+        actor_profile_id: string | null;
+        event_type: string;
+        description: string;
+        metadata: Json;
+        occurred_at: string;
+      }>;
+      payout_rules: TableDefinition<{
+        id: string;
+        dealership_id: string;
+        name: string;
+        task_type:
+          | "photo_shoot"
+          | "video"
+          | "exterior_360"
+          | "interior_360"
+          | "reshoot"
+          | "audit"
+          | "manual";
+        amount: number;
+        version: number;
+        effective_from: string;
+        effective_to: string | null;
+        active: boolean;
+        config: Json;
+        created_by: string | null;
+        created_at: string;
+      }>;
+      payout_entries: TableDefinition<{
+        id: string;
+        dealership_id: string;
+        organization_id: string;
+        employee_id: string;
+        vehicle_id: string | null;
+        photo_shoot_id: string | null;
+        activity_event_id: number | null;
+        task_type:
+          | "photo_shoot"
+          | "video"
+          | "exterior_360"
+          | "interior_360"
+          | "reshoot"
+          | "audit"
+          | "manual";
+        work_date: string;
+        amount: number;
+        currency: string;
+        rule_id: string | null;
+        rule_snapshot: Json;
+        status: "pending" | "approved" | "paid" | "void";
+        approved_by: string | null;
+        approved_at: string | null;
+        paid_by: string | null;
+        paid_at: string | null;
+        notes: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      integration_connections: TableDefinition<{
+        id: string;
+        organization_id: string;
+        dealership_id: string | null;
+        provider_type:
+          | "inventory_import"
+          | "vehicle_data"
+          | "media_publishing"
+          | "inventory_publishing";
+        provider_key: string;
+        display_name: string;
+        status: "not_configured" | "disabled" | "ready" | "syncing" | "healthy" | "failed";
+        external_dealership_id: string | null;
+        configuration_metadata: Json;
+        last_sync_at: string | null;
+        last_success_at: string | null;
+        last_failure_at: string | null;
+        last_error_code: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      vehicle_publications: TableDefinition<{
+        id: string;
+        vehicle_id: string;
+        integration_connection_id: string;
+        status: "pending" | "publishing" | "published" | "failed" | "disabled";
+        external_vehicle_id: string | null;
+        last_attempt_at: string | null;
+        last_success_at: string | null;
+        last_error_code: string | null;
+        updated_at: string;
+      }>;
       vehicles: {
         Row: {
+          assigned_photographer_id: string | null;
           body_class: string | null;
+          category: string | null;
+          certification_program: string | null;
+          comments: string | null;
           condition: string | null;
           created_at: string;
+          custom_comments: string | null;
           cylinders: number | null;
           dealership_id: string;
           drivetrain: string | null;
@@ -645,21 +1037,48 @@ export type Database = {
           fuel_type: string | null;
           id: string;
           interior_color: string | null;
+          internal_notes: string | null;
+          internet_price: number | null;
+          inventory_arrival_date: string | null;
+          inventory_type: "new" | "used" | "certified" | null;
           make: string | null;
           model: string | null;
           odometer: number | null;
           price: number | null;
+          price_description: string | null;
+          publication_description: string | null;
+          publication_state: "disabled" | "pending" | "publishing" | "published" | "failed";
+          retail_readiness_status:
+            | "retail_ready"
+            | "needs_attention"
+            | "blocked"
+            | "processing"
+            | "awaiting_review";
+          sale_price: number | null;
+          series: string | null;
+          source_external_id: string | null;
+          source_metadata: Json;
+          source_provider: string | null;
           status: string | null;
           stock_number: string | null;
+          tagline: string | null;
           transmission: string | null;
           trim: string | null;
+          updated_at: string;
           vin: string | null;
+          warranty_type: string | null;
           year: number | null;
+          msrp: number | null;
         };
         Insert: {
+          assigned_photographer_id?: string | null;
           body_class?: string | null;
+          category?: string | null;
+          certification_program?: string | null;
+          comments?: string | null;
           condition?: string | null;
           created_at?: string;
+          custom_comments?: string | null;
           cylinders?: number | null;
           dealership_id: string;
           drivetrain?: string | null;
@@ -668,21 +1087,48 @@ export type Database = {
           fuel_type?: string | null;
           id?: string;
           interior_color?: string | null;
+          internal_notes?: string | null;
+          internet_price?: number | null;
+          inventory_arrival_date?: string | null;
+          inventory_type?: "new" | "used" | "certified" | null;
           make?: string | null;
           model?: string | null;
           odometer?: number | null;
           price?: number | null;
+          price_description?: string | null;
+          publication_description?: string | null;
+          publication_state?: "disabled" | "pending" | "publishing" | "published" | "failed";
+          retail_readiness_status?:
+            | "retail_ready"
+            | "needs_attention"
+            | "blocked"
+            | "processing"
+            | "awaiting_review";
+          sale_price?: number | null;
+          series?: string | null;
+          source_external_id?: string | null;
+          source_metadata?: Json;
+          source_provider?: string | null;
           status?: string | null;
           stock_number?: string | null;
+          tagline?: string | null;
           transmission?: string | null;
           trim?: string | null;
+          updated_at?: string;
           vin?: string | null;
+          warranty_type?: string | null;
           year?: number | null;
+          msrp?: number | null;
         };
         Update: {
+          assigned_photographer_id?: string | null;
           body_class?: string | null;
+          category?: string | null;
+          certification_program?: string | null;
+          comments?: string | null;
           condition?: string | null;
           created_at?: string;
+          custom_comments?: string | null;
           cylinders?: number | null;
           dealership_id?: string;
           drivetrain?: string | null;
@@ -691,16 +1137,38 @@ export type Database = {
           fuel_type?: string | null;
           id?: string;
           interior_color?: string | null;
+          internal_notes?: string | null;
+          internet_price?: number | null;
+          inventory_arrival_date?: string | null;
+          inventory_type?: "new" | "used" | "certified" | null;
           make?: string | null;
           model?: string | null;
           odometer?: number | null;
           price?: number | null;
+          price_description?: string | null;
+          publication_description?: string | null;
+          publication_state?: "disabled" | "pending" | "publishing" | "published" | "failed";
+          retail_readiness_status?:
+            | "retail_ready"
+            | "needs_attention"
+            | "blocked"
+            | "processing"
+            | "awaiting_review";
+          sale_price?: number | null;
+          series?: string | null;
+          source_external_id?: string | null;
+          source_metadata?: Json;
+          source_provider?: string | null;
           status?: string | null;
           stock_number?: string | null;
+          tagline?: string | null;
           transmission?: string | null;
           trim?: string | null;
+          updated_at?: string;
           vin?: string | null;
+          warranty_type?: string | null;
           year?: number | null;
+          msrp?: number | null;
         };
         Relationships: [
           {
@@ -725,6 +1193,39 @@ export type Database = {
       complete_photo_capture_session: {
         Args: { _session_id: string };
         Returns: Database["public"]["Tables"]["photo_capture_sessions"]["Row"];
+      };
+      commit_photo_variant: {
+        Args: {
+          _image_url: string;
+          _photo_id: string;
+          _processing_provider?: string | null;
+          _storage_path?: string | null;
+          _variant_type: string;
+        };
+        Returns: Database["public"]["Tables"]["media_variants"]["Row"];
+      };
+      create_payout_rule: {
+        Args: {
+          _amount: number;
+          _config?: Json;
+          _dealership_id: string;
+          _effective_from?: string;
+          _name: string;
+          _task_type: string;
+        };
+        Returns: Database["public"]["Tables"]["payout_rules"]["Row"];
+      };
+      generate_vehicle_document: {
+        Args: { _document_type: string; _vehicle_id: string };
+        Returns: Database["public"]["Tables"]["generated_documents"]["Row"];
+      };
+      refresh_vehicle_readiness: {
+        Args: { _vehicle_id: string };
+        Returns: Database["public"]["Tables"]["vehicle_readiness"]["Row"];
+      };
+      set_payout_status: {
+        Args: { _payout_id: string; _status: string };
+        Returns: Database["public"]["Tables"]["payout_entries"]["Row"];
       };
       begin_temporary_password_reset_operation: {
         Args: { _actor_id: string; _idempotency_key: string; _target_profile_id: string };

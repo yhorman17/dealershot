@@ -53,6 +53,8 @@ type UserRow = {
   created_at: string;
   last_sign_in_at: string | null;
   password_change_required: boolean;
+  access_role: "store_manager" | "photographer" | "inventory_media" | "accounting" | null;
+  payout_eligible: boolean;
 };
 type Invitation = {
   id: string;
@@ -701,6 +703,7 @@ function EditUserModal({
   const callUpdateUser = useServerFn(updateUserAccount);
   const [fullName, setFullName] = useState(user.full_name ?? "");
   const [role, setRole] = useState(user.role);
+  const [accessRole, setAccessRole] = useState(user.access_role ?? "photographer");
   const [dealershipIds, setDealershipIds] = useState<string[]>(
     user.dealership_ids.length > 0
       ? user.dealership_ids
@@ -729,6 +732,7 @@ function EditUserModal({
             full_name: fullName.trim(),
             role: user.role === "owner" ? undefined : (role as "dealer_admin" | "staff"),
             dealership_ids: user.role === "owner" ? [] : dealershipIds,
+            access_role: role === "staff" ? accessRole : undefined,
           },
         });
       }
@@ -767,6 +771,33 @@ function EditUserModal({
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
           </div>
+          {role === "staff" && user.role !== "owner" && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-card-foreground">
+                Operational access
+              </label>
+              <ProductSelect
+                value={accessRole}
+                disabled={isSelf}
+                onValueChange={(value) =>
+                  setAccessRole(
+                    value as "store_manager" | "photographer" | "inventory_media" | "accounting",
+                  )
+                }
+                ariaLabel="Operational access"
+                options={[
+                  { value: "photographer", label: "Photographer" },
+                  { value: "inventory_media", label: "Inventory / media staff" },
+                  { value: "store_manager", label: "Store manager" },
+                  { value: "accounting", label: "Accounting / reporting" },
+                ]}
+              />
+              <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">
+                Controls store-level capture, inventory, document, media, or payout access. Platform
+                and dealer administrator roles remain separate.
+              </p>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">Email</label>
             <input
