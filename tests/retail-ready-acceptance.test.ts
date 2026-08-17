@@ -95,3 +95,11 @@ test("operational reporting exposes all accepted manager views", () => {
   assert.match(reports, /0–15/);
   assert.match(reports, /90\+/);
 });
+
+test("photographers are contained before the settings editor renders", () => {
+  const settings = read("src/routes/_authenticated/settings.tsx");
+
+  assert.match(settings, /data\?\.access_role === "store_manager"/);
+  assert.match(settings, /if \(!canManageSettings\)/);
+  assert.match(settings, /Settings access required/);
+});

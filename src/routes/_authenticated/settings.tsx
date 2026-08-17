@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Plus, Save, Settings2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader, ProductSelect, StatusBadge } from "@/components/product-ui";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
+import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 
@@ -35,8 +36,11 @@ const PROCESSING_CATEGORIES = [
 ] as const;
 
 function SettingsPage() {
+  const { profile } = useAuth();
   const { dealerships, selectedDealership, selectedDealershipId, setSelectedDealershipId } =
     useAccessibleDealerships();
+  const [loadingAccess, setLoadingAccess] = useState(profile?.role === "staff");
+  const [canManageSettings, setCanManageSettings] = useState(profile?.role !== "staff");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [readiness, setReadiness] = useState<ReadinessRule[]>([]);
@@ -45,6 +49,42 @@ function SettingsPage() {
   const [processing, setProcessing] = useState<ProcessingRule[]>([]);
   const [documents, setDocuments] = useState<DocumentRequirement[]>([]);
   const [payoutRules, setPayoutRules] = useState<PayoutRule[]>([]);
+
+  useEffect(() => {
+    if (!profile) {
+      setCanManageSettings(false);
+      setLoadingAccess(false);
+      return;
+    }
+    if (profile.role !== "staff") {
+      setCanManageSettings(true);
+      setLoadingAccess(false);
+      return;
+    }
+    if (!selectedDealershipId) {
+      setCanManageSettings(false);
+      setLoadingAccess(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingAccess(true);
+    void supabase
+      .from("profile_dealerships")
+      .select("access_role")
+      .eq("profile_id", profile.id)
+      .eq("dealership_id", selectedDealershipId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        setCanManageSettings(data?.access_role === "store_manager");
+        setLoadingAccess(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile, selectedDealershipId]);
 
   const load = useCallback(async () => {
     if (!selectedDealershipId) {
@@ -144,6 +184,33 @@ function SettingsPage() {
       ariaLabel="Store to configure"
     />
   );
+
+  if (loadingAccess) {
+    return (
+      <main className="ds-page-gutter">
+        <div className="ds-surface p-8 text-sm text-muted-foreground" aria-busy="true">
+          Checking store-settings access…
+        </div>
+      </main>
+    );
+  }
+
+  if (!canManageSettings) {
+    return (
+      <main className="ds-page-gutter">
+        <PageHeader
+          eyebrow="Store configuration"
+          title="Settings access required"
+          description="Your dealership role does not include permission to change store configuration."
+          actions={
+            <Button asChild variant="outline">
+              <Link to="/dashboard">Back to overview</Link>
+            </Button>
+          }
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="ds-page-gutter">
