@@ -6,6 +6,7 @@ import type { Database, Json } from "../src/integrations/supabase/types";
 import type { BackgroundJob, JobHandler } from "./runtime";
 
 const PRIVATE_BUCKET = "dealer-media-private";
+const LEGACY_PRIVATE_BUCKET = "dealer-media-legacy-private";
 const LEGACY_BUCKET = "vehicle-photos";
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 
@@ -53,7 +54,7 @@ function hash(bytes: Buffer) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-async function imageMetadata(bytes: Buffer) {
+async function imageMetadata(bytes: Buffer, allowLegacySvg = false) {
   if (bytes.length < 1 || bytes.length > MAX_IMAGE_BYTES) throw new Error("invalid_media_size");
   const metadata = await sharp(bytes, { failOn: "warning" }).metadata();
   const contentType =
@@ -63,10 +64,17 @@ async function imageMetadata(bytes: Buffer) {
         ? "image/webp"
         : metadata.format === "jpeg"
           ? "image/jpeg"
-          : null;
+          : allowLegacySvg && metadata.format === "svg"
+            ? "image/svg+xml"
+            : null;
   if (!contentType || !metadata.width || !metadata.height)
     throw new Error("unsupported_media_type");
-  return { contentType, width: metadata.width, height: metadata.height };
+  return {
+    contentType,
+    storageContentType: contentType === "image/svg+xml" ? "application/octet-stream" : contentType,
+    width: metadata.width,
+    height: metadata.height,
+  };
 }
 
 async function downloadBytes(client: SupabaseClient<Database>, bucket: string, path: string) {
@@ -113,6 +121,21 @@ export async function ensurePrivateMediaBucket(client: SupabaseClient<Database>)
     });
     if (updateError) throw new Error("storage_bucket_update_failed");
   }
+  if (!buckets.some((bucket) => bucket.id === LEGACY_PRIVATE_BUCKET)) {
+    const { error: createError } = await client.storage.createBucket(LEGACY_PRIVATE_BUCKET, {
+      public: false,
+      fileSizeLimit: MAX_IMAGE_BYTES,
+      allowedMimeTypes: ["application/octet-stream"],
+    });
+    if (createError) throw new Error("legacy_storage_bucket_create_failed");
+  } else {
+    const { error: updateError } = await client.storage.updateBucket(LEGACY_PRIVATE_BUCKET, {
+      public: false,
+      fileSizeLimit: MAX_IMAGE_BYTES,
+      allowedMimeTypes: ["application/octet-stream"],
+    });
+    if (updateError) throw new Error("legacy_storage_bucket_update_failed");
+  }
 }
 
 async function migrateLegacyMedia(client: SupabaseClient<Database>, job: BackgroundJob) {
@@ -125,26 +148,30 @@ async function migrateLegacyMedia(client: SupabaseClient<Database>, job: Backgro
   if (migration.state === "private") return { already_verified: true };
   try {
     const source = await downloadBytes(client, migration.source_bucket, migration.source_path);
-    const metadata = await imageMetadata(source);
+    const metadata = await imageMetadata(
+      source,
+      migration.destination_bucket === LEGACY_PRIVATE_BUCKET,
+    );
     await uploadVerified(
       client,
       migration.destination_bucket,
       migration.destination_path,
       source,
-      metadata.contentType,
+      metadata.storageContentType,
     );
     const checksum = hash(source);
-    const { data: completed, error: completeError } = await client.rpc(
-      "worker_complete_media_migration",
-      {
-        _migration_id: migrationId,
-        _checksum_sha256: checksum,
-        _byte_size: source.length,
-        _content_type: metadata.contentType,
-        _width: metadata.width,
-        _height: metadata.height,
-      },
-    );
+    const completionRpc =
+      metadata.contentType === "image/svg+xml"
+        ? "worker_complete_legacy_svg_migration"
+        : "worker_complete_media_migration";
+    const { data: completed, error: completeError } = await client.rpc(completionRpc, {
+      _migration_id: migrationId,
+      _checksum_sha256: checksum,
+      _byte_size: source.length,
+      _content_type: metadata.contentType,
+      _width: metadata.width,
+      _height: metadata.height,
+    });
     if (completeError || completed !== true) throw new Error("migration_finalize_failed");
     return { migrated: true, bytes: source.length, checksum_prefix: checksum.slice(0, 12) };
   } catch (cause) {
@@ -165,7 +192,7 @@ async function generateThumbnails(client: SupabaseClient<Database>, job: Backgro
   if (error) throw new Error("media_source_lookup_failed");
   const source = asObject<MediaSource>(data);
   const original = await downloadBytes(client, source.bucket, source.path);
-  await imageMetadata(original);
+  await imageMetadata(original, source.content_type === "image/svg+xml");
   const base = source.path.includes("/original/")
     ? source.path.slice(0, source.path.indexOf("/original/"))
     : source.path.replace(/\/[^/]+$/, "");

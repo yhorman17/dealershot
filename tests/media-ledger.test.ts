@@ -21,6 +21,10 @@ const legacyPathBackfill = readFileSync(
   path.join(root, "supabase/migrations/20260817225800_backfill_legacy_media_variant_paths.sql"),
   "utf8",
 );
+const legacySvgCompatibility = readFileSync(
+  path.join(root, "supabase/migrations/20260817231500_preserve_legacy_svg_originals.sql"),
+  "utf8",
+);
 const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
 
 const mediaAssetId = "10000000-0000-0000-0000-000000000001";
@@ -39,8 +43,20 @@ function mediaJob(jobType: string, payload: Record<string, string>): BackgroundJ
   };
 }
 
-function fakeMediaClient(source: Buffer) {
-  const objects = new Map<string, Buffer>([["vehicle-photos/legacy/source.jpg", source]]);
+function fakeMediaClient(
+  source: Buffer,
+  options: {
+    sourcePath?: string;
+    destinationBucket?: string;
+    contentType?: string;
+  } = {},
+) {
+  const sourcePath = options.sourcePath ?? "legacy/source.jpg";
+  const destinationBucket = options.destinationBucket ?? "dealer-media-private";
+  const contentType = options.contentType ?? "image/jpeg";
+  const filename = sourcePath.replace(/^.*\//, "");
+  const destinationPath = `stores/store-a/vehicles/vehicle-a/media/${mediaAssetId}/original/${filename}`;
+  const objects = new Map<string, Buffer>([[`vehicle-photos/${sourcePath}`, source]]);
   const buckets = new Map<string, { public: boolean }>([["vehicle-photos", { public: true }]]);
   const registered: Array<Record<string, unknown>> = [];
   let migrationCompleted = false;
@@ -87,9 +103,9 @@ function fakeMediaClient(source: Buffer) {
             media_asset_id: mediaAssetId,
             media_variant_id: "60000000-0000-0000-0000-000000000001",
             source_bucket: "vehicle-photos",
-            source_path: "legacy/source.jpg",
-            destination_bucket: "dealer-media-private",
-            destination_path: `stores/store-a/vehicles/vehicle-a/media/${mediaAssetId}/original/source.jpg`,
+            source_path: sourcePath,
+            destination_bucket: destinationBucket,
+            destination_path: destinationPath,
             state: "legacy",
             variant_type: "original",
             dealership_id: "store-a",
@@ -98,7 +114,10 @@ function fakeMediaClient(source: Buffer) {
           error: null,
         };
       }
-      if (name === "worker_complete_media_migration") {
+      if (
+        name === "worker_complete_media_migration" ||
+        name === "worker_complete_legacy_svg_migration"
+      ) {
         migrationCompleted = true;
         return { data: true, error: null };
       }
@@ -112,13 +131,11 @@ function fakeMediaClient(source: Buffer) {
             media_asset_id: mediaAssetId,
             dealership_id: "store-a",
             vehicle_id: "vehicle-a",
-            bucket: migrationCompleted ? "dealer-media-private" : "vehicle-photos",
-            path: migrationCompleted
-              ? `stores/store-a/vehicles/vehicle-a/media/${mediaAssetId}/original/source.jpg`
-              : "legacy/source.jpg",
+            bucket: migrationCompleted ? destinationBucket : "vehicle-photos",
+            path: migrationCompleted ? destinationPath : sourcePath,
             photo_id: "70000000-0000-0000-0000-000000000001",
             source_variant_id: "60000000-0000-0000-0000-000000000001",
-            content_type: "image/jpeg",
+            content_type: contentType,
           },
           error: null,
         };
@@ -175,6 +192,7 @@ test("worker creates and maintains a private constrained media bucket", async ()
   const fixture = fakeMediaClient(source);
   await ensurePrivateMediaBucket(fixture.client as never);
   assert.deepEqual(fixture.buckets.get("dealer-media-private"), { public: false });
+  assert.deepEqual(fixture.buckets.get("dealer-media-legacy-private"), { public: false });
 });
 
 test("deployment image carries Sharp's Alpine native runtime packages", () => {
@@ -190,6 +208,18 @@ test("URL-only legacy variants are normalized before private migration jobs enqu
   assert.match(legacyPathBackfill, /ON CONFLICT \(source_bucket, source_path\) DO NOTHING/);
   assert.match(legacyPathBackfill, /SET resolution = 'linked'/);
   assert.match(legacyPathBackfill, /'media\.legacy\.lockdown'/);
+});
+
+test("legacy SVG finalization is isolated, server-only, and resumable", () => {
+  assert.match(legacySvgCompatibility, /dealer-media-legacy-private/);
+  assert.match(legacySvgCompatibility, /_content_type <> 'image\/svg\+xml'/);
+  assert.match(legacySvgCompatibility, /SET search_path = ''/);
+  assert.match(
+    legacySvgCompatibility,
+    /REVOKE ALL ON FUNCTION public\.worker_complete_legacy_svg_migration/,
+  );
+  assert.match(legacySvgCompatibility, /\) FROM PUBLIC, anon, authenticated/);
+  assert.match(legacySvgCompatibility, /TO service_role/);
 });
 
 test("legacy migration verifies exact bytes before finalizing and preserves source", async () => {
@@ -215,6 +245,35 @@ test("legacy migration verifies exact bytes before finalizing and preserves sour
     createHash("sha256").update(source).digest("hex"),
   );
   assert.deepEqual(result && "migrated" in result ? result.migrated : false, true);
+});
+
+test("legacy SVG fixtures preserve exact bytes privately and render safe WebP previews", async () => {
+  const source = Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="640" height="480" fill="#3465a4"/></svg>',
+  );
+  const fixture = fakeMediaClient(source, {
+    sourcePath: "legacy/source.svg",
+    destinationBucket: "dealer-media-legacy-private",
+    contentType: "image/svg+xml",
+  });
+  await ensurePrivateMediaBucket(fixture.client as never);
+  const handlers = createMediaJobHandlers(fixture.client as never);
+  await handlers["media.legacy.migrate"](
+    mediaJob("media.legacy.migrate", { migration_id: migrationId }),
+  );
+  const copied = fixture.objects.get(
+    `dealer-media-legacy-private/stores/store-a/vehicles/vehicle-a/media/${mediaAssetId}/original/source.svg`,
+  );
+  assert.deepEqual(copied, source);
+
+  await handlers["media.thumbnail.generate"](
+    mediaJob("media.thumbnail.generate", { media_asset_id: mediaAssetId }),
+  );
+  assert.deepEqual(
+    fixture.registered.map((entry) => entry._content_type),
+    ["image/webp", "image/webp"],
+  );
+  assert.deepEqual(fixture.objects.get("vehicle-photos/legacy/source.svg"), source);
 });
 
 test("thumbnail rendering creates two private WebP derivatives without mutating original", async () => {

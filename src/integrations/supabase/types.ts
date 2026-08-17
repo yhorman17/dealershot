@@ -1347,6 +1347,17 @@ export type Database = {
         };
         Returns: boolean;
       };
+      worker_complete_legacy_svg_migration: {
+        Args: {
+          _migration_id: string;
+          _checksum_sha256: string;
+          _byte_size: number;
+          _content_type: string;
+          _width: number;
+          _height: number;
+        };
+        Returns: boolean;
+      };
       worker_fail_media_migration: {
         Args: { _migration_id: string; _safe_error_code: string };
         Returns: boolean;
