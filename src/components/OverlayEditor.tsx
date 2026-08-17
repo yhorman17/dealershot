@@ -34,6 +34,7 @@ type Photo = {
   id: string;
   vehicle_id: string;
   image_url: string;
+  original_image_url?: string | null;
   shot_type: string | null;
   sort_order: number;
   is_main: boolean;
@@ -144,27 +145,23 @@ export function OverlayEditor({
         const { error: insErr } = await supabase.from("photos").insert({
           vehicle_id: photo.vehicle_id,
           image_url: pub.publicUrl,
+          original_image_url: photo.original_image_url ?? photo.image_url,
           shot_type: photo.shot_type,
           overlay_id: selected.id,
           sort_order: (photo.sort_order ?? 0) + 1,
+          photo_state: "customized",
         });
         if (insErr) throw insErr;
       } else {
-        // Overwrite: replace existing row's image_url and delete old storage file
-        try {
-          const url = new URL(photo.image_url);
-          const idx = url.pathname.indexOf("/vehicle-photos/");
-          if (idx !== -1) {
-            const oldPath = url.pathname.slice(idx + "/vehicle-photos/".length);
-            await supabase.storage.from("vehicle-photos").remove([oldPath]);
-          }
-        } catch {
-          // ignore
-        }
-        const { error: updErr } = await supabase
-          .from("photos")
-          .update({ image_url: pub.publicUrl, overlay_id: selected.id })
-          .eq("id", photo.id);
+        // "Overwrite" selects a new approved variant; the immutable original
+        // and previous variants remain available for restoration and audit.
+        const { error: updErr } = await supabase.rpc("commit_photo_variant", {
+          _photo_id: photo.id,
+          _variant_type: "customized",
+          _image_url: pub.publicUrl,
+          _storage_path: path,
+          _processing_provider: "dealershot-overlay",
+        });
         if (updErr) throw updErr;
       }
       onSaved();

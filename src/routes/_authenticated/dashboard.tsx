@@ -60,6 +60,10 @@ function StaffDashboard({
   const [totalCount, setTotalCount] = useState(0);
   const [needsPhotosCount, setNeedsPhotosCount] = useState(0);
   const [needsPhotosIds, setNeedsPhotosIds] = useState<string[]>([]);
+  const [retailReadyCount, setRetailReadyCount] = useState(0);
+  const [blockedCount, setBlockedCount] = useState(0);
+  const [processingCount, setProcessingCount] = useState(0);
+  const [missingPriceCount, setMissingPriceCount] = useState(0);
   const [recent, setRecent] = useState<RecentVehicle[]>([]);
 
   useEffect(() => {
@@ -69,13 +73,27 @@ function StaffDashboard({
     }
     setLoading(true);
     void (async () => {
-      const { data: vehicles } = await supabase
-        .from("vehicles")
-        .select("id, year, make, model, trim, price, created_at")
-        .eq("dealership_id", dealershipId)
-        .order("created_at", { ascending: false });
+      const [{ data: vehicles }, { data: readinessRows }] = await Promise.all([
+        supabase
+          .from("vehicles")
+          .select("id, year, make, model, trim, price, created_at")
+          .eq("dealership_id", dealershipId)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("vehicle_readiness")
+          .select("vehicle_id, status, reasons")
+          .eq("dealership_id", dealershipId),
+      ]);
       const list = (vehicles as RecentVehicle[]) || [];
       setTotalCount(list.length);
+      setMissingPriceCount(list.filter((vehicle) => vehicle.price === null).length);
+      const readiness =
+        (readinessRows as Array<{ vehicle_id: string; status: string; reasons: unknown }>) ?? [];
+      setRetailReadyCount(readiness.filter((item) => item.status === "retail_ready").length);
+      setBlockedCount(readiness.filter((item) => item.status === "blocked").length);
+      setProcessingCount(
+        readiness.filter((item) => ["processing", "awaiting_review"].includes(item.status)).length,
+      );
 
       const ids = list.map((v) => v.id);
       const photosByVehicle = new Map<
@@ -107,12 +125,25 @@ function StaffDashboard({
         }
       }
 
-      const needsIds: string[] = [];
+      const needsIds = readiness
+        .filter(
+          (item) =>
+            Array.isArray(item.reasons) &&
+            item.reasons.some(
+              (reason) =>
+                reason &&
+                typeof reason === "object" &&
+                ["media.minimum_photos", "media.required_shot"].includes(
+                  String((reason as Record<string, unknown>).key),
+                ),
+            ),
+        )
+        .map((item) => item.vehicle_id);
       for (const v of list) {
         const photos = photosByVehicle.get(v.id) || [];
         const hasMain = photos.some((p) => p.is_main);
         const hasFront = photos.some((p) => (p.shot_type || "").toLowerCase() === "front");
-        if (photos.length === 0 || (!hasMain && !hasFront)) {
+        if (readiness.length === 0 && (photos.length === 0 || (!hasMain && !hasFront))) {
           needsIds.push(v.id);
         }
         // Attach thumbnail (main > front > first)
@@ -174,42 +205,77 @@ function StaffDashboard({
         </div>
       </PageHeader>
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Total vehicles"
-          value={loading ? <Skeleton className="h-9 w-14" /> : totalCount}
-          detail="Active dealership inventory"
-          icon={<CarFront className="size-4" />}
-        />
-        <MetricCard
-          label="Photo attention"
-          value={loading ? <Skeleton className="h-9 w-14" /> : needsPhotosCount}
-          detail={
-            needsPhotosCount > 0 ? "Missing a main or front shot" : "Every vehicle has a lead photo"
-          }
-          icon={<Camera className="size-4" />}
-          tone={needsPhotosCount > 0 ? "attention" : "default"}
-        />
-        <MetricCard
-          label="Recently added"
-          value={loading ? <Skeleton className="h-9 w-14" /> : Math.min(recent.length, totalCount)}
-          detail="Latest arrivals in this view"
-          icon={<Clock3 className="size-4" />}
-        />
-        <MetricCard
-          label="Lead-photo coverage"
-          value={
-            loading ? (
-              <Skeleton className="h-9 w-20" />
-            ) : totalCount === 0 ? (
-              "—"
-            ) : (
-              `${Math.round(((totalCount - needsPhotosCount) / totalCount) * 100)}%`
-            )
-          }
-          detail="Vehicles with a usable lead image"
-          icon={<CircleGauge className="size-4" />}
-        />
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+        <Link to="/inventory" search={{}} className="rounded-lg focus-visible:outline-none">
+          <MetricCard
+            label="Total vehicles"
+            value={loading ? <Skeleton className="h-9 w-14" /> : totalCount}
+            detail="Active dealership inventory"
+            icon={<CarFront className="size-4" />}
+          />
+        </Link>
+        <Link
+          to="/inventory"
+          search={{ readiness: "retail_ready" }}
+          className="rounded-lg focus-visible:outline-none"
+        >
+          <MetricCard
+            label="Retail Ready"
+            value={loading ? <Skeleton className="h-9 w-14" /> : retailReadyCount}
+            detail="All configured work complete"
+            icon={<CircleGauge className="size-4" />}
+          />
+        </Link>
+        <Link
+          to="/inventory"
+          search={{ media: "short_shoot" }}
+          className="rounded-lg focus-visible:outline-none"
+        >
+          <MetricCard
+            label="Short Shoot"
+            value={loading ? <Skeleton className="h-9 w-14" /> : needsPhotosCount}
+            detail="Missing required media"
+            icon={<Camera className="size-4" />}
+            tone={needsPhotosCount > 0 ? "attention" : "default"}
+          />
+        </Link>
+        <Link
+          to="/inventory"
+          search={{ readiness: "blocked" }}
+          className="rounded-lg focus-visible:outline-none"
+        >
+          <MetricCard
+            label="Blocked"
+            value={loading ? <Skeleton className="h-9 w-14" /> : blockedCount}
+            detail="Requires corrective action"
+            icon={<CircleGauge className="size-4" />}
+            tone={blockedCount > 0 ? "attention" : "default"}
+          />
+        </Link>
+        <Link
+          to="/inventory"
+          search={{ readiness: "processing" }}
+          className="rounded-lg focus-visible:outline-none"
+        >
+          <MetricCard
+            label="Processing / review"
+            value={loading ? <Skeleton className="h-9 w-14" /> : processingCount}
+            detail="Media work in flight"
+            icon={<Clock3 className="size-4" />}
+          />
+        </Link>
+        <Link
+          to="/inventory"
+          search={{ price: "missing" }}
+          className="rounded-lg focus-visible:outline-none"
+        >
+          <MetricCard
+            label="Missing Price"
+            value={loading ? <Skeleton className="h-9 w-14" /> : missingPriceCount}
+            detail="Visible latest arrivals"
+            icon={<CircleGauge className="size-4" />}
+          />
+        </Link>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">

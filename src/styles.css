@@ -183,6 +183,7 @@
   }
 
   :where(button, [role="button"], a[href]) {
+    touch-action: manipulation;
     transition:
       color var(--motion-duration-fast) var(--motion-ease-standard),
       background-color var(--motion-duration-fast) var(--motion-ease-standard),
@@ -351,6 +352,15 @@
       textarea
     ) {
       min-height: 2.75rem;
+    }
+  }
+
+  /* iOS zooms focused controls below 16px. Keep mobile forms at a stable
+     application scale without disabling user pinch zoom in the viewport. */
+  @media (max-width: 767px) {
+    :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
+    .form-input {
+      font-size: 1rem;
     }
   }
   .form-input::placeholder {
@@ -544,6 +554,48 @@
   .motion-gallery-item:hover,
   .motion-upload-target:hover {
     transform: none !important;
+  }
+}
+
+@media print {
+  @page {
+    size: letter;
+    margin: 0.45in;
+  }
+
+  .app-shell-header,
+  aside,
+  body > header,
+  .report-page > header,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    print-color-adjust: exact;
+  }
+
+  .motion-sidebar {
+    padding-left: 0 !important;
+  }
+
+  .print-document {
+    width: 100%;
+  }
+
+  .report-page table {
+    font-size: 9pt;
+  }
+
+  .report-page thead {
+    display: table-header-group;
+  }
+
+  .report-page tr,
+  .print-document section {
+    break-inside: avoid;
   }
 }
 

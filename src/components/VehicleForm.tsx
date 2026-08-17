@@ -14,6 +14,7 @@ export type VehicleFormValues = {
   make: string;
   model: string;
   trim: string;
+  series: string;
   body_class: string;
   engine: string;
   cylinders: string;
@@ -24,7 +25,19 @@ export type VehicleFormValues = {
   interior_color: string;
   odometer: string;
   price: string;
+  msrp: string;
+  sale_price: string;
+  price_description: string;
   stock_number: string;
+  inventory_type: "new" | "used" | "certified";
+  inventory_arrival_date: string;
+  category: string;
+  warranty_type: string;
+  comments: string;
+  custom_comments: string;
+  tagline: string;
+  publication_description: string;
+  internal_notes: string;
   condition: string;
   status: string;
 };
@@ -35,6 +48,7 @@ export const emptyVehicleValues: VehicleFormValues = {
   make: "",
   model: "",
   trim: "",
+  series: "",
   body_class: "",
   engine: "",
   cylinders: "",
@@ -45,7 +59,19 @@ export const emptyVehicleValues: VehicleFormValues = {
   interior_color: "",
   odometer: "",
   price: "",
+  msrp: "",
+  sale_price: "",
+  price_description: "",
   stock_number: "",
+  inventory_type: "used",
+  inventory_arrival_date: new Date().toISOString().slice(0, 10),
+  category: "",
+  warranty_type: "",
+  comments: "",
+  custom_comments: "",
+  tagline: "",
+  publication_description: "",
+  internal_notes: "",
   condition: "Used",
   status: "Available",
 };
@@ -119,9 +145,9 @@ export function VehicleForm({
     e.preventDefault();
     setError(null);
     const fe: { odometer?: string; price?: string } = {};
-    if (values.odometer.trim() === "" || isNaN(Number(values.odometer)))
+    if (values.odometer.trim() !== "" && isNaN(Number(values.odometer)))
       fe.odometer = "Enter a valid number";
-    if (values.price.trim() === "" || isNaN(Number(values.price)))
+    if (values.price.trim() !== "" && isNaN(Number(values.price)))
       fe.price = "Enter a valid number";
     setFieldErrors(fe);
     if (fe.odometer || fe.price) return;
@@ -132,6 +158,7 @@ export function VehicleForm({
         make: values.make.trim() || null,
         model: values.model.trim() || null,
         trim: values.trim.trim() || null,
+        series: values.series.trim() || null,
         body_class: values.body_class.trim() || null,
         engine: values.engine.trim() || null,
         cylinders: values.cylinders ? parseInt(values.cylinders, 10) : null,
@@ -142,7 +169,20 @@ export function VehicleForm({
         interior_color: values.interior_color.trim() || null,
         odometer: values.odometer ? parseInt(values.odometer, 10) : null,
         price: values.price ? parseFloat(values.price) : null,
+        internet_price: values.price ? parseFloat(values.price) : null,
+        msrp: values.msrp ? parseFloat(values.msrp) : null,
+        sale_price: values.sale_price ? parseFloat(values.sale_price) : null,
+        price_description: values.price_description.trim() || null,
         stock_number: values.stock_number.trim() || null,
+        inventory_type: values.inventory_type,
+        inventory_arrival_date: values.inventory_arrival_date || null,
+        category: values.category.trim() || null,
+        warranty_type: values.warranty_type.trim() || null,
+        comments: values.comments.trim() || null,
+        custom_comments: values.custom_comments.trim() || null,
+        tagline: values.tagline.trim() || null,
+        publication_description: values.publication_description.trim() || null,
+        internal_notes: values.internal_notes.trim() || null,
         condition: values.condition || null,
         status: values.status || null,
       };
@@ -264,6 +304,7 @@ export function VehicleForm({
         <Input label="Make" value={values.make} onChange={(v) => set("make", v)} />
         <Input label="Model" value={values.model} onChange={(v) => set("model", v)} />
         <Input label="Trim" value={values.trim} onChange={(v) => set("trim", v)} />
+        <Input label="Series" value={values.series} onChange={(v) => set("series", v)} />
         <Input
           label="Body class"
           value={values.body_class}
@@ -305,7 +346,7 @@ export function VehicleForm({
           error={fieldErrors.odometer}
         />
         <Input
-          label="Price (USD)"
+          label="Internet price (USD)"
           type="number"
           value={values.price}
           onChange={(v) => set("price", v)}
@@ -314,9 +355,78 @@ export function VehicleForm({
       </Section>
 
       <Section
+        title="Merchandising & pricing"
+        description="Keep consumer-facing copy separate from internal operating notes."
+      >
+        <Input
+          label="MSRP (USD)"
+          type="number"
+          value={values.msrp}
+          onChange={(v) => set("msrp", v)}
+        />
+        <Input
+          label="Sale price (USD)"
+          type="number"
+          value={values.sale_price}
+          onChange={(v) => set("sale_price", v)}
+        />
+        <Input
+          label="Price description"
+          value={values.price_description}
+          onChange={(v) => set("price_description", v)}
+        />
+        <Input label="Category" value={values.category} onChange={(v) => set("category", v)} />
+        <Input
+          label="Warranty type"
+          value={values.warranty_type}
+          onChange={(v) => set("warranty_type", v)}
+        />
+        <Input label="Tagline" value={values.tagline} onChange={(v) => set("tagline", v)} />
+        <TextArea label="Comments" value={values.comments} onChange={(v) => set("comments", v)} />
+        <TextArea
+          label="Custom comments"
+          value={values.custom_comments}
+          onChange={(v) => set("custom_comments", v)}
+        />
+        <TextArea
+          label="Publication description"
+          value={values.publication_description}
+          onChange={(v) => set("publication_description", v)}
+        />
+        <TextArea
+          label="Internal notes — never published"
+          value={values.internal_notes}
+          onChange={(v) => set("internal_notes", v)}
+        />
+      </Section>
+
+      <Section
         title="Retail status"
         description="Set the sales condition and current inventory state."
       >
+        <div>
+          <label className="block text-xs font-medium text-card-foreground mb-1.5">
+            Inventory type
+          </label>
+          <ProductSelect
+            value={values.inventory_type}
+            onValueChange={(value) =>
+              set("inventory_type", value as VehicleFormValues["inventory_type"])
+            }
+            ariaLabel="Inventory type"
+            options={[
+              { value: "new", label: "New" },
+              { value: "used", label: "Used" },
+              { value: "certified", label: "Certified" },
+            ]}
+          />
+        </div>
+        <Input
+          label="Inventory arrival date"
+          type="date"
+          value={values.inventory_arrival_date}
+          onChange={(value) => set("inventory_arrival_date", value)}
+        />
         <div>
           <label className="block text-xs font-medium text-card-foreground mb-1.5">Condition</label>
           <ProductSelect
@@ -416,6 +526,32 @@ function Input({
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+function TextArea({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const id = `vehicle-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  return (
+    <div className="sm:col-span-2 lg:col-span-3">
+      <label htmlFor={id} className="mb-1.5 block text-xs font-semibold text-card-foreground">
+        {label}
+      </label>
+      <textarea
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={3}
+        className="form-input resize-y bg-card"
+      />
     </div>
   );
 }

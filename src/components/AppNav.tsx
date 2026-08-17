@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Aperture,
+  BarChart3,
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -40,6 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { supabase } from "@/integrations/supabase/client";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard };
 
@@ -48,16 +50,51 @@ export function AppNav({ children }: { children: ReactNode }) {
   const isOwner = profile?.role === "owner";
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [accessRole, setAccessRole] = useState<string | null>(null);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+
+  useEffect(() => {
+    if (!profile?.id || !profile.dealership_id || profile.role !== "staff") {
+      setAccessRole(null);
+      return;
+    }
+    void supabase
+      .from("profile_dealerships")
+      .select("access_role")
+      .eq("profile_id", profile.id)
+      .eq("dealership_id", profile.dealership_id)
+      .maybeSingle()
+      .then(({ data }) => setAccessRole(data?.access_role ?? "photographer"));
+  }, [profile?.dealership_id, profile?.id, profile?.role]);
+
+  const staffCanUse = (area: "capture" | "media" | "documents" | "reports") => {
+    if (profile?.role !== "staff") return true;
+    const role = accessRole ?? "photographer";
+    if (area === "capture") return role !== "accounting";
+    if (area === "media") return role === "inventory_media" || role === "store_manager";
+    if (area === "documents") return role === "inventory_media" || role === "store_manager";
+    return role === "accounting" || role === "store_manager";
+  };
 
   const items: NavItem[] = [
     { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
     { to: "/inventory", label: "Inventory", icon: PackageSearch },
-    { to: "/bulk-photos", label: "Bulk Photos", icon: Camera },
-    { to: "/overlays", label: "Overlays", icon: Images },
-    { to: "/backdrops", label: "Backdrops", icon: Aperture },
-    { to: "/documents", label: "Documents", icon: FileImage },
-    { to: "/export", label: "Exports", icon: FileOutput },
+    ...(staffCanUse("capture") ? [{ to: "/bulk-photos", label: "Bulk Photos", icon: Camera }] : []),
+    ...(staffCanUse("media")
+      ? [
+          { to: "/overlays", label: "Overlays", icon: Images },
+          { to: "/backdrops", label: "Backdrops", icon: Aperture },
+        ]
+      : []),
+    ...(staffCanUse("documents")
+      ? [
+          { to: "/documents", label: "Documents", icon: FileImage },
+          { to: "/export", label: "Exports", icon: FileOutput },
+        ]
+      : []),
+    ...(staffCanUse("reports")
+      ? [{ to: "/reports", label: "Production & payouts", icon: BarChart3 }]
+      : []),
     ...(isOwner || profile?.role === "dealer_admin"
       ? [{ to: "/dealerships", label: "Dealerships", icon: Building2 }]
       : []),
@@ -211,7 +248,7 @@ export function AppNav({ children }: { children: ReactNode }) {
             collapsed ? "md:pl-[72px]" : "md:pl-64",
           )}
         >
-          <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-card/95 px-3 backdrop-blur sm:px-5">
+          <header className="app-shell-header sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-card/95 px-3 backdrop-blur sm:px-5">
             <div className="flex min-w-0 items-center gap-3">
               <Button
                 variant="ghost"

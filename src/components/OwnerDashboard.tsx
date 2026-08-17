@@ -46,6 +46,7 @@ type Vehicle = {
   created_at: string;
 };
 type Photo = { id: string; vehicle_id: string; created_at: string };
+type Readiness = { vehicle_id: string; status: string; reasons: unknown };
 type Profile = {
   id: string;
   full_name: string | null;
@@ -76,6 +77,7 @@ export function OwnerDashboard() {
   const [dealerships, setDealerships] = useState<Dealership[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [readiness, setReadiness] = useState<Readiness[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
 
   const [showCreate, setShowCreate] = useState(false);
@@ -88,7 +90,7 @@ export function OwnerDashboard() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [d, v, p, pr] = await Promise.all([
+    const [d, v, p, pr, vr] = await Promise.all([
       supabase.from("dealerships").select("*").order("created_at", { ascending: false }),
       supabase
         .from("vehicles")
@@ -105,11 +107,13 @@ export function OwnerDashboard() {
         .select("id, full_name, email, role, dealership_id, created_at")
         .order("created_at", { ascending: false })
         .limit(200),
+      supabase.from("vehicle_readiness").select("vehicle_id, status, reasons").limit(5000),
     ]);
     setDealerships((d.data as Dealership[]) || []);
     setVehicles((v.data as Vehicle[]) || []);
     setPhotos((p.data as Photo[]) || []);
     setProfiles((pr.data as Profile[]) || []);
+    setReadiness((vr.data as Readiness[]) || []);
     setLoading(false);
   }, []);
 
@@ -132,6 +136,8 @@ export function OwnerDashboard() {
   const totalUsers = profiles.filter((p) => p.id !== user?.id).length;
   const totalVehicles = vehicles.length;
   const totalPhotos = photos.length;
+  const retailReady = readiness.filter((item) => item.status === "retail_ready").length;
+  const needsAttention = readiness.filter((item) => item.status !== "retail_ready").length;
 
   // Per-dealership counts
   const stats = useMemo(() => {
@@ -250,7 +256,7 @@ export function OwnerDashboard() {
       />
 
       {/* KPIs */}
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-6">
         <MetricCard
           label="Dealerships"
           value={loading ? <Skeleton className="h-9 w-12" /> : totalDealerships}
@@ -274,6 +280,19 @@ export function OwnerDashboard() {
           value={loading ? <Skeleton className="h-9 w-12" /> : totalPhotos}
           icon={<Camera className="size-4" />}
           detail="Managed assets"
+        />
+        <MetricCard
+          label="Retail Ready"
+          value={loading ? <Skeleton className="h-9 w-12" /> : retailReady}
+          icon={<CarFront className="size-4" />}
+          detail="Requirements satisfied"
+        />
+        <MetricCard
+          label="Needs Attention"
+          value={loading ? <Skeleton className="h-9 w-12" /> : needsAttention}
+          icon={<CarFront className="size-4" />}
+          detail="Blocked or incomplete"
+          tone={needsAttention > 0 ? "attention" : "default"}
         />
       </div>
 

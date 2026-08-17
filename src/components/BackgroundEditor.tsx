@@ -980,8 +980,9 @@ export function BackgroundEditor({
     setError(null);
     try {
       let cutoutUrl = persistedCutoutUrl;
+      let cutoutPath: string | null = null;
       if (pendingCutoutBlobRef.current) {
-        const cutoutPath = `${photo.vehicle_id}/cutouts/${crypto.randomUUID()}.png`;
+        cutoutPath = `${photo.vehicle_id}/cutouts/${crypto.randomUUID()}.png`;
         const { error: cutoutUploadError } = await supabase.storage
           .from("vehicle-photos")
           .upload(cutoutPath, pendingCutoutBlobRef.current, {
@@ -990,24 +991,27 @@ export function BackgroundEditor({
           });
         if (cutoutUploadError) throw cutoutUploadError;
         cutoutUrl = supabase.storage.from("vehicle-photos").getPublicUrl(cutoutPath).data.publicUrl;
+        const { error: variantError } = await supabase.rpc("commit_photo_variant", {
+          _photo_id: photo.id,
+          _variant_type: photo.cutout_image_url ? "corrected_cutout" : "cutout",
+          _image_url: cutoutUrl,
+          _storage_path: cutoutPath,
+          _processing_provider: "imgly-client",
+        });
+        if (variantError) throw variantError;
       }
 
       if (!backdropImg || !baseSize) {
         if (!cutoutUrl) throw new Error("Create a cutout before saving.");
-        const { error: cutoutSaveError } = await supabase
-          .from("photos")
-          .update({
-            image_url: cutoutUrl,
-            cutout_image_url: cutoutUrl,
-            corrected_cutout_url: pendingCutoutBlobRef.current
-              ? cutoutUrl
-              : photo.corrected_cutout_url,
-            is_cutout: true,
-            cutout_status: "done",
-            photo_state: "cutout",
-          })
-          .eq("id", photo.id);
-        if (cutoutSaveError) throw cutoutSaveError;
+        if (!pendingCutoutBlobRef.current) {
+          const { error: cutoutSaveError } = await supabase.rpc("commit_photo_variant", {
+            _photo_id: photo.id,
+            _variant_type: photo.corrected_cutout_url ? "corrected_cutout" : "cutout",
+            _image_url: cutoutUrl,
+            _processing_provider: "imgly-client",
+          });
+          if (cutoutSaveError) throw cutoutSaveError;
+        }
         onSaved();
         return;
       }
@@ -1029,19 +1033,13 @@ export function BackgroundEditor({
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from("vehicle-photos").getPublicUrl(path);
 
-      const { error: updErr } = await supabase
-        .from("photos")
-        .update({
-          image_url: pub.publicUrl,
-          cutout_image_url: cutoutUrl,
-          corrected_cutout_url: pendingCutoutBlobRef.current
-            ? cutoutUrl
-            : photo.corrected_cutout_url,
-          is_cutout: Boolean(cutoutUrl),
-          cutout_status: cutoutUrl ? "done" : "none",
-          photo_state: "customized",
-        })
-        .eq("id", photo.id);
+      const { error: updErr } = await supabase.rpc("commit_photo_variant", {
+        _photo_id: photo.id,
+        _variant_type: "customized",
+        _image_url: pub.publicUrl,
+        _storage_path: path,
+        _processing_provider: "dealershot-canvas",
+      });
       if (updErr) throw updErr;
       onSaved();
     } catch (err) {

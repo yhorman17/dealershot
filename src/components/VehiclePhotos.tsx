@@ -168,7 +168,8 @@ export function VehiclePhotos({
   const [customLabel, setCustomLabel] = useState("");
   const [addingCustom, setAddingCustom] = useState(false);
   const [dealershipId, setDealershipId] = useState<string | null>(null);
-  const [captureStatus, setCaptureStatus] = useState<"in_progress" | "completed">("in_progress");
+  const [captureStatus, setCaptureStatus] = useState<"idle" | "in_progress" | "completed">("idle");
+  const [starting, setStarting] = useState(false);
   const [queueEntries, setQueueEntries] = useState<UploadEntry<CaptureUpload>[]>([]);
   const [completing, setCompleting] = useState(false);
   const captureSessionRef = useRef<string | null>(null);
@@ -332,6 +333,7 @@ export function VehiclePhotos({
       .maybeSingle();
     if (existing?.id) {
       captureSessionRef.current = existing.id;
+      setCaptureStatus("in_progress");
       return existing.id;
     }
     const { data, error } = await supabase
@@ -356,11 +358,52 @@ export function VehiclePhotos({
         .maybeSingle();
       if (!raced?.id) throw error;
       captureSessionRef.current = raced.id;
+      setCaptureStatus("in_progress");
       return raced.id;
     }
     captureSessionRef.current = data.id;
+    setCaptureStatus("in_progress");
     return data.id;
   }, [getCaptureContext, userId, vehicleId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    void supabase
+      .from("photo_capture_sessions")
+      .select("id")
+      .eq("vehicle_id", vehicleId)
+      .eq("created_by", userId)
+      .eq("mode", "guided")
+      .eq("status", "in_progress")
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled || !data?.id) return;
+        captureSessionRef.current = data.id;
+        setCaptureStatus("in_progress");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, vehicleId]);
+
+  const startShoot = async () => {
+    if (starting || captureStatus === "in_progress") return;
+    setStarting(true);
+    try {
+      await ensureCaptureSession();
+      toast.success("Photo shoot started", {
+        description:
+          "Raw originals save as you capture. Finish the shoot when the vehicle is done.",
+      });
+    } catch (reason) {
+      toast.error("Photo shoot could not start", {
+        description: reason instanceof Error ? reason.message : "Try again.",
+      });
+    } finally {
+      setStarting(false);
+    }
+  };
 
   const uploadQueue = useMemo(
     () =>
@@ -599,9 +642,13 @@ export function VehiclePhotos({
                   ? `${pendingUploads} safely queued or uploading while you continue`
                   : captureStatus === "completed"
                     ? "Vehicle photos completed"
-                    : photos.length > 0
-                      ? "All raw originals are safely uploaded"
-                      : "Captured photos will appear here immediately"}
+                    : captureStatus === "in_progress"
+                      ? photos.length > 0
+                        ? "All raw originals are safely uploaded"
+                        : "Shoot in progress — capture the first photo"
+                      : photos.length > 0
+                        ? "All raw originals are safely uploaded"
+                        : "Start a shoot when you are ready to photograph this vehicle"}
             </p>
           </div>
           <div className="flex gap-2">
@@ -610,14 +657,25 @@ export function VehiclePhotos({
                 <RefreshCw className="size-4" /> Retry Uploads
               </Button>
             )}
-            <Button
-              className="min-h-12 flex-1 sm:flex-none"
-              onClick={() => void completePhotos()}
-              disabled={completing || registeredPhotoCount === 0}
-            >
-              <Check className="size-4" />
-              {completing ? "Completing…" : "Complete Photos"}
-            </Button>
+            {captureStatus === "in_progress" ? (
+              <Button
+                className="min-h-12 flex-1 sm:flex-none"
+                onClick={() => void completePhotos()}
+                disabled={completing || registeredPhotoCount === 0}
+              >
+                <Check className="size-4" />
+                {completing ? "Completing…" : "Complete Photos"}
+              </Button>
+            ) : (
+              <Button
+                className="min-h-12 flex-1 sm:flex-none"
+                onClick={() => void startShoot()}
+                disabled={starting}
+              >
+                <Camera className="size-4" />
+                {starting ? "Starting…" : "Start Shoot"}
+              </Button>
+            )}
           </div>
         </div>
       </div>

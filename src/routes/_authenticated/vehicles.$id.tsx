@@ -22,6 +22,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState, PageHeader, PageSkeleton, StatusBadge } from "@/components/product-ui";
+import { VehicleOperationsPanel } from "@/components/VehicleOperationsPanel";
+import type { Database } from "@/integrations/supabase/types";
+import { CircleGauge, DollarSign, FileText, History, ListChecks, RadioTower } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id")({
   validateSearch: (search: Record<string, unknown>): { customize?: string } => ({
@@ -31,7 +34,7 @@ export const Route = createFileRoute("/_authenticated/vehicles/$id")({
   component: VehicleDetailPage,
 });
 
-type Vehicle = Record<string, string | number | null> & { id: string };
+type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 
 function VehicleDetailPage() {
   const { id } = Route.useParams();
@@ -59,7 +62,7 @@ function VehicleDetailPage() {
         .select("sort_order, is_main, created_at, document:documents(image_url)")
         .eq("vehicle_id", id),
     ]);
-    setVehicle(data as Vehicle | null);
+    setVehicle(data);
     const photoRows =
       (photos as {
         image_url: string;
@@ -134,26 +137,6 @@ function VehicleDetailPage() {
       </main>
     );
   }
-
-  const specs: [string, string | number | null][] = [
-    ["VIN", vehicle.vin],
-    ["Stock #", vehicle.stock_number],
-    ["Year", vehicle.year],
-    ["Make", vehicle.make],
-    ["Model", vehicle.model],
-    ["Trim", vehicle.trim],
-    ["Body", vehicle.body_class],
-    ["Engine", vehicle.engine],
-    ["Cylinders", vehicle.cylinders],
-    ["Transmission", vehicle.transmission],
-    ["Drivetrain", vehicle.drivetrain],
-    ["Fuel type", vehicle.fuel_type],
-    ["Exterior color", vehicle.exterior_color],
-    ["Interior color", vehicle.interior_color],
-    ["Odometer", vehicle.odometer ? formatMiles(Number(vehicle.odometer)) : null],
-    ["Condition", vehicle.condition],
-    ["Status", vehicle.status],
-  ];
 
   return (
     <main className="ds-page-gutter">
@@ -249,42 +232,45 @@ function VehicleDetailPage() {
         </div>
       </section>
 
-      <Tabs defaultValue="photos" className="space-y-4">
+      <Tabs defaultValue={customize ? "media" : "overview"} className="space-y-4">
         <TabsList className="h-11 w-full justify-start overflow-x-auto rounded-lg border border-border bg-card p-1 sm:w-auto">
-          <TabsTrigger value="photos" className="min-h-9 gap-2">
-            <Camera className="size-4" />
-            Photos & processing
+          <TabsTrigger value="overview" className="min-h-9 gap-2">
+            <CircleGauge className="size-4" />
+            Overview
           </TabsTrigger>
-          <TabsTrigger value="specifications" className="min-h-9 gap-2">
-            <CarFront className="size-4" />
-            Specifications
+          <TabsTrigger value="media" className="min-h-9 gap-2">
+            <Camera className="size-4" />
+            Media
+          </TabsTrigger>
+          <TabsTrigger value="equipment" className="min-h-9 gap-2">
+            <ListChecks className="size-4" /> Equipment
+          </TabsTrigger>
+          <TabsTrigger value="pricing" className="min-h-9 gap-2">
+            <DollarSign className="size-4" /> Pricing
+          </TabsTrigger>
+          <TabsTrigger value="documents" className="min-h-9 gap-2">
+            <FileText className="size-4" /> Documents
+          </TabsTrigger>
+          <TabsTrigger value="activity" className="min-h-9 gap-2">
+            <History className="size-4" /> Activity
+          </TabsTrigger>
+          <TabsTrigger value="publishing" className="min-h-9 gap-2">
+            <RadioTower className="size-4" /> Publishing
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="photos" className="motion-tab-panel mt-0">
+        <TabsContent value="overview" className="motion-tab-panel mt-0">
+          <VehicleOperationsPanel section="overview" vehicle={vehicle} />
+        </TabsContent>
+        <TabsContent value="media" className="motion-tab-panel mt-0">
           <VehiclePhotos vehicleId={id} initialCustomizePhotoId={customize} />
         </TabsContent>
-        <TabsContent value="specifications" className="motion-tab-panel mt-0">
-          <section className="ds-surface overflow-hidden">
-            <div className="border-b border-border px-5 py-4">
-              <h2 className="text-sm font-semibold text-card-foreground">Vehicle specifications</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Identity, drivetrain, colors, and sales details.
-              </p>
-            </div>
-            <dl className="grid sm:grid-cols-2 lg:grid-cols-3">
-              {specs.map(([label, value]) => (
-                <div key={label} className="min-w-0 border-b border-border p-4 sm:border-r sm:p-5">
-                  <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    {label}
-                  </dt>
-                  <dd className="mt-1.5 break-words text-sm font-medium text-card-foreground">
-                    {value ?? "—"}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        </TabsContent>
+        {(["equipment", "pricing", "documents", "activity", "publishing"] as const).map(
+          (section) => (
+            <TabsContent key={section} value={section} className="motion-tab-panel mt-0">
+              <VehicleOperationsPanel section={section} vehicle={vehicle} />
+            </TabsContent>
+          ),
+        )}
       </Tabs>
 
       {exportOpen && (
@@ -364,7 +350,7 @@ function Snapshot({
 
 function vehicleToFormValues(v: Vehicle): VehicleFormValues {
   const s = (k: string) => {
-    const val = (v as Record<string, string | number | null>)[k];
+    const val = (v as unknown as Record<string, string | number | null>)[k];
     return val == null ? "" : String(val);
   };
   return {
@@ -374,6 +360,7 @@ function vehicleToFormValues(v: Vehicle): VehicleFormValues {
     make: s("make"),
     model: s("model"),
     trim: s("trim"),
+    series: s("series"),
     body_class: s("body_class"),
     engine: s("engine"),
     cylinders: s("cylinders"),
@@ -384,7 +371,20 @@ function vehicleToFormValues(v: Vehicle): VehicleFormValues {
     interior_color: s("interior_color"),
     odometer: s("odometer"),
     price: s("price"),
+    msrp: s("msrp"),
+    sale_price: s("sale_price"),
+    price_description: s("price_description"),
     stock_number: s("stock_number"),
+    inventory_type:
+      v.inventory_type === "new" || v.inventory_type === "certified" ? v.inventory_type : "used",
+    inventory_arrival_date: s("inventory_arrival_date"),
+    category: s("category"),
+    warranty_type: s("warranty_type"),
+    comments: s("comments"),
+    custom_comments: s("custom_comments"),
+    tagline: s("tagline"),
+    publication_description: s("publication_description"),
+    internal_notes: s("internal_notes"),
     condition: s("condition") || "Used",
     status: s("status") || "Available",
   };
