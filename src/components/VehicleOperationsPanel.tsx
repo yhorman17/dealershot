@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, FileText, Plus, RadioTower, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -139,7 +139,7 @@ function EquipmentPanel({ vehicle }: { vehicle: Vehicle }) {
   const [category, setCategory] = useState<Equipment["category"]>("safety");
   const [label, setLabel] = useState("");
   const [saving, setSaving] = useState(false);
-  const load = () => {
+  const load = useCallback(() => {
     void supabase
       .from("vehicle_equipment")
       .select("*")
@@ -147,8 +147,8 @@ function EquipmentPanel({ vehicle }: { vehicle: Vehicle }) {
       .order("category")
       .order("sort_order")
       .then(({ data }) => setItems(data ?? []));
-  };
-  useEffect(load, [vehicle.id]);
+  }, [vehicle.id]);
+  useEffect(load, [load]);
   const groups = useMemo(() => {
     const result = new Map<Equipment["category"], Equipment[]>();
     items.forEach((item) => {
@@ -281,17 +281,24 @@ function PricingPanel({ vehicle }: { vehicle: Vehicle }) {
 
 function DocumentsPanel({ vehicle }: { vehicle: Vehicle }) {
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
+  const [requirements, setRequirements] = useState<
+    Array<Database["public"]["Tables"]["document_requirements"]["Row"]>
+  >([]);
   const [generating, setGenerating] = useState<string | null>(null);
-  const load = () => {
-    void supabase
-      .from("generated_documents")
-      .select("*")
-      .eq("vehicle_id", vehicle.id)
-      .eq("status", "generated")
-      .order("generated_at", { ascending: false })
-      .then(({ data }) => setDocuments(data ?? []));
-  };
-  useEffect(load, [vehicle.id]);
+  const load = useCallback(() => {
+    void Promise.all([
+      supabase
+        .from("generated_documents")
+        .select("*")
+        .eq("vehicle_id", vehicle.id)
+        .order("generated_at", { ascending: false }),
+      supabase.from("document_requirements").select("*").eq("dealership_id", vehicle.dealership_id),
+    ]).then(([documentResult, requirementResult]) => {
+      setDocuments(documentResult.data ?? []);
+      setRequirements(requirementResult.data ?? []);
+    });
+  }, [vehicle.dealership_id, vehicle.id]);
+  useEffect(load, [load]);
   const types = ["window_sticker", "buyers_guide", "addendum", "cpo_sheet", "placard"] as const;
   const generate = async (documentType: (typeof types)[number]) => {
     setGenerating(documentType);
@@ -315,13 +322,33 @@ function DocumentsPanel({ vehicle }: { vehicle: Vehicle }) {
       />
       <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-3">
         {types.map((documentType) => {
-          const latest = documents.find((item) => item.document_type === documentType);
+          const history = documents.filter((item) => item.document_type === documentType);
+          const latest = history.find((item) => item.status === "generated");
+          const requirement = requirements.find((item) => item.document_type === documentType);
+          const applies = Boolean(
+            requirement?.enabled &&
+            requirement.applies_to.includes(vehicle.inventory_type ?? "used"),
+          );
+          const required = Boolean(applies && requirement?.required);
+          const stale = Boolean(latest?.stale_at);
           const usedOnly = ["window_sticker", "buyers_guide"].includes(documentType);
           const unavailable = usedOnly && vehicle.inventory_type === "new";
           return (
             <article key={documentType} className="bg-card p-5">
               <FileText className="size-5 text-primary" />
               <h3 className="mt-3 font-semibold">{title(documentType)}</h3>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <StatusBadge tone={required ? "warning" : "neutral"}>
+                  {required ? "Required" : applies ? "Optional" : "Not required"}
+                </StatusBadge>
+                {latest ? (
+                  <StatusBadge tone={stale ? "warning" : "success"}>
+                    {stale ? "Stale" : "Generated"}
+                  </StatusBadge>
+                ) : (
+                  <StatusBadge tone={required ? "danger" : "neutral"}>Missing</StatusBadge>
+                )}
+              </div>
               <p className="mt-1 min-h-10 text-xs leading-5 text-muted-foreground">
                 {documentType === "buyers_guide"
                   ? "Printable technical template. Final legal/FTC validation remains required."
@@ -344,7 +371,7 @@ function DocumentsPanel({ vehicle }: { vehicle: Vehicle }) {
                       to="/vehicles/$id/documents/$documentId"
                       params={{ id: vehicle.id, documentId: latest.id }}
                     >
-                      View / print
+                      Preview / print
                     </Link>
                   </Button>
                 )}
@@ -359,6 +386,28 @@ function DocumentsPanel({ vehicle }: { vehicle: Vehicle }) {
                   {latest ? "Regenerate" : "Generate"}
                 </Button>
               </div>
+              {stale ? (
+                <p className="mt-2 text-xs text-warning-foreground">
+                  Vehicle or store data changed after this version was generated. Regenerate before
+                  printing.
+                </p>
+              ) : null}
+              {history.length > 1 ? (
+                <details className="mt-3 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer font-medium text-foreground">
+                    View history ({history.length})
+                  </summary>
+                  <ul className="mt-2 space-y-1">
+                    {history.map((item) => (
+                      <li key={item.id}>
+                        v{item.template_version} · {new Date(item.generated_at).toLocaleString()} ·{" "}
+                        {item.status}
+                        {item.stale_at ? " · stale" : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
               {unavailable && (
                 <p className="mt-2 text-xs text-warning-foreground">
                   Used-only document does not apply to new inventory.

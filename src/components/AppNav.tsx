@@ -17,6 +17,7 @@ import {
   PanelLeftClose,
   Plus,
   ScanLine,
+  Settings,
   ShieldCheck,
   UserRound,
   Users,
@@ -67,12 +68,13 @@ export function AppNav({ children }: { children: ReactNode }) {
       .then(({ data }) => setAccessRole(data?.access_role ?? "photographer"));
   }, [profile?.dealership_id, profile?.id, profile?.role]);
 
-  const staffCanUse = (area: "capture" | "media" | "documents" | "reports") => {
+  const staffCanUse = (area: "capture" | "media" | "documents" | "reports" | "settings") => {
     if (profile?.role !== "staff") return true;
     const role = accessRole ?? "photographer";
     if (area === "capture") return role !== "accounting";
     if (area === "media") return role === "inventory_media" || role === "store_manager";
     if (area === "documents") return role === "inventory_media" || role === "store_manager";
+    if (area === "settings") return role === "store_manager";
     return role === "accounting" || role === "store_manager";
   };
 
@@ -100,6 +102,9 @@ export function AppNav({ children }: { children: ReactNode }) {
       : []),
     ...(isOwner || profile?.role === "dealer_admin"
       ? [{ to: "/users", label: "Users & access", icon: Users }]
+      : []),
+    ...(isOwner || profile?.role === "dealer_admin" || staffCanUse("settings")
+      ? [{ to: "/settings", label: "Store settings", icon: Settings }]
       : []),
   ];
 
@@ -341,6 +346,7 @@ function pageTitle(pathname: string) {
     "/export": "Exports",
     "/dealerships": "Dealerships",
     "/users": "Users & access",
+    "/settings": "Store settings",
   };
   return labels[pathname] ?? "DealerShot";
 }

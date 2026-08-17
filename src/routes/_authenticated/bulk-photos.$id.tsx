@@ -191,16 +191,7 @@ function BulkPhotoWorkspace() {
     setCompleting(false);
   };
 
-  const updateItem = async (
-    item: Item,
-    changes: Pick<Partial<Item>, "shot_type" | "sort_order" | "is_main">,
-  ) => {
-    if (changes.is_main)
-      await supabase
-        .from("bulk_photo_items")
-        .update({ is_main: false })
-        .eq("session_id", id)
-        .eq("is_main", true);
+  const updateItem = async (item: Item, changes: Pick<Partial<Item>, "shot_type">) => {
     const { error: updateError } = await supabase
       .from("bulk_photo_items")
       .update(changes)
@@ -208,18 +199,32 @@ function BulkPhotoWorkspace() {
     if (updateError) toast.error("Photo update failed", { description: updateError.message });
     else await load();
   };
+  const setMain = async (item: Item) => {
+    const { error: updateError } = await supabase.rpc("set_bulk_primary_item", {
+      _session_id: id,
+      _item_id: item.id,
+    });
+    if (updateError)
+      toast.error("Main image could not be changed", { description: updateError.message });
+    else {
+      toast.success("Main image updated");
+      await load();
+    }
+  };
   const move = async (item: Item, direction: -1 | 1) => {
     const index = items.findIndex((candidate) => candidate.id === item.id);
-    const target = items[index + direction];
-    if (!target) return;
-    const [{ error: firstError }, { error: secondError }] = await Promise.all([
-      supabase.from("bulk_photo_items").update({ sort_order: target.sort_order }).eq("id", item.id),
-      supabase.from("bulk_photo_items").update({ sort_order: item.sort_order }).eq("id", target.id),
-    ]);
-    if (firstError || secondError) {
+    if (!items[index + direction]) return;
+    const next = [...items];
+    [next[index], next[index + direction]] = [next[index + direction], next[index]];
+    const { error: reorderError } = await supabase.rpc("reorder_bulk_photo_items", {
+      _session_id: id,
+      _item_ids: next.map((candidate) => candidate.id),
+    });
+    if (reorderError) {
       toast.error("Photo order could not be updated", {
-        description: (firstError ?? secondError)?.message,
+        description: reorderError.message,
       });
+      return;
     }
     await load();
   };
@@ -506,7 +511,7 @@ function BulkPhotoWorkspace() {
                   <Button
                     variant="outline"
                     className="w-full"
-                    onClick={() => void updateItem(selected, { is_main: true })}
+                    onClick={() => void setMain(selected)}
                     disabled={selected.is_main}
                   >
                     <Star className="size-4" />

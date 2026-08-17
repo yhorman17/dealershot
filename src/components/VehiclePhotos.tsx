@@ -87,6 +87,26 @@ export const SHOT_TYPES = [
 ] as const;
 
 const STANDARD_SHOT_NAMES: Set<string> = new Set(SHOT_TYPES.map((s) => s.name));
+type GuidedShot = {
+  name: string;
+  tip: string;
+  category: "exterior" | "interior" | "detail" | "odometer" | "vin";
+  required: boolean;
+  minimumCount: number;
+};
+
+const FALLBACK_GUIDED_SHOTS: GuidedShot[] = SHOT_TYPES.map((shot) => ({
+  ...shot,
+  category: ["Dashboard", "Seats", "Trunk"].includes(shot.name)
+    ? "interior"
+    : shot.name === "Odometer"
+      ? "odometer"
+      : shot.name === "Engine"
+        ? "detail"
+        : "exterior",
+  required: true,
+  minimumCount: 1,
+}));
 
 type Photo = {
   id: string;
@@ -168,6 +188,7 @@ export function VehiclePhotos({
   const [customLabel, setCustomLabel] = useState("");
   const [addingCustom, setAddingCustom] = useState(false);
   const [dealershipId, setDealershipId] = useState<string | null>(null);
+  const [guidedShots, setGuidedShots] = useState<GuidedShot[]>(FALLBACK_GUIDED_SHOTS);
   const [captureStatus, setCaptureStatus] = useState<"idle" | "in_progress" | "completed">("idle");
   const [starting, setStarting] = useState(false);
   const [queueEntries, setQueueEntries] = useState<UploadEntry<CaptureUpload>[]>([]);
@@ -189,8 +210,12 @@ export function VehiclePhotos({
   const initialCustomizeOpenedRef = useRef(false);
   const [bgPhoto, setBgPhoto] = useState<Photo | null>(null);
   const [showAttachDoc, setShowAttachDoc] = useState(false);
-  const [activeShotName, setActiveShotName] =
-    useState<(typeof SHOT_TYPES)[number]["name"]>("Front");
+  const [activeShotName, setActiveShotName] = useState<string>("Front");
+  const [completionWarning, setCompletionWarning] = useState<{
+    sessionId: string;
+    missing: Array<{ label: string; category: string }>;
+    policy: "block" | "warn";
+  } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Photo | null>(null);
   const [pendingDetach, setPendingDetach] = useState<VehicleDocument | null>(null);
 
@@ -235,6 +260,34 @@ export function VehiclePhotos({
       // surface an actionable error without dropping the selected File.
     });
   }, [getCaptureContext]);
+
+  useEffect(() => {
+    if (!dealershipId) return;
+    let cancelled = false;
+    void supabase
+      .from("photo_shot_requirements")
+      .select("label, guidance, category, required, minimum_count")
+      .eq("dealership_id", dealershipId)
+      .eq("enabled", true)
+      .order("sort_order")
+      .then(({ data, error }) => {
+        if (cancelled || error || !data?.length) return;
+        const configured = data.map((shot) => ({
+          name: shot.label,
+          tip: shot.guidance || "Keep the full subject sharp, level, and clearly in frame.",
+          category: shot.category,
+          required: shot.required,
+          minimumCount: shot.minimum_count,
+        }));
+        setGuidedShots(configured);
+        setActiveShotName((current) =>
+          configured.some((shot) => shot.name === current) ? current : configured[0].name,
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dealershipId]);
 
   const load = useCallback(
     async ({ animate = false }: { animate?: boolean } = {}) => {
@@ -460,10 +513,10 @@ export function VehiclePhotos({
     setCaptureStatus("in_progress");
     const existing = photos.find((p) => p.shot_type === shotName);
     uploadQueue.add({ file, shotType: shotName, replacePhotoId: existing?.id });
-    const currentIndex = SHOT_TYPES.findIndex((shot) => shot.name === shotName);
-    const next = SHOT_TYPES.slice(currentIndex + 1).find(
-      (shot) => !photos.some((photo) => photo.shot_type === shot.name),
-    );
+    const currentIndex = guidedShots.findIndex((shot) => shot.name === shotName);
+    const next = guidedShots
+      .slice(currentIndex + 1)
+      .find((shot) => !photos.some((photo) => photo.shot_type === shot.name));
     if (next) setActiveShotName(next.name);
     toast.success(`${shotName} queued`, { description: "You can take the next photo now." });
   };
@@ -496,29 +549,21 @@ export function VehiclePhotos({
     toast.success("Document detached");
   };
 
-  const clearAllMains = async () => {
-    // Clear is_main across both tables to enforce single main
-    await supabase
-      .from("photos")
-      .update({ is_main: false })
-      .eq("vehicle_id", vehicleId)
-      .eq("is_main", true);
-    await supabase
-      .from("vehicle_documents")
-      .update({ is_main: false })
-      .eq("vehicle_id", vehicleId)
-      .eq("is_main", true);
-  };
-
   const setAsMain = async (item: GalleryItem) => {
     if (item.is_main) return;
-    await clearAllMains();
-    if (item.kind === "photo" && item.photo) {
-      await supabase.from("photos").update({ is_main: true }).eq("id", item.photo.id);
-    } else if (item.kind === "document" && item.link) {
-      await supabase.from("vehicle_documents").update({ is_main: true }).eq("id", item.link.id);
+    const assetId = item.kind === "photo" ? item.photo?.id : item.link?.id;
+    if (!assetId) return;
+    const { error } = await supabase.rpc("set_vehicle_primary_asset", {
+      _vehicle_id: vehicleId,
+      _asset_type: item.kind,
+      _asset_id: assetId,
+    });
+    if (error) {
+      toast.error("Main image could not be changed", { description: error.message });
+      return;
     }
     await load({ animate: true });
+    toast.success("Main image updated");
   };
 
   const moveItem = async (item: GalleryItem, direction: -1 | 1) => {
@@ -526,20 +571,21 @@ export function VehiclePhotos({
     const idx = orderedNonMain.findIndex((i) => i.key === item.key);
     const targetIdx = idx + direction;
     if (idx === -1 || targetIdx < 0 || targetIdx >= orderedNonMain.length) return;
-    const other = orderedNonMain[targetIdx];
-    const a = item.sort_order;
-    const b = other.sort_order;
-    const newA = b === a ? a + direction : b;
-    const newB = b === a ? a : a;
-    const updateOne = async (i: GalleryItem, val: number) => {
-      if (i.kind === "photo" && i.photo) {
-        await supabase.from("photos").update({ sort_order: val }).eq("id", i.photo.id);
-      } else if (i.kind === "document" && i.link) {
-        await supabase.from("vehicle_documents").update({ sort_order: val }).eq("id", i.link.id);
-      }
-    };
-    await updateOne(item, newA);
-    await updateOne(other, newB);
+    const reordered = [...orderedNonMain];
+    [reordered[idx], reordered[targetIdx]] = [reordered[targetIdx], reordered[idx]];
+    const completeOrder = [...sortItems(items).filter((entry) => entry.is_main), ...reordered];
+    const { error } = await supabase.rpc("reorder_vehicle_gallery", {
+      _vehicle_id: vehicleId,
+      _items: completeOrder.map((entry, index) => ({
+        type: entry.kind,
+        id: entry.kind === "photo" ? entry.photo?.id : entry.link?.id,
+        position: index + 1,
+      })),
+    });
+    if (error) {
+      toast.error("Photo order could not be saved", { description: error.message });
+      return;
+    }
     await load({ animate: true });
   };
 
@@ -557,12 +603,31 @@ export function VehiclePhotos({
     await load({ animate: true });
   };
 
-  const completed = SHOT_TYPES.filter((s) => photos.some((p) => p.shot_type === s.name)).length;
-  const customShots = photos.filter((p) => p.shot_type && !STANDARD_SHOT_NAMES.has(p.shot_type));
+  const configuredShotNames = new Set(guidedShots.map((shot) => shot.name));
+  const completed = guidedShots.filter((s) => photos.some((p) => p.shot_type === s.name)).length;
+  const customShots = photos.filter(
+    (p) =>
+      p.shot_type && !configuredShotNames.has(p.shot_type) && !STANDARD_SHOT_NAMES.has(p.shot_type),
+  );
   const orderedNonMain = sortItems(items).filter((i) => !i.is_main);
   const attachedDocIds = new Set(docLinks.map((l) => l.document_id));
-  const activeShot = SHOT_TYPES.find((shot) => shot.name === activeShotName) ?? SHOT_TYPES[0];
+  const activeShot = guidedShots.find((shot) => shot.name === activeShotName) ?? guidedShots[0];
   const activePhoto = photos.find((photo) => photo.shot_type === activeShot.name);
+  const requiredShots = guidedShots.filter((shot) => shot.required);
+  const missingGuidedShots = requiredShots.filter(
+    (shot) => photos.filter((photo) => photo.shot_type === shot.name).length < shot.minimumCount,
+  );
+  const categoryProgress = (["exterior", "interior"] as const).map((category) => {
+    const categoryShots = requiredShots.filter((shot) => shot.category === category);
+    return {
+      category,
+      complete: categoryShots.filter(
+        (shot) =>
+          photos.filter((photo) => photo.shot_type === shot.name).length >= shot.minimumCount,
+      ).length,
+      total: categoryShots.length,
+    };
+  });
   const pendingUploads = queueEntries.filter(
     (entry) => entry.state === "queued" || entry.state === "uploading",
   ).length;
@@ -571,6 +636,19 @@ export function VehiclePhotos({
   const latestUploadError = [...queueEntries]
     .reverse()
     .find((entry) => entry.state === "failed")?.error;
+
+  const finalizePhotos = async (sessionId: string) => {
+    const { error } = await supabase.rpc("complete_photo_capture_session", {
+      _session_id: sessionId,
+    });
+    if (error) throw error;
+    setCaptureStatus("completed");
+    captureSessionRef.current = null;
+    setCompletionWarning(null);
+    toast.success("Vehicle photos completed", {
+      description: `${photos.length} photo${photos.length === 1 ? "" : "s"} captured.`,
+    });
+  };
 
   const completePhotos = async () => {
     setCompleting(true);
@@ -585,15 +663,22 @@ export function VehiclePhotos({
     }
     try {
       const sessionId = await ensureCaptureSession();
-      const { error } = await supabase.rpc("complete_photo_capture_session", {
-        _session_id: sessionId,
-      });
-      if (error) throw error;
-      setCaptureStatus("completed");
-      captureSessionRef.current = null;
-      toast.success("Vehicle photos completed", {
-        description: `${photos.length} photo${photos.length === 1 ? "" : "s"} captured.`,
-      });
+      const { data, error: completenessError } = await supabase.rpc(
+        "get_capture_session_completeness",
+        { _session_id: sessionId },
+      );
+      if (completenessError) throw completenessError;
+      const result = (data ?? {}) as {
+        completion_policy?: "block" | "warn";
+        missing?: Array<{ label: string; category: string }>;
+      };
+      const missing = Array.isArray(result.missing) ? result.missing : [];
+      if (missing.length > 0) {
+        setCompletionWarning({ sessionId, missing, policy: result.completion_policy ?? "warn" });
+        setCompleting(false);
+        return;
+      }
+      await finalizePhotos(sessionId);
     } catch (reason) {
       toast.error("Photos could not be completed", {
         description: reason instanceof Error ? reason.message : "Try again.",
@@ -690,15 +775,50 @@ export function VehiclePhotos({
                   Move through the standard angles without leaving this view.
                 </p>
               </div>
-              <StatusBadge tone={completed === SHOT_TYPES.length ? "success" : "info"}>
-                {completed} / {SHOT_TYPES.length} complete
+              <StatusBadge tone={completed === guidedShots.length ? "success" : "info"}>
+                {completed} / {guidedShots.length} complete
               </StatusBadge>
             </div>
             <Progress
-              value={(completed / SHOT_TYPES.length) * 100}
+              value={guidedShots.length ? (completed / guidedShots.length) * 100 : 0}
               className="mt-4 h-1.5"
-              aria-label={`${completed} of ${SHOT_TYPES.length} guided shots complete`}
+              aria-label={`${completed} of ${guidedShots.length} guided shots complete`}
             />
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {categoryProgress.map((progress) => (
+                <div
+                  key={progress.category}
+                  className="rounded-md border border-border bg-secondary/35 px-3 py-2 text-xs"
+                >
+                  <span className="font-semibold">
+                    {progress.category === "exterior" ? "Exterior" : "Interior"}
+                  </span>{" "}
+                  <span className="text-muted-foreground">
+                    {progress.total
+                      ? `${progress.complete} / ${progress.total}`
+                      : "No required shots"}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {missingGuidedShots.length > 0 ? (
+              <div
+                className="mt-3 rounded-md border border-warning/35 bg-warning/10 p-3 text-xs text-warning-foreground"
+                aria-live="polite"
+              >
+                <p className="font-semibold">
+                  {missingGuidedShots.length} required shot
+                  {missingGuidedShots.length === 1 ? "" : "s"} remaining
+                </p>
+                <p className="mt-1">
+                  Missing: {missingGuidedShots.map((shot) => shot.name).join(", ")}
+                </p>
+              </div>
+            ) : requiredShots.length > 0 ? (
+              <div className="mt-3 flex items-center gap-2 rounded-md border border-success/25 bg-success/10 p-3 text-xs text-success">
+                <Check className="size-4" /> All required shots are captured.
+              </div>
+            ) : null}
           </div>
 
           <div className="grid lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)]">
@@ -769,7 +889,7 @@ export function VehiclePhotos({
               role="list"
               aria-label="Guided shot sequence"
             >
-              {SHOT_TYPES.map((shot, index) => {
+              {guidedShots.map((shot, index) => {
                 const taken = photos.find((photo) => photo.shot_type === shot.name);
                 const active = activeShot.name === shot.name;
                 return (
@@ -1119,6 +1239,48 @@ export function VehiclePhotos({
               <Trash2 className="size-4" />
               Delete photo
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={!!completionWarning}
+        onOpenChange={(open) => !open && setCompletionWarning(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Required shots are still missing</AlertDialogTitle>
+            <AlertDialogDescription>
+              {completionWarning?.policy === "block"
+                ? "This store requires the missing shots before this shoot can be completed."
+                : "This store allows completion with a warning, but the vehicle will remain a short shoot until these shots are added."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ul className="max-h-48 list-disc overflow-y-auto pl-5 text-sm text-muted-foreground">
+            {completionWarning?.missing.map((item, index) => (
+              <li key={`${item.label}-${index}`}>
+                {item.label} · {item.category}
+              </li>
+            ))}
+          </ul>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep shooting</AlertDialogCancel>
+            {completionWarning?.policy === "warn" ? (
+              <AlertDialogAction
+                onClick={() => {
+                  if (!completionWarning) return;
+                  setCompleting(true);
+                  void finalizePhotos(completionWarning.sessionId)
+                    .catch((reason: unknown) =>
+                      toast.error("Photos could not be completed", {
+                        description: reason instanceof Error ? reason.message : "Try again.",
+                      }),
+                    )
+                    .finally(() => setCompleting(false));
+                }}
+              >
+                Complete with missing shots
+              </AlertDialogAction>
+            ) : null}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -57,6 +57,12 @@ function PrintableVehicleDocument() {
           <Printer className="size-4" /> Print
         </Button>
       </div>
+      {document.stale_at ? (
+        <div className="mb-5 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 print:hidden">
+          <strong>This version is outdated.</strong> Vehicle or store data changed after it was
+          generated. Return to the vehicle workspace and regenerate before printing.
+        </div>
+      ) : null}
       <article className="min-h-[10in] border border-border bg-white p-8 text-slate-950 shadow-sm print:min-h-0 print:border-0 print:p-0 print:shadow-none">
         <header className="flex items-start justify-between gap-6 border-b-4 border-slate-900 pb-5">
           <div>
