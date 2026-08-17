@@ -1267,6 +1267,34 @@ export type Database = {
         Args: { _dealership_id: string };
         Returns: Json;
       };
+      get_production_payout_report: {
+        Args: {
+          _dealership_id: string;
+          _from_date: string;
+          _status?: string | null;
+          _to_date: string;
+        };
+        Returns: {
+          amount: number;
+          completed_at: string | null;
+          duration_seconds: number | null;
+          employee_id: string;
+          employee_name: string;
+          payout_id: string;
+          payout_status: string;
+          photo_count: number;
+          photo_shoot_id: string | null;
+          review_status: string;
+          started_at: string | null;
+          stock_number: string;
+          task_type: string;
+          vehicle_id: string | null;
+          vehicle_name: string;
+          video_count: number;
+          vin: string;
+          work_date: string;
+        }[];
+      };
       list_payout_eligible_profiles: {
         Args: { _dealership_id: string };
         Returns: {

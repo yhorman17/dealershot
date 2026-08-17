@@ -1206,6 +1206,15 @@ SELECT test.expect_sqlstate(
   '42501',
   'photographers cannot approve or mark payouts paid'
 );
+SELECT test.expect_sqlstate(
+  $$SELECT * FROM public.get_production_payout_report(
+      'aaaaaaaa-0000-0000-0000-000000000001',
+      current_date - 1,
+      current_date + 1,
+      NULL)$$,
+  '42501',
+  'photographers cannot access production payout reports'
+);
 RESET ROLE;
 
 SET ROLE authenticated;
@@ -1231,6 +1240,19 @@ SELECT test.assert_true(
    FROM public.payout_entries
    WHERE photo_shoot_id = '40000000-0000-0000-0000-000000000003'),
   'authorized administrator can approve a payout with trusted attribution'
+);
+SELECT test.assert_true(
+  (SELECT count(*) = 1
+   FROM public.get_production_payout_report(
+     'aaaaaaaa-0000-0000-0000-000000000001',
+     current_date - 1,
+     current_date + 1,
+     'approved'
+   )
+   WHERE employee_id = '00000000-0000-0000-0000-000000000003'
+     AND photo_count = 1
+     AND payout_status = 'approved'),
+  'authorized reporting projection includes trusted employee and shoot totals'
 );
 RESET ROLE;
 

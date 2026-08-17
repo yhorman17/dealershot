@@ -46,15 +46,24 @@ export const Route = createFileRoute("/_authenticated/reports")({
 });
 
 type PayoutRecord = {
-  id: string;
-  dealership_id: string;
+  payout_id: string;
   employee_id: string;
+  employee_name: string;
   vehicle_id: string | null;
   photo_shoot_id: string | null;
   task_type: string;
   work_date: string;
   amount: number;
-  status: "pending" | "approved" | "paid" | "void";
+  payout_status: "pending" | "approved" | "paid" | "void";
+  stock_number: string;
+  vin: string;
+  vehicle_name: string;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  photo_count: number;
+  video_count: number;
+  review_status: string;
 };
 
 type ReportView = "payouts" | "daily" | "no_photos" | "short_shoot" | "processing" | "attention";
@@ -85,18 +94,12 @@ function ReportsPage() {
     setLoading(true);
     setError(null);
     void (async () => {
-      let payoutQuery = supabase
-        .from("payout_entries")
-        .select(
-          "id, dealership_id, employee_id, vehicle_id, photo_shoot_id, task_type, work_date, amount, status",
-        )
-        .eq("dealership_id", selectedDealershipId)
-        .gte("work_date", fromDate)
-        .lte("work_date", toDate)
-        .order("work_date", { ascending: false });
-      if (status !== "all")
-        payoutQuery = payoutQuery.eq("status", status as PayoutRecord["status"]);
-      const { data, error: payoutError } = await payoutQuery;
+      const { data, error: payoutError } = await supabase.rpc("get_production_payout_report", {
+        _dealership_id: selectedDealershipId,
+        _from_date: fromDate,
+        _to_date: toDate,
+        _status: status === "all" ? null : status,
+      });
       if (cancelled) return;
       if (payoutError) {
         setError(
@@ -106,76 +109,25 @@ function ReportsPage() {
         return;
       }
       const payouts = (data as PayoutRecord[]) ?? [];
-      const employeeIds = [...new Set(payouts.map((item) => item.employee_id))];
-      const vehicleIds = [
-        ...new Set(payouts.flatMap((item) => (item.vehicle_id ? [item.vehicle_id] : []))),
-      ];
-      const shootIds = [
-        ...new Set(payouts.flatMap((item) => (item.photo_shoot_id ? [item.photo_shoot_id] : []))),
-      ];
-      const [profilesResult, vehiclesResult, shootsResult] = await Promise.all([
-        employeeIds.length
-          ? supabase.from("profiles").select("id, full_name, email").in("id", employeeIds)
-          : Promise.resolve({ data: [] }),
-        vehicleIds.length
-          ? supabase
-              .from("vehicles")
-              .select("id, stock_number, vin, year, make, model, trim")
-              .in("id", vehicleIds)
-          : Promise.resolve({ data: [] }),
-        shootIds.length
-          ? supabase
-              .from("photo_capture_sessions")
-              .select(
-                "id, started_at, completed_at, duration_seconds, photo_count, video_count, review_status",
-              )
-              .in("id", shootIds)
-          : Promise.resolve({ data: [] }),
-      ]);
-      if (cancelled) return;
-      const profileMap = new Map(
-        (
-          (profilesResult.data as Array<{ id: string; full_name: string | null; email: string }>) ??
-          []
-        ).map((item) => [item.id, item.full_name || item.email]),
-      );
-      const vehicleMap = new Map(
-        ((vehiclesResult.data as Array<Record<string, string | number | null>>) ?? []).map(
-          (item) => [item.id, item],
-        ),
-      );
-      const shootMap = new Map(
-        ((shootsResult.data as Array<Record<string, string | number | null>>) ?? []).map((item) => [
-          item.id,
-          item,
-        ]),
-      );
       setRows(
-        payouts.map((item) => {
-          const vehicle = item.vehicle_id ? vehicleMap.get(item.vehicle_id) : undefined;
-          const shoot = item.photo_shoot_id ? shootMap.get(item.photo_shoot_id) : undefined;
-          return {
-            payoutId: item.id,
-            employee: profileMap.get(item.employee_id) ?? "Former user",
-            workDate: item.work_date,
-            dealership: selectedDealership?.name ?? "Dealership",
-            stockNumber: String(vehicle?.stock_number ?? ""),
-            vin: String(vehicle?.vin ?? ""),
-            vehicle: [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim]
-              .filter(Boolean)
-              .join(" "),
-            taskType: humanize(item.task_type),
-            startedAt: String(shoot?.started_at ?? ""),
-            completedAt: String(shoot?.completed_at ?? ""),
-            durationSeconds:
-              typeof shoot?.duration_seconds === "number" ? shoot.duration_seconds : null,
-            photoCount: Number(shoot?.photo_count ?? 0),
-            videoCount: Number(shoot?.video_count ?? 0),
-            amount: Number(item.amount),
-            payoutStatus: item.status,
-            reviewStatus: String(shoot?.review_status ?? "unreviewed"),
-          };
-        }),
+        payouts.map((item) => ({
+          payoutId: item.payout_id,
+          employee: item.employee_name,
+          workDate: item.work_date,
+          dealership: selectedDealership?.name ?? "Dealership",
+          stockNumber: item.stock_number,
+          vin: item.vin,
+          vehicle: item.vehicle_name,
+          taskType: humanize(item.task_type),
+          startedAt: item.started_at ?? "",
+          completedAt: item.completed_at ?? "",
+          durationSeconds: item.duration_seconds,
+          photoCount: item.photo_count,
+          videoCount: item.video_count,
+          amount: Number(item.amount),
+          payoutStatus: item.payout_status,
+          reviewStatus: item.review_status,
+        })),
       );
       setLoading(false);
     })();
@@ -734,22 +686,19 @@ function OperationalReport({
         };
       });
       const sessions = sessionsResult.data ?? [];
-      const profileIds = [
-        ...new Set([
-          ...mapped.flatMap((item) =>
-            item.assigned_photographer_id ? [item.assigned_photographer_id] : [],
-          ),
-          ...sessions.flatMap((item) => (item.created_by ? [item.created_by] : [])),
-        ]),
-      ];
-      const profileResult = profileIds.length
-        ? await supabase.from("profiles").select("id, full_name, email").in("id", profileIds)
-        : { data: [] };
+      const profileResult = await supabase.rpc("list_payout_eligible_profiles", {
+        _dealership_id: dealershipId,
+      });
       if (cancelled) return;
+      if (profileResult.error) {
+        setError(profileResult.error.message);
+        setLoading(false);
+        return;
+      }
       setNames(
         new Map(
           (profileResult.data ?? []).map((profile) => [
-            profile.id,
+            profile.profile_id,
             profile.full_name || profile.email,
           ]),
         ),

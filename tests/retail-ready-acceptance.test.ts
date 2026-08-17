@@ -80,6 +80,7 @@ test("document and payout history remain versioned and visibly stale", () => {
 
 test("operational reporting exposes all accepted manager views", () => {
   const reports = read("src/routes/_authenticated/reports.tsx");
+  const migration = read("supabase/migrations/20260817200004_hosted_reporting_fixes.sql");
   for (const label of [
     "Production & Payouts",
     "Daily Activity",
@@ -91,6 +92,10 @@ test("operational reporting exposes all accepted manager views", () => {
     assert.match(reports, new RegExp(label.replace("&", "&")));
   }
   assert.match(reports, /create_manual_payout_adjustment/);
+  assert.match(reports, /get_production_payout_report/);
+  assert.doesNotMatch(reports, /from\("profiles"\)/);
+  assert.match(migration, /current_user_has_store_capability\(_dealership_id, 'reports'\)/);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\.get_production_payout_report/);
   assert.match(reports, /inventoryAge/);
   assert.match(reports, /0–15/);
   assert.match(reports, /90\+/);
