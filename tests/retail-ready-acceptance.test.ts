@@ -103,7 +103,7 @@ test("operational reporting exposes all accepted manager views", () => {
 
 test("Daily Activity uses a trusted tenant-scoped capture projection", () => {
   const reports = read("src/routes/_authenticated/reports.tsx");
-  const migration = read("supabase/migrations/20260817203201_secure_daily_activity_report.sql");
+  const migration = read("supabase/migrations/20260817203452_secure_daily_activity_report.sql");
 
   assert.match(reports, /rpc\("get_daily_activity_report"/);
   assert.doesNotMatch(reports, /from\("photo_capture_sessions"\)/);
