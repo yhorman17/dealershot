@@ -101,6 +101,20 @@ test("operational reporting exposes all accepted manager views", () => {
   assert.match(reports, /90\+/);
 });
 
+test("Daily Activity uses a trusted tenant-scoped capture projection", () => {
+  const reports = read("src/routes/_authenticated/reports.tsx");
+  const migration = read("supabase/migrations/20260817203201_secure_daily_activity_report.sql");
+
+  assert.match(reports, /rpc\("get_daily_activity_report"/);
+  assert.doesNotMatch(reports, /from\("photo_capture_sessions"\)/);
+  assert.match(migration, /current_user_has_store_capability\(_dealership_id, 'reports'\)/);
+  assert.match(migration, /SECURITY DEFINER/);
+  assert.match(migration, /SET search_path = ''/);
+  assert.match(migration, /AT TIME ZONE coalesce\(dealership\.timezone/);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\.get_daily_activity_report/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.get_daily_activity_report/);
+});
+
 test("photographers are contained before the settings editor renders", () => {
   const settings = read("src/routes/_authenticated/settings.tsx");
   const navigation = read("src/components/AppNav.tsx");

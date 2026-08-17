@@ -1267,6 +1267,17 @@ export type Database = {
         Args: { _dealership_id: string };
         Returns: Json;
       };
+      get_daily_activity_report: {
+        Args: { _dealership_id: string; _from_date: string; _to_date: string };
+        Returns: {
+          completed_at: string | null;
+          created_by: string | null;
+          duration_seconds: number | null;
+          id: string;
+          photo_count: number;
+          video_count: number;
+        }[];
+      };
       get_production_payout_report: {
         Args: {
           _dealership_id: string;

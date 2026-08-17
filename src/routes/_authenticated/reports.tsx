@@ -635,14 +635,11 @@ function OperationalReport({
           .from("vehicle_readiness")
           .select("vehicle_id, status, reasons, photo_count")
           .eq("dealership_id", dealershipId),
-        supabase
-          .from("photo_capture_sessions")
-          .select("id, completed_at, created_by, photo_count, video_count, duration_seconds")
-          .eq("dealership_id", dealershipId)
-          .eq("status", "completed")
-          .gte("completed_at", `${fromDate}T00:00:00`)
-          .lte("completed_at", `${toDate}T23:59:59`)
-          .order("completed_at", { ascending: false }),
+        supabase.rpc("get_daily_activity_report", {
+          _dealership_id: dealershipId,
+          _from_date: fromDate,
+          _to_date: toDate,
+        }),
       ]);
       if (cancelled) return;
       const vehicleIds = (vehiclesResult.data ?? []).map((vehicle) => vehicle.id);
