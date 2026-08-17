@@ -29,6 +29,10 @@ WORKDIR /app
 
 COPY --from=build --chown=node:node /app/.output ./.output
 COPY --from=build --chown=node:node /app/.worker ./.worker
+# The worker bundle dynamically loads Sharp's platform-specific native addon.
+# Vite can bundle Sharp's JavaScript, but the linux-musl addon and libvips
+# packages must remain available at runtime in the Alpine image.
+COPY --from=build --chown=node:node /app/node_modules/@img ./node_modules/@img
 
 USER node
 

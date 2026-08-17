@@ -17,6 +17,7 @@ const migration = readFileSync(
   ),
   "utf8",
 );
+const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
 
 const mediaAssetId = "10000000-0000-0000-0000-000000000001";
 const migrationId = "20000000-0000-0000-0000-000000000001";
@@ -170,6 +171,13 @@ test("worker creates and maintains a private constrained media bucket", async ()
   const fixture = fakeMediaClient(source);
   await ensurePrivateMediaBucket(fixture.client as never);
   assert.deepEqual(fixture.buckets.get("dealer-media-private"), { public: false });
+});
+
+test("deployment image carries Sharp's Alpine native runtime packages", () => {
+  assert.match(
+    dockerfile,
+    /COPY --from=build --chown=node:node \/app\/node_modules\/@img \.\/node_modules\/@img/,
+  );
 });
 
 test("legacy migration verifies exact bytes before finalizing and preserves source", async () => {
