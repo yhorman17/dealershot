@@ -121,3 +121,15 @@ test("one-time credential handoff exposes every copy target without persisting i
   assert.match(component, /Copy all credentials/);
   assert.match(server, /login_url: `\$\{getApplicationOrigin\(\)\}\/login`/);
 });
+
+test("changing a staff user's dealership replaces the prior assignment", () => {
+  const component = readFileSync(
+    path.join(process.cwd(), "src/components/TemporaryCredentialsDialogs.tsx"),
+    "utf8",
+  );
+
+  assert.match(
+    component,
+    /role === "staff" \? \[value\] : \[value, \.\.\.ids\.filter\(\(id\) => id !== value\)\]/,
+  );
+});

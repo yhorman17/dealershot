@@ -134,7 +134,9 @@ export function ProvisionUserDialog({
               <ProductSelect
                 value={primaryId}
                 onValueChange={(value) =>
-                  setDealershipIds((ids) => [value, ...ids.filter((id) => id !== value)])
+                  setDealershipIds((ids) =>
+                    role === "staff" ? [value] : [value, ...ids.filter((id) => id !== value)],
+                  )
                 }
                 ariaLabel="Primary dealership"
                 placeholder="Select dealership…"
