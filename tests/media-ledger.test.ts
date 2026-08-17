@@ -25,6 +25,14 @@ const legacySvgCompatibility = readFileSync(
   path.join(root, "supabase/migrations/20260817231500_preserve_legacy_svg_originals.sql"),
   "utf8",
 );
+const preservedAttemptRecovery = readFileSync(
+  path.join(root, "supabase/migrations/20260817233627_resume_preserved_media_job_attempts.sql"),
+  "utf8",
+);
+const mediaRelationshipIndexes = readFileSync(
+  path.join(root, "supabase/migrations/20260817233940_index_active_media_ledger_relationships.sql"),
+  "utf8",
+);
 const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
 
 const mediaAssetId = "10000000-0000-0000-0000-000000000001";
@@ -220,6 +228,26 @@ test("legacy SVG finalization is isolated, server-only, and resumable", () => {
   );
   assert.match(legacySvgCompatibility, /\) FROM PUBLIC, anon, authenticated/);
   assert.match(legacySvgCompatibility, /TO service_role/);
+});
+
+test("legacy job recovery continues preserved attempt numbering", () => {
+  assert.match(preservedAttemptRecovery, /max\(attempt\.attempt_number\)/);
+  assert.match(
+    preservedAttemptRecovery,
+    /attempt_count = greatest\(job\.attempt_count, preserved\.latest_attempt\)/,
+  );
+  assert.match(
+    preservedAttemptRecovery,
+    /max_attempts = greatest\(job\.max_attempts, preserved\.latest_attempt \+ 4\)/,
+  );
+  assert.doesNotMatch(preservedAttemptRecovery, /DELETE FROM private\.background_job_attempts/);
+});
+
+test("active media ledger relationships have covering indexes", () => {
+  assert.match(mediaRelationshipIndexes, /media_storage_migrations_media_asset_idx/);
+  assert.match(mediaRelationshipIndexes, /media_storage_migrations_media_variant_idx/);
+  assert.match(mediaRelationshipIndexes, /photos_media_asset_idx/);
+  assert.match(mediaRelationshipIndexes, /bulk_photo_items_media_asset_idx/);
 });
 
 test("legacy migration verifies exact bytes before finalizing and preserves source", async () => {
