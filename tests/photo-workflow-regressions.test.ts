@@ -98,6 +98,7 @@ test("Bulk Photos supports raw intake, completion, organization, and no-reupload
 
   assert.match(list, /mode: "bulk"/);
   assert.match(list, /vin: normalizedVin/);
+  assert.match(list, /rpc\("start_photo_capture_session"/);
   assert.match(list, /import\("@\/components\/VinScannerModal"\)/);
   assert.match(list, /aria-label="Scan VIN"/);
   assert.match(workspace, /createUploadQueue<BulkUpload>/);

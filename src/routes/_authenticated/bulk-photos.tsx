@@ -101,17 +101,12 @@ function BulkPhotosPage() {
         .eq("dealership_id", selectedDealershipId)
         .eq("vin", normalizedVin)
         .maybeSingle();
-      const { data, error } = await supabase
-        .from("photo_capture_sessions")
-        .insert({
-          dealership_id: selectedDealershipId,
-          vehicle_id: vehicle?.id ?? null,
-          vin: normalizedVin,
-          mode: "bulk",
-          created_by: user.id,
-        })
-        .select("id")
-        .single();
+      const { data, error } = await supabase.rpc("start_photo_capture_session", {
+        _dealership_id: selectedDealershipId,
+        _vehicle_id: vehicle?.id ?? null,
+        _vin: normalizedVin,
+        _mode: "bulk",
+      });
       if (error) throw error;
       navigate({ to: "/bulk-photos/$id", params: { id: data.id } });
     } catch (reason) {
