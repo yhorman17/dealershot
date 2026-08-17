@@ -57,11 +57,8 @@ test("guided capture persists raw originals through a bounded retryable queue", 
   const source = read("src/components/VehiclePhotos.tsx");
 
   assert.match(source, /createUploadQueue<CaptureUpload>/);
-  assert.match(source, /\/originals\//);
-  assert.match(source, /original_image_url: imageUrl/);
-  assert.match(source, /photo_state: "raw"/);
-  assert.match(source, /is_cutout: false/);
-  assert.match(source, /cutout_status: "none"/);
+  assert.match(source, /await uploadPrivateOriginal\(/);
+  assert.doesNotMatch(source, /getPublicUrl|from\("photos"\)[\s\S]{0,160}\.insert\(/);
   assert.match(source, /uploadQueue\.retryFailed\(\)/);
   assert.match(source, /await uploadQueue\.waitForIdle\(\)/);
   assert.match(source, /complete_photo_capture_session/);

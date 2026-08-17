@@ -511,20 +511,15 @@ SELECT test.assert_row_count(
   1,
   'staff A can attach a dealer A document'
 );
-SELECT test.assert_row_count(
+SELECT test.expect_sqlstate(
   $$INSERT INTO storage.objects (bucket_id, name) VALUES ('vehicle-photos', '10000000-0000-0000-0000-000000000001/staff-a.jpg')$$,
-  1,
-  'staff A can upload to a dealer A vehicle path'
+  '42501',
+  'browser users cannot bypass path-scoped private upload targets'
 );
 SELECT test.assert_row_count(
   $$UPDATE storage.objects SET name = '10000000-0000-0000-0000-000000000001/staff-a-renamed.jpg' WHERE bucket_id = 'vehicle-photos' AND name = '10000000-0000-0000-0000-000000000001/staff-a.jpg'$$,
-  1,
-  'staff A can update an authorized Storage object'
-);
-SELECT test.expect_sqlstate(
-  $$UPDATE storage.objects SET name = '10000000-0000-0000-0000-000000000002/moved.jpg' WHERE bucket_id = 'vehicle-photos' AND name = '10000000-0000-0000-0000-000000000001/staff-a-renamed.jpg'$$,
-  '42501',
-  'Storage UPDATE WITH CHECK prevents a cross-tenant move'
+  0,
+  'browser users cannot overwrite private originals'
 );
 SELECT test.assert_row_count(
   $$UPDATE storage.objects SET name = '10000000-0000-0000-0000-000000000002/hidden-update.jpg' WHERE bucket_id = 'vehicle-photos' AND name = '10000000-0000-0000-0000-000000000002/existing-b.jpg'$$,
@@ -573,8 +568,8 @@ SELECT test.assert_row_count(
 );
 SELECT test.assert_row_count(
   $$DELETE FROM storage.objects WHERE bucket_id = 'vehicle-photos' AND name = '10000000-0000-0000-0000-000000000001/staff-a-renamed.jpg'$$,
-  1,
-  'staff A can delete their authorized Storage object'
+  0,
+  'browser users cannot delete retained originals'
 );
 RESET ROLE;
 
@@ -991,17 +986,57 @@ SELECT test.expect_sqlstate(
   '42501',
   'photo rows cannot attach an authorized vehicle to another tenant capture session'
 );
+SELECT test.expect_sqlstate(
+  $$INSERT INTO public.bulk_photo_items (
+      id, session_id, image_url, storage_path, created_by
+    ) VALUES (
+      '41000000-0000-0000-0000-000000000001',
+      '40000000-0000-0000-0000-000000000001',
+      'https://example.test/raw.jpg',
+      '40000000-0000-0000-0000-000000000001/originals/raw.jpg',
+      '00000000-0000-0000-0000-000000000003'
+    )$$,
+  '42501',
+  'browser users cannot finalize bulk media rows directly'
+);
+RESET ROLE;
 INSERT INTO storage.objects (bucket_id, name)
 VALUES ('vehicle-photos', '40000000-0000-0000-0000-000000000001/originals/raw.jpg');
+INSERT INTO public.media_assets (
+  id, organization_id, dealership_id, capture_session_id, uploaded_by,
+  source_type, media_kind, media_category, original_filename, content_type,
+  byte_size, checksum_sha256, storage_bucket, storage_object_path, migration_state
+)
+SELECT
+  '42000000-0000-0000-0000-000000000001', d.organization_id, d.id,
+  '40000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000003', 'bulk', 'photo', 'exterior',
+  'raw.jpg', 'image/jpeg', 4, repeat('a', 64), 'vehicle-photos',
+  '40000000-0000-0000-0000-000000000001/originals/raw.jpg', 'legacy'
+FROM public.dealerships d
+WHERE d.id = 'aaaaaaaa-0000-0000-0000-000000000001';
+INSERT INTO public.media_variants (
+  id, media_asset_id, variant_type, image_url, storage_bucket, storage_path,
+  content_type, original_filename, byte_size, checksum, variant_role, processing_status
+) VALUES (
+  '43000000-0000-0000-0000-000000000001',
+  '42000000-0000-0000-0000-000000000001', 'original',
+  'private-media://43000000-0000-0000-0000-000000000001', 'vehicle-photos',
+  '40000000-0000-0000-0000-000000000001/originals/raw.jpg', 'image/jpeg',
+  'raw.jpg', 4, repeat('a', 64), 'source', 'completed'
+);
 INSERT INTO public.bulk_photo_items (
-  id, session_id, image_url, storage_path, created_by
+  id, session_id, image_url, storage_path, created_by, media_asset_id
 ) VALUES (
   '41000000-0000-0000-0000-000000000001',
   '40000000-0000-0000-0000-000000000001',
-  'https://example.test/raw.jpg',
+  'private-media://43000000-0000-0000-0000-000000000001',
   '40000000-0000-0000-0000-000000000001/originals/raw.jpg',
-  '00000000-0000-0000-0000-000000000003'
+  '00000000-0000-0000-0000-000000000003',
+  '42000000-0000-0000-0000-000000000001'
 );
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
 SELECT test.expect_sqlstate(
   $$UPDATE public.photo_capture_sessions SET status = 'completed'
     WHERE id = '40000000-0000-0000-0000-000000000001'$$,
@@ -1058,10 +1093,13 @@ SELECT test.assert_true(
   (SELECT status = 'prepared' AND vehicle_id = '10000000-0000-0000-0000-000000000001'
    FROM public.photo_capture_sessions
    WHERE id = '40000000-0000-0000-0000-000000000001')
-  AND (SELECT image_url = 'https://example.test/raw.jpg'
-   FROM public.photos
-   WHERE capture_session_id = '40000000-0000-0000-0000-000000000001'),
-  'dealer admin associates the package without changing its physical image URL'
+  AND (SELECT p.image_url LIKE 'private-media://%'
+            AND p.media_asset_id IS NOT NULL
+            AND ma.storage_object_path = '40000000-0000-0000-0000-000000000001/originals/raw.jpg'
+   FROM public.photos p
+   JOIN public.media_assets ma ON ma.id = p.media_asset_id
+   WHERE p.capture_session_id = '40000000-0000-0000-0000-000000000001'),
+  'dealer admin associates the package without duplicating its physical media object'
 );
 SELECT test.expect_sqlstate(
   $$SELECT public.associate_bulk_photo_session(
@@ -1125,9 +1163,12 @@ SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
 SELECT public.generate_vehicle_document(
   '10000000-0000-0000-0000-000000000001', 'window_sticker'
 );
-SELECT public.commit_photo_variant(
-  '30000000-0000-0000-0000-000000000001', 'customized',
-  'https://example.test/customized.jpg', 'customized.jpg', 'test-renderer'
+SELECT test.expect_sqlstate(
+  $$SELECT public.commit_photo_variant(
+    '30000000-0000-0000-0000-000000000001', 'customized',
+    'https://example.test/customized.jpg', 'customized.jpg', 'test-renderer')$$,
+  '42501',
+  'legacy browser-side variant finalization is disabled'
 );
 SELECT test.assert_true(
   (SELECT count(*) = 1 FROM public.generated_documents
@@ -1142,17 +1183,13 @@ SELECT test.assert_true(
   'authorized document generation snapshots vehicle data and emits an audit event'
 );
 SELECT test.assert_true(
-  (SELECT image_url = 'https://example.test/customized.jpg'
-     AND original_image_url = 'https://example.test/a.jpg'
-     AND approved_variant_id IS NOT NULL
-   FROM public.photos WHERE id = '30000000-0000-0000-0000-000000000001')
-  AND (SELECT count(*) = 1 FROM public.media_variants
-       WHERE photo_id = '30000000-0000-0000-0000-000000000001'
-         AND variant_type = 'original' AND image_url = 'https://example.test/a.jpg')
-  AND (SELECT count(*) = 1 FROM public.media_variants
-       WHERE photo_id = '30000000-0000-0000-0000-000000000001'
-         AND variant_type = 'customized' AND image_url = 'https://example.test/customized.jpg'),
-  'authorized preparation creates a variant without altering the immutable original'
+  NOT has_function_privilege('authenticated',
+    'public.finalize_private_photo_upload(uuid,uuid,uuid,uuid,text,text,text,text,bigint,integer,integer,text,text,integer,text)',
+    'EXECUTE')
+  AND NOT has_function_privilege('authenticated',
+    'public.commit_private_photo_variant(uuid,uuid,uuid,text,uuid,text,text,text,bigint,integer,integer,text,text)',
+    'EXECUTE'),
+  'trusted media finalization functions are server-only'
 );
 SELECT public.create_payout_rule(
   'aaaaaaaa-0000-0000-0000-000000000001',
@@ -1171,15 +1208,21 @@ INSERT INTO public.photo_capture_sessions (
   '1HGCM82633A004352', 'guided',
   '00000000-0000-0000-0000-000000000003'
 );
-INSERT INTO public.photos (
-  id, vehicle_id, image_url, original_image_url, capture_session_id,
-  media_category, shot_type
-) VALUES (
-  '30000000-0000-0000-0000-000000000003',
+RESET ROLE;
+SET ROLE service_role;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT public.finalize_private_photo_upload(
+  '00000000-0000-0000-0000-000000000003',
+  '44000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000001',
-  'https://example.test/shoot.jpg', 'https://example.test/shoot.jpg',
-  '40000000-0000-0000-0000-000000000003', 'exterior', 'Front'
+  '40000000-0000-0000-0000-000000000003',
+  'dealer-media-private',
+  'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/10000000-0000-0000-0000-000000000001/media/44000000-0000-0000-0000-000000000001/original/shoot.jpg',
+  'shoot.jpg', 'image/jpeg', 4, 1, 1, repeat('b', 64), 'Front', 0, 'capture'
 );
+RESET ROLE;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
 SELECT public.complete_photo_capture_session('40000000-0000-0000-0000-000000000003');
 SELECT test.assert_true(
   (SELECT photo_count = 1 AND completed_by = '00000000-0000-0000-0000-000000000003'
@@ -1317,23 +1360,19 @@ SELECT test.expect_sqlstate(
   '42501',
   'photographers cannot create their own payout adjustments'
 );
-INSERT INTO public.photos (
-  id, vehicle_id, image_url, original_image_url, photo_state, is_main,
-  is_cutout, cutout_status, processing_status, review_status
-) VALUES (
-  '30000000-0000-0000-0000-000000000009',
-  '10000000-0000-0000-0000-000000000001',
-  'https://example.test/raw-upload.jpg', 'https://example.test/forged-original.jpg',
-  'customized', true, true, 'completed', 'completed', 'approved'
+SELECT test.expect_sqlstate(
+  $$INSERT INTO public.photos (
+      id, vehicle_id, image_url, original_image_url, photo_state, is_main,
+      is_cutout, cutout_status, processing_status, review_status
+    ) VALUES (
+      '30000000-0000-0000-0000-000000000009',
+      '10000000-0000-0000-0000-000000000001',
+      'https://example.test/raw-upload.jpg', 'https://example.test/forged-original.jpg',
+      'customized', true, true, 'completed', 'completed', 'approved'
+    )$$,
+  '42501',
+  'raw capture rows can only be finalized by trusted server logic'
 );
-SELECT test.assert_true(
-  (SELECT original_image_url = image_url AND photo_state = 'raw'
-          AND NOT is_main AND NOT is_cutout AND cutout_status = 'none'
-          AND processing_status = 'not_required' AND review_status = 'unreviewed'
-   FROM public.photos WHERE id = '30000000-0000-0000-0000-000000000009'),
-  'raw capture INSERT cannot smuggle processed, approved, or primary state'
-);
-DELETE FROM public.photos WHERE id = '30000000-0000-0000-0000-000000000009';
 RESET ROLE;
 
 SET ROLE authenticated;
@@ -1582,25 +1621,26 @@ SELECT test.assert_true(
 );
 SELECT test.assert_true(
   (
-    SELECT count(*) = 47
+    SELECT count(*) = 49
     FROM pg_policies
     WHERE schemaname = 'public'
       AND tablename IN (
         'profiles', 'dealerships', 'vehicles', 'photos', 'overlay_templates',
         'documents', 'vehicle_documents', 'backdrops', 'impersonation_logs',
         'user_invitations', 'photo_capture_sessions', 'bulk_photo_items',
-        'photography_settings', 'photo_shot_requirements'
+        'photography_settings', 'photo_shot_requirements',
+        'media_assets', 'media_variants'
       )
   ),
   'repository tables have only the reviewed policy set'
 );
 SELECT test.assert_true(
   (
-    SELECT count(*) = 20
+    SELECT count(*) = 17
     FROM pg_policies
     WHERE schemaname = 'storage' AND tablename = 'objects'
   ),
-  'Storage has only the reviewed public-read and active-mutation policies'
+  'Storage has only the reviewed public-asset and private-media policies'
 );
 
 -- Phase 1 settings remain readable only through active tenant scope, and all
@@ -1696,6 +1736,7 @@ SELECT test.assert_true(
 
 -- Queue lifecycle: dedupe, claim, retry with backoff, reclaim, complete, and
 -- terminal failure all use service-only RPCs and durable attempt records.
+DELETE FROM private.background_jobs WHERE job_type LIKE 'media.%';
 SET ROLE service_role;
 SELECT (public.enqueue_background_job(
   'system.noop', '{"source":"portable-test"}'::jsonb,
@@ -1753,8 +1794,8 @@ RESET ROLE;
 
 SET ROLE anon;
 SELECT test.assert_true(
-  (SELECT count(*) >= 1 FROM storage.objects WHERE bucket_id = 'vehicle-photos'),
-  'anonymous public Storage reads remain available'
+  (SELECT count(*) = 0 FROM storage.objects WHERE bucket_id = 'vehicle-photos'),
+  'anonymous users cannot read private vehicle originals'
 );
 SELECT test.expect_sqlstate(
   $$INSERT INTO storage.objects (bucket_id, name) VALUES ('vehicle-photos', '10000000-0000-0000-0000-000000000001/anon.jpg')$$,
