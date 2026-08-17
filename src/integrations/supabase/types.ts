@@ -239,6 +239,7 @@ export type Database = {
       };
       photo_capture_sessions: {
         Row: {
+          completion_policy: "block" | "warn";
           completed_at: string | null;
           completed_by: string | null;
           created_at: string;
@@ -250,12 +251,14 @@ export type Database = {
           id: string;
           interior_count: number;
           mode: "guided" | "bulk";
+          missing_requirements: Json;
           notes: string | null;
           photo_count: number;
           prepared_at: string | null;
           prepared_by: string | null;
           reshoot_of: string | null;
           review_status: "unreviewed" | "awaiting_review" | "approved" | "rejected";
+          requirements_snapshot: Json;
           shoot_type: "standard" | "reshoot" | "bulk";
           started_at: string;
           status: "in_progress" | "completed" | "prepared";
@@ -265,6 +268,7 @@ export type Database = {
           vin: string | null;
         };
         Insert: {
+          completion_policy?: "block" | "warn";
           completed_at?: string | null;
           completed_by?: string | null;
           created_at?: string;
@@ -276,12 +280,14 @@ export type Database = {
           id?: string;
           interior_count?: number;
           mode: "guided" | "bulk";
+          missing_requirements?: Json;
           notes?: string | null;
           photo_count?: number;
           prepared_at?: string | null;
           prepared_by?: string | null;
           reshoot_of?: string | null;
           review_status?: "unreviewed" | "awaiting_review" | "approved" | "rejected";
+          requirements_snapshot?: Json;
           shoot_type?: "standard" | "reshoot" | "bulk";
           started_at?: string;
           status?: "in_progress" | "completed" | "prepared";
@@ -293,6 +299,27 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      photography_settings: TableDefinition<{
+        dealership_id: string;
+        completion_policy: "block" | "warn";
+        updated_by: string | null;
+        updated_at: string;
+      }>;
+      photo_shot_requirements: TableDefinition<{
+        id: string;
+        dealership_id: string;
+        shot_key: string;
+        label: string;
+        guidance: string | null;
+        category: "exterior" | "interior" | "detail" | "odometer" | "vin";
+        required: boolean;
+        enabled: boolean;
+        minimum_count: number;
+        applies_to: string[];
+        sort_order: number;
+        created_at: string;
+        updated_at: string;
+      }>;
       bulk_photo_items: {
         Row: {
           created_at: string;
@@ -911,6 +938,9 @@ export type Database = {
         safe_error_code: string | null;
         generated_by: string | null;
         generated_at: string;
+        source_updated_at: string;
+        stale_at: string | null;
+        stale_reason: string | null;
         updated_at: string;
       }>;
       vehicle_readiness: TableDefinition<{
@@ -1215,6 +1245,24 @@ export type Database = {
         };
         Returns: Database["public"]["Tables"]["payout_rules"]["Row"];
       };
+      create_manual_payout_adjustment: {
+        Args: {
+          _amount: number;
+          _dealership_id: string;
+          _employee_id: string;
+          _reason: string;
+          _work_date?: string;
+        };
+        Returns: Database["public"]["Tables"]["payout_entries"]["Row"];
+      };
+      disable_payout_rule: {
+        Args: { _rule_id: string };
+        Returns: Database["public"]["Tables"]["payout_rules"]["Row"];
+      };
+      get_capture_session_completeness: {
+        Args: { _session_id: string };
+        Returns: Json;
+      };
       generate_vehicle_document: {
         Args: { _document_type: string; _vehicle_id: string };
         Returns: Database["public"]["Tables"]["generated_documents"]["Row"];
@@ -1222,6 +1270,38 @@ export type Database = {
       refresh_vehicle_readiness: {
         Args: { _vehicle_id: string };
         Returns: Database["public"]["Tables"]["vehicle_readiness"]["Row"];
+      };
+      reorder_vehicle_gallery: {
+        Args: { _items: Json; _vehicle_id: string };
+        Returns: Json;
+      };
+      reorder_bulk_photo_items: {
+        Args: { _item_ids: string[]; _session_id: string };
+        Returns: undefined;
+      };
+      save_document_requirements: {
+        Args: { _dealership_id: string; _requirements: Json };
+        Returns: undefined;
+      };
+      save_media_processing_configuration: {
+        Args: { _dealership_id: string; _rules: Json };
+        Returns: undefined;
+      };
+      save_photography_configuration: {
+        Args: { _completion_policy: string; _dealership_id: string; _shots: Json };
+        Returns: undefined;
+      };
+      save_readiness_configuration: {
+        Args: { _dealership_id: string; _rules: Json };
+        Returns: undefined;
+      };
+      set_vehicle_primary_asset: {
+        Args: { _asset_id: string; _asset_type: string; _vehicle_id: string };
+        Returns: Json;
+      };
+      set_bulk_primary_item: {
+        Args: { _item_id: string; _session_id: string };
+        Returns: undefined;
       };
       set_payout_status: {
         Args: { _payout_id: string; _status: string };
