@@ -1263,6 +1263,18 @@ export type Database = {
         Args: { _session_id: string };
         Returns: Json;
       };
+      get_current_user_store_capabilities: {
+        Args: { _dealership_id: string };
+        Returns: Json;
+      };
+      list_payout_eligible_profiles: {
+        Args: { _dealership_id: string };
+        Returns: {
+          email: string;
+          full_name: string | null;
+          profile_id: string;
+        }[];
+      };
       generate_vehicle_document: {
         Args: { _document_type: string; _vehicle_id: string };
         Returns: Database["public"]["Tables"]["generated_documents"]["Row"];
@@ -1306,6 +1318,15 @@ export type Database = {
       set_payout_status: {
         Args: { _payout_id: string; _status: string };
         Returns: Database["public"]["Tables"]["payout_entries"]["Row"];
+      };
+      start_photo_capture_session: {
+        Args: {
+          _dealership_id: string;
+          _mode?: string;
+          _vehicle_id?: string | null;
+          _vin?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["photo_capture_sessions"]["Row"];
       };
       begin_temporary_password_reset_operation: {
         Args: { _actor_id: string; _idempotency_key: string; _target_profile_id: string };

@@ -125,6 +125,21 @@ test("capture-session migration preserves originals and enforces tenant-scoped s
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.complete_photo_capture_session/);
 });
 
+test("hosted capture starts through an idempotent authorization-checked RPC", () => {
+  const source = read("src/components/VehiclePhotos.tsx");
+  const migration = read("supabase/migrations/20260817193000_hosted_capture_and_access_fixes.sql");
+
+  assert.match(source, /rpc\("start_photo_capture_session"/);
+  assert.doesNotMatch(source, /from\("photo_capture_sessions"\)[\s\S]{0,160}\.insert\(/);
+  assert.match(migration, /FUNCTION public\.start_photo_capture_session/);
+  assert.match(migration, /private\.current_user_has_active_membership\(_dealership_id\)/);
+  assert.match(migration, /vehicle_store_id IS DISTINCT FROM _dealership_id/);
+  assert.match(migration, /ON CONFLICT DO NOTHING/);
+  assert.match(migration, /created_by = actor_id/);
+  assert.match(migration, /SET search_path = ''/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.start_photo_capture_session/);
+});
+
 test("Fix Cutout waits for decoded assets and a measurable viewport", () => {
   const editor = read("src/components/MaskEditor.tsx");
 

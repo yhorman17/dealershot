@@ -389,17 +389,12 @@ export function VehiclePhotos({
       setCaptureStatus("in_progress");
       return existing.id;
     }
-    const { data, error } = await supabase
-      .from("photo_capture_sessions")
-      .insert({
-        dealership_id: context.dealershipId,
-        vehicle_id: vehicleId,
-        vin: context.vin,
-        mode: "guided",
-        created_by: userId,
-      })
-      .select("id")
-      .single();
+    const { data, error } = await supabase.rpc("start_photo_capture_session", {
+      _dealership_id: context.dealershipId,
+      _vehicle_id: vehicleId,
+      _vin: context.vin,
+      _mode: "guided",
+    });
     if (error) {
       const { data: raced } = await supabase
         .from("photo_capture_sessions")

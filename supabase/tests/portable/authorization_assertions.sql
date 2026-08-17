@@ -906,6 +906,60 @@ INSERT INTO public.photo_capture_sessions (
 );
 SET ROLE authenticated;
 SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT public.start_photo_capture_session(
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  NULL,
+  'guided'
+);
+SELECT public.start_photo_capture_session(
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  NULL,
+  'guided'
+);
+SELECT test.assert_true(
+  (SELECT count(*) = 1
+   FROM public.photo_capture_sessions
+   WHERE vehicle_id = '10000000-0000-0000-0000-000000000001'
+     AND created_by = '00000000-0000-0000-0000-000000000003'
+     AND mode = 'guided'
+     AND status = 'in_progress'),
+  'photographer starts and reads one idempotent guided capture session'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.start_photo_capture_session(
+      'bbbbbbbb-0000-0000-0000-000000000001',
+      '10000000-0000-0000-0000-000000000002',
+      NULL,
+      'guided'
+    )$$,
+  '42501',
+  'capture start RPC denies a staff user outside its active primary store'
+);
+SELECT test.assert_true(
+  (public.get_current_user_store_capabilities(
+    'aaaaaaaa-0000-0000-0000-000000000001'
+  )->>'capture')::boolean
+  AND NOT (public.get_current_user_store_capabilities(
+    'aaaaaaaa-0000-0000-0000-000000000001'
+  )->>'settings')::boolean,
+  'photographer capability discovery allows capture without exposing settings'
+);
+SELECT test.assert_true(
+  (SELECT count(*) = 0 FROM public.list_payout_eligible_profiles(
+    'aaaaaaaa-0000-0000-0000-000000000001'
+  )),
+  'photographer cannot enumerate payout-eligible coworkers'
+);
+RESET ROLE;
+DELETE FROM public.photo_capture_sessions
+WHERE vehicle_id = '10000000-0000-0000-0000-000000000001'
+  AND created_by = '00000000-0000-0000-0000-000000000003'
+  AND mode = 'guided'
+  AND status = 'in_progress';
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
 INSERT INTO public.photo_capture_sessions (
   id, dealership_id, vehicle_id, vin, mode, created_by
 ) VALUES (

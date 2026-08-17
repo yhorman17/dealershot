@@ -45,37 +45,37 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { supabase } from "@/integrations/supabase/client";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard };
+type StoreCapabilities = {
+  capture: boolean;
+  media: boolean;
+  documents: boolean;
+  reports: boolean;
+  settings: boolean;
+};
 
 export function AppNav({ children }: { children: ReactNode }) {
   const { profile, user, signOut } = useAuth();
   const isOwner = profile?.role === "owner";
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [accessRole, setAccessRole] = useState<string | null>(null);
+  const [capabilities, setCapabilities] = useState<StoreCapabilities | null>(null);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   useEffect(() => {
     if (!profile?.id || !profile.dealership_id || profile.role !== "staff") {
-      setAccessRole(null);
+      setCapabilities(null);
       return;
     }
     void supabase
-      .from("profile_dealerships")
-      .select("access_role")
-      .eq("profile_id", profile.id)
-      .eq("dealership_id", profile.dealership_id)
-      .maybeSingle()
-      .then(({ data }) => setAccessRole(data?.access_role ?? "photographer"));
+      .rpc("get_current_user_store_capabilities", { _dealership_id: profile.dealership_id })
+      .then(({ data, error }) => {
+        setCapabilities(error ? null : (data as StoreCapabilities));
+      });
   }, [profile?.dealership_id, profile?.id, profile?.role]);
 
   const staffCanUse = (area: "capture" | "media" | "documents" | "reports" | "settings") => {
     if (profile?.role !== "staff") return true;
-    const role = accessRole ?? "photographer";
-    if (area === "capture") return role !== "accounting";
-    if (area === "media") return role === "inventory_media" || role === "store_manager";
-    if (area === "documents") return role === "inventory_media" || role === "store_manager";
-    if (area === "settings") return role === "store_manager";
-    return role === "accounting" || role === "store_manager";
+    return capabilities?.[area] ?? false;
   };
 
   const items: NavItem[] = [

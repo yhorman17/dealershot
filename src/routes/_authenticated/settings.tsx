@@ -70,14 +70,11 @@ function SettingsPage() {
     let cancelled = false;
     setLoadingAccess(true);
     void supabase
-      .from("profile_dealerships")
-      .select("access_role")
-      .eq("profile_id", profile.id)
-      .eq("dealership_id", selectedDealershipId)
-      .maybeSingle()
-      .then(({ data }) => {
+      .rpc("get_current_user_store_capabilities", { _dealership_id: selectedDealershipId })
+      .then(({ data, error }) => {
         if (cancelled) return;
-        setCanManageSettings(data?.access_role === "store_manager");
+        const capabilities = data as { settings?: boolean } | null;
+        setCanManageSettings(!error && capabilities?.settings === true);
         setLoadingAccess(false);
       });
 

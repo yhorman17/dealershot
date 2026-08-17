@@ -98,8 +98,14 @@ test("operational reporting exposes all accepted manager views", () => {
 
 test("photographers are contained before the settings editor renders", () => {
   const settings = read("src/routes/_authenticated/settings.tsx");
+  const navigation = read("src/components/AppNav.tsx");
+  const migration = read("supabase/migrations/20260817193000_hosted_capture_and_access_fixes.sql");
 
-  assert.match(settings, /data\?\.access_role === "store_manager"/);
+  assert.match(settings, /rpc\("get_current_user_store_capabilities"/);
+  assert.match(navigation, /rpc\("get_current_user_store_capabilities"/);
+  assert.doesNotMatch(settings, /from\("profile_dealerships"\)/);
+  assert.doesNotMatch(navigation, /from\("profile_dealerships"\)/);
+  assert.match(migration, /private\.current_user_has_store_capability/);
   assert.match(settings, /if \(!canManageSettings\)/);
   assert.match(settings, /Settings access required/);
 });

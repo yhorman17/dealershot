@@ -489,21 +489,12 @@ function ManualAdjustmentDialog({
   useEffect(() => {
     if (!open || !dealershipId) return;
     void supabase
-      .from("profile_dealerships")
-      .select("profile_id, profile:profiles(id, full_name, email)")
-      .eq("dealership_id", dealershipId)
-      .eq("payout_eligible", true)
+      .rpc("list_payout_eligible_profiles", { _dealership_id: dealershipId })
       .then(({ data }) => {
-        const options = (
-          (data ?? []) as unknown as Array<{
-            profile_id: string;
-            profile: { id: string; full_name: string | null; email: string } | null;
-          }>
-        ).flatMap((item) =>
-          item.profile
-            ? [{ id: item.profile.id, name: item.profile.full_name || item.profile.email }]
-            : [],
-        );
+        const options = (data ?? []).map((item) => ({
+          id: item.profile_id,
+          name: item.full_name || item.email,
+        }));
         setEmployees(options);
         setEmployeeId((current) => current || options[0]?.id || "");
       });
