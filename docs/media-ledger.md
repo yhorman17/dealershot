@@ -45,15 +45,16 @@ Rendering jobs use the existing durable queue states and leases: queued, running
 
 ## Hosted cutover order
 
-The two migrations are intentionally separate:
+The schema and queue migrations are intentionally separate:
 
 1. Apply `20260817212030_production_media_ledger_private_pipeline.sql`.
 2. Deploy the exact web/worker build that understands private media jobs.
 3. Verify worker startup created `dealer-media-private` as private with MIME/size restrictions.
 4. Apply `20260817214320_enqueue_private_media_migration_jobs.sql`.
-5. Monitor every migration record and job. Copy is verified by destination download, byte count, and SHA-256 before references change.
-6. The low-priority lockdown job refuses to run while a referenced migration is pending or failed. Only then does it change `vehicle-photos` to private.
-7. Verify authenticated delivery and anonymous/cross-store denial before declaring cutover complete.
+5. If legacy variants retain only compatibility URLs, apply the additive `20260817225800_backfill_legacy_media_variant_paths.sql`; it normalizes paths, links the orphan inventory, and idempotently enqueues the same jobs.
+6. Monitor every migration record and job. Copy is verified by destination download, byte count, and SHA-256 before references change.
+7. The low-priority lockdown job refuses to run while a referenced migration is pending or failed. Only then does it change `vehicle-photos` to private.
+8. Verify authenticated delivery and anonymous/cross-store denial before declaring cutover complete.
 
 This order prevents the old deployed worker from claiming and dead-lettering job types it does not understand.
 

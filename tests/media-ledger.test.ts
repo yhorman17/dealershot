@@ -17,6 +17,10 @@ const migration = readFileSync(
   ),
   "utf8",
 );
+const legacyPathBackfill = readFileSync(
+  path.join(root, "supabase/migrations/20260817225800_backfill_legacy_media_variant_paths.sql"),
+  "utf8",
+);
 const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
 
 const mediaAssetId = "10000000-0000-0000-0000-000000000001";
@@ -178,6 +182,14 @@ test("deployment image carries Sharp's Alpine native runtime packages", () => {
     dockerfile,
     /COPY --from=build --chown=node:node \/app\/node_modules\/@img \.\/node_modules\/@img/,
   );
+});
+
+test("URL-only legacy variants are normalized before private migration jobs enqueue", () => {
+  assert.match(legacyPathBackfill, /mv\.image_url LIKE '%\/vehicle-photos\/%'/);
+  assert.match(legacyPathBackfill, /INSERT INTO private\.media_storage_migrations/);
+  assert.match(legacyPathBackfill, /ON CONFLICT \(source_bucket, source_path\) DO NOTHING/);
+  assert.match(legacyPathBackfill, /SET resolution = 'linked'/);
+  assert.match(legacyPathBackfill, /'media\.legacy\.lockdown'/);
 });
 
 test("legacy migration verifies exact bytes before finalizing and preserves source", async () => {
