@@ -14,7 +14,7 @@ services:
   - name: dealershot
     github:
       repo: yhorman17/dealershot
-      branch: fix/fix-cutout-rendering
+      branch: feature/retail-ready-configuration-acceptance
       deploy_on_push: false
     dockerfile_path: Dockerfile
     source_dir: /
@@ -34,6 +34,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: "8080"
+      - key: DEPLOYED_COMMIT_SHA
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${_self.COMMIT_HASH}
     health_check:
       http_path: /health
       initial_delay_seconds: 10
@@ -45,7 +49,7 @@ workers:
   - name: background-worker
     github:
       repo: yhorman17/dealershot
-      branch: fix/fix-cutout-rendering
+      branch: feature/retail-ready-configuration-acceptance
       deploy_on_push: false
     dockerfile_path: Dockerfile
     source_dir: /
@@ -69,6 +73,10 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: "60000"
+      - key: DEPLOYED_COMMIT_SHA
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${_self.COMMIT_HASH}
 
 ingress:
   rules:
