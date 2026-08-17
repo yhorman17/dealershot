@@ -61,6 +61,8 @@ The [Phase 1 expansion foundation](docs/DEALERSHOT_EXPANSION_PHASE_1.md) documen
 
 The [photo workflow optimization](docs/DEALERSHOT_PHOTO_WORKFLOW.md) documents fast raw capture, completion sessions, Bulk Photos, lazy desktop Customize, non-destructive Fix Cutout, and the compatibility boundary before the future Media Ledger.
 
+The [NetLook-replacement foundation](docs/DEALERSHOT_NETLOOK_FOUNDATION.md) documents the organization/store domain, configurable Retail Ready evaluation, durable shoots and production records, selective media handling, document snapshots, accounting reports, roles, and honest future-provider boundaries.
+
 ## Database changes
 
 Database changes are version-controlled under `supabase/migrations`. Review and validate migrations in a disposable environment before applying them through the normal Supabase deployment workflow. Do not edit production data manually.
