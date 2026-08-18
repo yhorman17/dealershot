@@ -18,6 +18,7 @@
     "test": "node --test tests/*.test.ts",
     "test:authorization": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-security-policies.ps1",
     "test:hosted:phase1": "node scripts/test-hosted-phase1.mjs",
+    "ops:cleanup:staging-acceptance": "node scripts/ops/cleanup-staging-acceptance.mjs",
     "test:security": "npm run test && npm run test:authorization",
     "verify": "npm run lint && npm run typecheck && npm run build && npm run test:security"
   },
