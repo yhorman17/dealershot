@@ -180,6 +180,14 @@ function BulkCaptureWorkspace() {
     (entry) => entry.state === "queued" || entry.state === "uploading",
   ).length;
   const failed = queueEntries.filter((entry) => entry.state === "failed").length;
+  const failedUploads = queueEntries.filter((entry) => entry.state === "failed");
+  const visibleCameraUploads = queueEntries
+    .filter((entry) => entry.state !== "uploaded")
+    .map((entry) => ({
+      id: entry.id,
+      filename: entry.payload?.file.name ?? "Vehicle photo",
+      state: entry.state as "queued" | "uploading" | "failed",
+    }));
   const acceptedCount = items.length + pending + failed;
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const workflowStage = session?.workflow_stage;
@@ -384,9 +392,11 @@ function BulkCaptureWorkspace() {
           acceptedCount={acceptedCount}
           pending={pending}
           failed={failed}
+          failedUploads={failedUploads}
           busy={busy}
           onOpenCamera={() => setCameraOpen(true)}
           onRetry={() => uploadQueue.retryFailed()}
+          onRetryUpload={(entryId) => uploadQueue.retry(entryId)}
           onFinish={() => void finishTakingPhotos()}
         />
       )}
@@ -398,10 +408,12 @@ function BulkCaptureWorkspace() {
           selectedId={selectedId}
           pending={pending}
           failed={failed}
+          failedUploads={failedUploads}
           busy={busy}
           onSelect={setSelectedId}
           onAddMore={() => setCameraOpen(true)}
           onRetry={() => uploadQueue.retryFailed()}
+          onRetryUpload={(entryId) => uploadQueue.retry(entryId)}
           onRetake={(item) => {
             setReplaceItemId(item.id);
             setCameraOpen(true);
@@ -439,6 +451,8 @@ function BulkCaptureWorkspace() {
           capturedCount={acceptedCount}
           uploadingCount={pending}
           failedCount={failed}
+          uploads={visibleCameraUploads}
+          onRetryUpload={(entryId) => uploadQueue.retry(entryId)}
           doneLabel={replaceItemId ? "Cancel retake" : "Finish photos"}
           onCapture={addCapture}
           onDone={() => {
@@ -460,18 +474,22 @@ function CaptureStage({
   acceptedCount,
   pending,
   failed,
+  failedUploads,
   busy,
   onOpenCamera,
   onRetry,
+  onRetryUpload,
   onFinish,
 }: {
   items: Item[];
   acceptedCount: number;
   pending: number;
   failed: number;
+  failedUploads: UploadEntry<BulkUpload>[];
   busy: string | null;
   onOpenCamera: () => void;
   onRetry: () => void;
+  onRetryUpload: (entryId: string) => void;
   onFinish: () => void;
 }) {
   return (
@@ -489,9 +507,9 @@ function CaptureStage({
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          {failed > 0 && (
+          {failed > 1 && (
             <Button variant="outline" onClick={onRetry}>
-              <RefreshCw className="size-4" /> Retry failed
+              <RefreshCw className="size-4" /> Retry all failed
             </Button>
           )}
           <Button className="min-h-12" onClick={onOpenCamera}>
@@ -507,6 +525,7 @@ function CaptureStage({
           </Button>
         </div>
       </div>
+      <FailedUploadList entries={failedUploads} onRetry={onRetryUpload} />
       <ThumbnailStrip items={items} />
     </section>
   );
@@ -518,10 +537,12 @@ function ReviewStage({
   selectedId,
   pending,
   failed,
+  failedUploads,
   busy,
   onSelect,
   onAddMore,
   onRetry,
+  onRetryUpload,
   onRetake,
   onRemove,
   onClassify,
@@ -535,10 +556,12 @@ function ReviewStage({
   selectedId: string | null;
   pending: number;
   failed: number;
+  failedUploads: UploadEntry<BulkUpload>[];
   busy: string | null;
   onSelect: (id: string) => void;
   onAddMore: () => void;
   onRetry: () => void;
+  onRetryUpload: (entryId: string) => void;
   onRetake: (item: Item) => void;
   onRemove: (item: Item) => void;
   onClassify: (item: Item, value: string | null) => void;
@@ -561,14 +584,15 @@ function ReviewStage({
             <ImagePlus className="size-4" /> Add more
           </Button>
         </div>
-        {failed > 0 && (
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+        {failed > 1 && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
             <span>{failed} uploads failed. Successful photos are still safe.</span>
             <Button size="sm" variant="outline" onClick={onRetry}>
-              Retry
+              Retry all
             </Button>
           </div>
         )}
+        <FailedUploadList entries={failedUploads} onRetry={onRetryUpload} />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {items.map((item, index) => (
             <button
@@ -814,6 +838,33 @@ function ThumbnailStrip({ items }: { items: Item[] }) {
           alt=""
           className="size-20 shrink-0 rounded-md border border-border object-cover"
         />
+      ))}
+    </div>
+  );
+}
+
+function FailedUploadList({
+  entries,
+  onRetry,
+}: {
+  entries: UploadEntry<BulkUpload>[];
+  onRetry: (entryId: string) => void;
+}) {
+  if (!entries.length) return null;
+  return (
+    <div className="mt-4 space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+      {entries.map((entry) => (
+        <div key={entry.id} className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="min-w-0 flex-1 truncate font-medium">
+            {entry.payload?.file.name ?? "Vehicle photo"}
+          </span>
+          <span className="text-xs text-destructive">
+            Upload failed. Check your connection and try again.
+          </span>
+          <Button size="sm" variant="outline" onClick={() => onRetry(entry.id)}>
+            <RefreshCw className="size-3.5" /> Retry
+          </Button>
+        </div>
       ))}
     </div>
   );

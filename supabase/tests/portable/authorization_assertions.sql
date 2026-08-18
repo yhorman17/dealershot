@@ -2127,6 +2127,39 @@ SELECT test.assert_true(
   'repeated Bulk start returns the one existing active workflow'
 );
 RESET ROLE;
+SET "request.jwt.claim.sub" = '';
+SET ROLE service_role;
+SELECT public.finalize_private_bulk_upload(
+  '00000000-0000-0000-0000-000000000002',
+  'fa000000-0000-4000-8000-000000000001',
+  (
+    SELECT id FROM public.photo_capture_sessions
+    WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+      AND vin = '1HGCM82633A004352' AND mode = 'bulk' AND status = 'in_progress'
+  ),
+  'dealer-media-private',
+  'stores/aaaaaaaa-0000-0000-0000-000000000001/sessions/' || (
+    SELECT id FROM public.photo_capture_sessions
+    WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+      AND vin = '1HGCM82633A004352' AND mode = 'bulk' AND status = 'in_progress'
+  ) || '/media/fa000000-0000-4000-8000-000000000001/original/test.jpg',
+  'test.jpg', 'image/jpeg', 1024, 1920, 1080,
+  repeat('a', 64), 0
+);
+SELECT test.assert_true(
+  EXISTS (
+    SELECT 1 FROM public.bulk_photo_items
+    WHERE media_asset_id = 'fa000000-0000-4000-8000-000000000001'
+      AND created_by = '00000000-0000-0000-0000-000000000002'
+  )
+  AND EXISTS (
+    SELECT 1 FROM public.media_variants
+    WHERE media_asset_id = 'fa000000-0000-4000-8000-000000000001'
+      AND variant_type = 'original'
+  ),
+  'trusted server finalizes authorized Bulk media while preserving actor attribution'
+);
+RESET ROLE;
 SET ROLE authenticated;
 SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
 SELECT test.expect_sqlstate(
@@ -2198,6 +2231,15 @@ SELECT test.assert_true(
   'a canceled workflow does not block one future Bulk capture'
 );
 RESET ROLE;
+DELETE FROM private.background_jobs
+WHERE resource_type = 'media_asset'
+  AND resource_id = 'fa000000-0000-4000-8000-000000000001';
+DELETE FROM public.bulk_photo_items
+WHERE media_asset_id = 'fa000000-0000-4000-8000-000000000001';
+DELETE FROM public.media_variants
+WHERE media_asset_id = 'fa000000-0000-4000-8000-000000000001';
+DELETE FROM public.media_assets
+WHERE id = 'fa000000-0000-4000-8000-000000000001';
 DELETE FROM public.photo_capture_sessions
 WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
   AND vehicle_id IS NULL AND vin = '1HGCM82633A004352'
