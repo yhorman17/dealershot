@@ -38,7 +38,7 @@ test("Bulk UI keeps per-file failure and retry state without exposing database e
 
 test("trusted Bulk finalization preserves browser and cross-store authorization", () => {
   const migration = read(
-    "supabase/migrations/20260818203000_fix_bulk_private_upload_finalization.sql",
+    "supabase/migrations/20260818201928_fix_bulk_private_upload_finalization.sql",
   );
   const mediaServer = read("src/lib/api/media.functions.ts");
   assert.match(migration, /current_setting\('request\.jwt\.claim\.role', true\)/);
