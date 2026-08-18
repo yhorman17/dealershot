@@ -35,9 +35,10 @@ test("background removal is explicit and absent from the capture critical path",
 
   assert.doesNotMatch(vehiclePhotos, /cutout-queue|@imgly\/background-removal|removeBackground/);
   assert.match(editor, /const createCutout = async/);
-  assert.match(editor, /await import\("@imgly\/background-removal"\)/);
+  const backgroundRemoval = read("src/lib/background-removal.ts");
+  assert.match(backgroundRemoval, /await import\("@imgly\/background-removal"\)/);
   assert.match(editor, /removeInFlightRef\.current/);
-  assert.match(editor, /removeBackground\(sourceBlob/);
+  assert.match(editor, /removeVehicleBackground\(/);
   assert.match(editor, /Your original photo was not changed\. Try again\./);
   assert.match(editor, /onClick=\{\(\) => void createCutout\(\)\}/);
   assert.equal(existsSync(path.join(root, "src/lib/cutout-queue.ts")), false);

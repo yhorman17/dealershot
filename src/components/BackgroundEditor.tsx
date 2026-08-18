@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Scissors, X } from "lucide-react";
 import { uploadPrivateVariant } from "@/lib/private-media";
+import { removeVehicleBackground } from "@/lib/background-removal";
 
 export type Position = "top" | "bottom" | "tl" | "tr" | "bl" | "br";
 
@@ -764,14 +765,8 @@ export function BackgroundEditor({
     setRemoveProgress(0);
     setRemoveErr(null);
     try {
-      const { removeBackground } = await import("@imgly/background-removal");
-      const blob = await removeBackground(sourceBlob, {
-        model: "isnet_quint8",
-        debug: false,
-        output: { format: "image/png", quality: 1 },
-        progress: (_key, current, total) => {
-          if (total > 0) setRemoveProgress(Math.min(100, Math.round((current / total) * 100)));
-        },
+      const blob = await removeVehicleBackground(sourceBlob, (_key, current, total) => {
+        if (total > 0) setRemoveProgress(Math.min(100, Math.round((current / total) * 100)));
       });
       pendingCutoutBlobRef.current = blob;
       const url = URL.createObjectURL(blob);

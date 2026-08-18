@@ -12,6 +12,7 @@ dist
 dist-ssr
 .output
 .worker
+public/background-removal/
 .vinxi
 .tanstack/**
 .nitro
