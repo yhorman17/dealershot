@@ -1,80 +1,17 @@
-import { lazy, Suspense, useState, useRef, useEffect, type FormEvent } from "react";
+import { lazy, Suspense, useReducer, useState, useRef, useEffect, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CONDITIONS, STATUSES } from "@/lib/vehicle-options";
 import { toast } from "sonner";
 import { ProductSelect } from "@/components/product-ui";
+import {
+  createVehicleFormState,
+  vehicleFormReducer,
+  type VehicleFormValues,
+} from "@/lib/vehicle-form-state";
 
 const VinScannerModal = lazy(() =>
   import("@/components/VinScannerModal").then((module) => ({ default: module.VinScannerModal })),
 );
-
-export type VehicleFormValues = {
-  vin: string;
-  year: string;
-  make: string;
-  model: string;
-  trim: string;
-  series: string;
-  body_class: string;
-  engine: string;
-  cylinders: string;
-  transmission: string;
-  drivetrain: string;
-  fuel_type: string;
-  exterior_color: string;
-  interior_color: string;
-  odometer: string;
-  price: string;
-  msrp: string;
-  sale_price: string;
-  price_description: string;
-  stock_number: string;
-  inventory_type: "new" | "used" | "certified";
-  inventory_arrival_date: string;
-  category: string;
-  warranty_type: string;
-  comments: string;
-  custom_comments: string;
-  tagline: string;
-  publication_description: string;
-  internal_notes: string;
-  condition: string;
-  status: string;
-};
-
-export const emptyVehicleValues: VehicleFormValues = {
-  vin: "",
-  year: "",
-  make: "",
-  model: "",
-  trim: "",
-  series: "",
-  body_class: "",
-  engine: "",
-  cylinders: "",
-  transmission: "",
-  drivetrain: "",
-  fuel_type: "",
-  exterior_color: "",
-  interior_color: "",
-  odometer: "",
-  price: "",
-  msrp: "",
-  sale_price: "",
-  price_description: "",
-  stock_number: "",
-  inventory_type: "used",
-  inventory_arrival_date: new Date().toISOString().slice(0, 10),
-  category: "",
-  warranty_type: "",
-  comments: "",
-  custom_comments: "",
-  tagline: "",
-  publication_description: "",
-  internal_notes: "",
-  condition: "Used",
-  status: "Available",
-};
 
 export function VehicleForm({
   initial,
@@ -90,7 +27,8 @@ export function VehicleForm({
   onCancel: () => void;
 }) {
   const isEdit = Boolean(vehicleId);
-  const [values, setValues] = useState<VehicleFormValues>(initial || emptyVehicleValues);
+  const [formState, dispatch] = useReducer(vehicleFormReducer, initial, createVehicleFormState);
+  const values = formState.values;
   const [decoding, setDecoding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +44,7 @@ export function VehicleForm({
   }, [vinPulse]);
 
   const set = <K extends keyof VehicleFormValues>(k: K, v: VehicleFormValues[K]) =>
-    setValues((p) => ({ ...p, [k]: v }));
+    dispatch({ type: "field", field: k, value: v });
 
   const decodeVin = async () => {
     if (!values.vin.trim()) return;
@@ -120,19 +58,21 @@ export function VehicleForm({
       const json = await res.json();
       const r = json?.Results?.[0];
       if (!r) throw new Error("No data returned");
-      setValues((p) => ({
-        ...p,
-        year: r.ModelYear || p.year,
-        make: r.Make || p.make,
-        model: r.Model || p.model,
-        trim: r.Trim || p.trim,
-        body_class: r.BodyClass || p.body_class,
-        engine: r.EngineModel || r.DisplacementL || p.engine,
-        cylinders: r.EngineCylinders || p.cylinders,
-        transmission: r.TransmissionStyle || p.transmission,
-        drivetrain: r.DriveType || p.drivetrain,
-        fuel_type: r.FuelTypePrimary || p.fuel_type,
-      }));
+      dispatch({
+        type: "patch",
+        values: {
+          year: r.ModelYear || values.year,
+          make: r.Make || values.make,
+          model: r.Model || values.model,
+          trim: r.Trim || values.trim,
+          body_class: r.BodyClass || values.body_class,
+          engine: r.EngineModel || r.DisplacementL || values.engine,
+          cylinders: r.EngineCylinders || values.cylinders,
+          transmission: r.TransmissionStyle || values.transmission,
+          drivetrain: r.DriveType || values.drivetrain,
+          fuel_type: r.FuelTypePrimary || values.fuel_type,
+        },
+      });
       setDecodeMsg("VIN decoded — review and edit as needed.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "VIN decode failed");
@@ -223,7 +163,7 @@ export function VehicleForm({
             <input
               ref={vinInputRef}
               value={values.vin}
-              onChange={(e) => set("vin", e.target.value.toUpperCase())}
+              onChange={(e) => dispatch({ type: "vin", value: e.target.value })}
               readOnly={isEdit}
               className={`form-input flex-1 transition-shadow ${vinPulse ? "ring-2 ring-primary border-primary" : ""} ${isEdit ? "opacity-70 cursor-not-allowed" : ""}`}
               placeholder="17-character VIN"
@@ -272,7 +212,7 @@ export function VehicleForm({
         <Input
           label="Stock number"
           value={values.stock_number}
-          onChange={(v) => set("stock_number", v)}
+          onChange={(v) => dispatch({ type: "stock", value: v })}
         />
       </Section>
 
@@ -287,7 +227,7 @@ export function VehicleForm({
           <VinScannerModal
             onClose={() => setScannerOpen(false)}
             onDetected={(vin) => {
-              set("vin", vin);
+              dispatch({ type: "vin", value: vin });
               setScannerOpen(false);
               setVinPulse(true);
               setTimeout(() => vinInputRef.current?.focus(), 0);

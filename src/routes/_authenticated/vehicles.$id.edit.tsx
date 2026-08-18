@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { VehicleForm, type VehicleFormValues, emptyVehicleValues } from "@/components/VehicleForm";
+import { VehicleForm } from "@/components/VehicleForm";
+import { type VehicleFormValues, emptyVehicleValues } from "@/lib/vehicle-form-state";
 import { PageHeader, PageSkeleton } from "@/components/product-ui";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id/edit")({
