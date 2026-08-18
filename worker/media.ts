@@ -35,6 +35,20 @@ type MediaSource = {
   content_type: string;
 };
 
+type VehicleDeletionOperation = {
+  operation_id: string;
+  vehicle_id: string;
+  storage_status: "queued" | "running" | "succeeded" | "failed";
+  storage_manifest: Array<{ bucket: string; path: string }>;
+};
+
+const VEHICLE_DELETE_BUCKETS = new Set([
+  "dealer-media-private",
+  "dealer-media-legacy-private",
+  "vehicle-photos",
+  "documents",
+]);
+
 function asObject<T>(value: Json | null): T {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("invalid_media_job_payload");
@@ -253,6 +267,67 @@ async function lockdownLegacyBucket(client: SupabaseClient<Database>) {
   return { legacy_bucket_private: true, migrated: status.private };
 }
 
+async function cleanupDeletedVehicleStorage(client: SupabaseClient<Database>, job: BackgroundJob) {
+  const operationId = payloadId(job, "operation_id");
+  const { data, error } = await client.rpc(
+    "worker_get_vehicle_deletion_operation" as never,
+    { _operation_id: operationId } as never,
+  );
+  if (error) throw new Error("vehicle_deletion_lookup_failed");
+  const operation = asObject<VehicleDeletionOperation>(data as Json | null);
+  if (operation.storage_status === "succeeded") {
+    return { already_clean: true, operation_id: operationId };
+  }
+
+  try {
+    const grouped = new Map<string, Set<string>>();
+    for (const object of operation.storage_manifest) {
+      if (
+        !object ||
+        typeof object.bucket !== "string" ||
+        typeof object.path !== "string" ||
+        !VEHICLE_DELETE_BUCKETS.has(object.bucket) ||
+        !object.path ||
+        object.path.startsWith("/") ||
+        object.path.split("/").includes("..")
+      ) {
+        throw new Error("invalid_vehicle_deletion_manifest");
+      }
+      const paths = grouped.get(object.bucket) ?? new Set<string>();
+      paths.add(object.path);
+      grouped.set(object.bucket, paths);
+    }
+
+    let deletedObjectCount = 0;
+    for (const [bucket, uniquePaths] of grouped) {
+      const paths = [...uniquePaths];
+      for (let index = 0; index < paths.length; index += 100) {
+        const batch = paths.slice(index, index + 100);
+        const { error: removeError } = await client.storage.from(bucket).remove(batch);
+        if (removeError) throw new Error("vehicle_storage_delete_failed");
+        deletedObjectCount += batch.length;
+      }
+    }
+
+    const { data: completed, error: completeError } = await client.rpc(
+      "worker_complete_vehicle_deletion_storage_cleanup" as never,
+      { _operation_id: operationId, _deleted_object_count: deletedObjectCount } as never,
+    );
+    if (completeError || completed !== true) throw new Error("vehicle_deletion_finalize_failed");
+    return { operation_id: operationId, deleted_objects: deletedObjectCount };
+  } catch (cause) {
+    const errorCode = cause instanceof Error ? cause.message : "vehicle_storage_cleanup_failed";
+    await client.rpc(
+      "worker_fail_vehicle_deletion_storage_cleanup" as never,
+      {
+        _operation_id: operationId,
+        _safe_error_code: errorCode,
+      } as never,
+    );
+    throw cause;
+  }
+}
+
 export function createMediaJobHandlers(
   client: SupabaseClient<Database>,
 ): Record<string, JobHandler> {
@@ -260,5 +335,6 @@ export function createMediaJobHandlers(
     "media.legacy.migrate": (job) => migrateLegacyMedia(client, job),
     "media.thumbnail.generate": (job) => generateThumbnails(client, job),
     "media.legacy.lockdown": () => lockdownLegacyBucket(client),
+    "vehicle.storage.cleanup": (job) => cleanupDeletedVehicleStorage(client, job),
   };
 }

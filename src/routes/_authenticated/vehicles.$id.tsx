@@ -25,8 +25,9 @@ import { EmptyState, PageHeader, PageSkeleton, StatusBadge } from "@/components/
 import { VehicleOperationsPanel } from "@/components/VehicleOperationsPanel";
 import type { Database } from "@/integrations/supabase/types";
 import { CircleGauge, DollarSign, FileText, History, ListChecks, RadioTower } from "lucide-react";
-import { resolveAuthorizedMediaUrls } from "@/lib/private-media";
+import { clearAuthorizedMediaCache, resolveAuthorizedMediaUrls } from "@/lib/private-media";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
+import { deleteVehicle } from "@/lib/api/vehicles.functions";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id")({
   validateSearch: (search: Record<string, unknown>): { customize?: string } => ({
@@ -51,6 +52,7 @@ function VehicleDetailPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,13 +119,26 @@ function VehicleDetailPage() {
   }, [setSelectedDealershipId, vehicle?.dealership_id]);
 
   const handleDelete = async () => {
-    const { error } = await supabase.from("vehicles").delete().eq("id", id);
-    if (error) {
-      toast.error("Vehicle could not be deleted", { description: error.message });
-      return;
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const outcome = await deleteVehicle({ data: { vehicle_id: id } });
+      if (!outcome.ok) {
+        toast.error("Vehicle could not be deleted", { description: outcome.error.message });
+        return;
+      }
+      clearAuthorizedMediaCache();
+      toast.success(
+        outcome.result.status === "already_deleted" ? "Vehicle already removed" : "Vehicle deleted",
+        outcome.result.storage_status === "succeeded"
+          ? undefined
+          : { description: "Private media cleanup is finishing securely in the background." },
+      );
+      setDeleteOpen(false);
+      await navigate({ to: "/inventory", replace: true });
+    } finally {
+      setDeleting(false);
     }
-    toast.success("Vehicle deleted");
-    navigate({ to: "/inventory" });
   };
 
   if (loading) {
@@ -327,12 +342,16 @@ function VehicleDetailPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep vehicle</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>Keep vehicle</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => void handleDelete()}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDelete();
+              }}
+              disabled={deleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete vehicle
+              {deleting ? "Deleting securely…" : "Delete vehicle"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

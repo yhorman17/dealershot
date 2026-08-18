@@ -491,10 +491,10 @@ SELECT test.expect_sqlstate(
   '42501',
   'vehicle UPDATE WITH CHECK prevents tenant reassignment'
 );
-SELECT test.assert_row_count(
+SELECT test.expect_sqlstate(
   $$DELETE FROM public.vehicles WHERE id = '10000000-0000-0000-0000-000000000002'$$,
-  0,
-  'staff A cannot delete a dealer B vehicle'
+  '42501',
+  'ordinary users cannot bypass the controlled vehicle deletion workflow'
 );
 SELECT test.assert_row_count(
   $$UPDATE public.photos SET shot_type = 'tampered' WHERE id = '30000000-0000-0000-0000-000000000002'$$,
@@ -604,20 +604,18 @@ SELECT test.assert_row_count(
   1,
   'dealer administrator can create a vehicle in their dealership'
 );
-SELECT test.assert_row_count(
-  $$DELETE FROM public.vehicles WHERE id = '10000000-0000-0000-0000-000000000010'$$,
-  1,
-  'dealer administrator can delete a vehicle in their dealership'
+SELECT test.assert_true(
+  public.delete_vehicle('10000000-0000-0000-0000-000000000010')->>'status' = 'deleted',
+  'dealer administrator can delete a vehicle through the controlled workflow'
 );
 SELECT test.assert_row_count(
   $$INSERT INTO public.vehicles (id, dealership_id, make) VALUES ('10000000-0000-0000-0000-000000000011', 'bbbbbbbb-0000-0000-0000-000000000001', 'Second assigned dealer')$$,
   1,
   'dealer administrator can create tenant data in a second assigned dealership'
 );
-SELECT test.assert_row_count(
-  $$DELETE FROM public.vehicles WHERE id = '10000000-0000-0000-0000-000000000011'$$,
-  1,
-  'dealer administrator can administer a second assigned dealership'
+SELECT test.assert_true(
+  public.delete_vehicle('10000000-0000-0000-0000-000000000011')->>'status' = 'deleted',
+  'dealer administrator can administer a second assigned dealership through the workflow'
 );
 SELECT test.assert_row_count(
   $$INSERT INTO storage.objects (bucket_id, name) VALUES ('overlays', 'bbbbbbbb-0000-0000-0000-000000000001/admin-b.png')$$,
@@ -1736,7 +1734,8 @@ SELECT test.assert_true(
 
 -- Queue lifecycle: dedupe, claim, retry with backoff, reclaim, complete, and
 -- terminal failure all use service-only RPCs and durable attempt records.
-DELETE FROM private.background_jobs WHERE job_type LIKE 'media.%';
+DELETE FROM private.background_jobs
+WHERE job_type LIKE 'media.%' OR job_type = 'vehicle.storage.cleanup';
 SET ROLE service_role;
 SELECT (public.enqueue_background_job(
   'system.noop', '{"source":"portable-test"}'::jsonb,
@@ -1836,6 +1835,224 @@ SELECT test.assert_true(
       AND target_profile_id = '00000000-0000-0000-0000-000000000099'
   ),
   'account erasure preserves immutable audit subject identifiers'
+);
+
+-- Vehicle deletion is a privileged, idempotent workflow rather than a raw
+-- table delete. It preserves production history and writes a durable exact
+-- Storage cleanup outbox.
+SELECT test.assert_true(
+  NOT has_table_privilege('authenticated', 'public.vehicles', 'DELETE')
+  AND has_function_privilege('authenticated', 'public.delete_vehicle(uuid)', 'EXECUTE')
+  AND NOT has_table_privilege('authenticated', 'private.vehicle_deletion_operations', 'SELECT')
+  AND NOT has_function_privilege('authenticated', 'public.worker_get_vehicle_deletion_operation(uuid)', 'EXECUTE'),
+  'vehicle deletion exposes only the authorized workflow to ordinary users'
+);
+
+INSERT INTO public.vehicles (id, dealership_id, vin, make, model, stock_number) VALUES
+  ('10000000-0000-4000-8000-000000000010', 'aaaaaaaa-0000-0000-0000-000000000001', 'DELETE-NO-MEDIA', 'Delete', 'Empty', 'DEL-EMPTY'),
+  ('10000000-0000-4000-8000-000000000011', 'aaaaaaaa-0000-0000-0000-000000000001', 'DELETE-WITH-MEDIA', 'Delete', 'Media', 'DEL-MEDIA'),
+  ('10000000-0000-4000-8000-000000000012', 'aaaaaaaa-0000-0000-0000-000000000001', 'DELETE-ACTIVE', 'Delete', 'Active', 'DEL-ACTIVE'),
+  ('10000000-0000-4000-8000-000000000013', 'aaaaaaaa-0000-0000-0000-000000000001', 'DELETE-HISTORY', 'Delete', 'History', 'DEL-HISTORY'),
+  ('10000000-0000-4000-8000-000000000014', 'bbbbbbbb-0000-0000-0000-000000000001', 'DELETE-OTHER', 'Delete', 'Other', 'DEL-OTHER');
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT test.expect_sqlstate(
+  $$SELECT public.delete_vehicle('10000000-0000-4000-8000-000000000010')$$,
+  '42501',
+  'photographers cannot permanently delete vehicles'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.delete_vehicle('10000000-0000-4000-8000-000000000014')$$,
+  '42501',
+  'an unauthorized store identity cannot delete a cross-store vehicle'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000001';
+SELECT (public.delete_vehicle('10000000-0000-4000-8000-000000000010')->>'operation_id') AS empty_delete_operation \gset
+SELECT (public.delete_vehicle('10000000-0000-4000-8000-000000000010')->>'status') AS empty_second_delete_status \gset
+RESET ROLE;
+SELECT test.assert_true(
+  NOT EXISTS (SELECT 1 FROM public.vehicles WHERE id = '10000000-0000-4000-8000-000000000010')
+  AND EXISTS (
+    SELECT 1 FROM private.vehicle_deletion_operations
+    WHERE id = :'empty_delete_operation'::uuid
+      AND storage_manifest = '[]'::jsonb
+      AND storage_status = 'queued'
+  ),
+  'a dependency-free vehicle deletes through the controlled workflow'
+);
+SELECT test.assert_true(
+  :'empty_second_delete_status' = 'already_deleted'
+  AND (
+    SELECT count(*) = 1 FROM public.audit_events
+    WHERE event_type = 'vehicle.deleted'
+      AND payload->>'operation_id' = :'empty_delete_operation'
+  ),
+  'double deletion is idempotent and does not duplicate the audit event'
+);
+
+INSERT INTO public.media_assets (
+  id, organization_id, dealership_id, vehicle_id, uploaded_by,
+  source_type, content_type, byte_size, checksum_sha256,
+  storage_bucket, storage_object_path
+) VALUES (
+  '80000000-0000-4000-8000-000000000011',
+  '11111111-aaaa-4000-8000-000000000001',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '10000000-0000-4000-8000-000000000011',
+  '00000000-0000-0000-0000-000000000001',
+  'capture', 'image/jpeg', 100,
+  repeat('a', 64), 'dealer-media-private',
+  'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/10000000-0000-4000-8000-000000000011/media/80000000-0000-4000-8000-000000000011/original/source.jpg'
+);
+INSERT INTO public.photos (id, vehicle_id, media_asset_id, image_url, original_image_url)
+VALUES (
+  '30000000-0000-4000-8000-000000000011',
+  '10000000-0000-4000-8000-000000000011',
+  '80000000-0000-4000-8000-000000000011',
+  'private-media:80000000-0000-4000-8000-000000000011',
+  'private-media:80000000-0000-4000-8000-000000000011'
+);
+UPDATE public.media_variants
+SET storage_bucket = 'dealer-media-private',
+    storage_path = 'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/10000000-0000-4000-8000-000000000011/media/80000000-0000-4000-8000-000000000011/original/source.jpg',
+    content_type = 'image/jpeg', byte_size = 100, checksum = repeat('a', 64)
+WHERE media_asset_id = '80000000-0000-4000-8000-000000000011';
+INSERT INTO public.media_variants (
+  id, photo_id, media_asset_id, source_variant_id, variant_type, variant_role,
+  image_url, processing_status, storage_bucket, storage_path,
+  content_type, byte_size, checksum
+)
+SELECT
+  '81000000-0000-4000-8000-000000000011', photo.id, photo.media_asset_id,
+  original.id, 'thumbnail', 'thumbnail_small',
+  'private-media:80000000-0000-4000-8000-000000000011', 'completed',
+  'dealer-media-private',
+  'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/10000000-0000-4000-8000-000000000011/media/80000000-0000-4000-8000-000000000011/derivatives/thumbnail-320.webp',
+  'image/webp', 50, repeat('b', 64)
+FROM public.photos AS photo
+JOIN public.media_variants AS original
+  ON original.media_asset_id = photo.media_asset_id AND original.variant_type = 'original'
+WHERE photo.id = '30000000-0000-4000-8000-000000000011';
+INSERT INTO private.background_jobs (
+  id, job_type, payload, dealership_id, resource_type, resource_id, status, dedupe_key
+) VALUES (
+  '82000000-0000-4000-8000-000000000011', 'media.thumbnail.generate',
+  '{"media_asset_id":"80000000-0000-4000-8000-000000000011"}',
+  'aaaaaaaa-0000-0000-0000-000000000001', 'media_asset',
+  '80000000-0000-4000-8000-000000000011', 'queued', 'delete-media-fixture'
+);
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000001';
+SELECT (public.delete_vehicle('10000000-0000-4000-8000-000000000011')->>'operation_id') AS media_delete_operation \gset
+RESET ROLE;
+SELECT test.assert_true(
+  NOT EXISTS (SELECT 1 FROM public.photos WHERE id = '30000000-0000-4000-8000-000000000011')
+  AND NOT EXISTS (SELECT 1 FROM public.media_assets WHERE id = '80000000-0000-4000-8000-000000000011')
+  AND NOT EXISTS (SELECT 1 FROM public.media_variants WHERE media_asset_id = '80000000-0000-4000-8000-000000000011')
+  AND (SELECT status = 'cancelled' FROM private.background_jobs WHERE id = '82000000-0000-4000-8000-000000000011')
+  AND (
+    SELECT jsonb_array_length(storage_manifest) = 2
+    FROM private.vehicle_deletion_operations
+    WHERE id = :'media_delete_operation'::uuid
+  ),
+  'vehicle media, variants, and queued jobs are handled without FK violations'
+);
+
+INSERT INTO public.photo_capture_sessions (
+  id, dealership_id, vehicle_id, mode, status, created_by, started_at
+) VALUES (
+  '83000000-0000-4000-8000-000000000012',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '10000000-0000-4000-8000-000000000012',
+  'guided', 'in_progress', '00000000-0000-0000-0000-000000000003', now()
+);
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000001';
+SELECT test.expect_sqlstate(
+  $$SELECT public.delete_vehicle('10000000-0000-4000-8000-000000000012')$$,
+  '55000',
+  'active capture blocks vehicle deletion without partial changes'
+);
+RESET ROLE;
+SELECT test.assert_true(
+  EXISTS (SELECT 1 FROM public.vehicles WHERE id = '10000000-0000-4000-8000-000000000012')
+  AND EXISTS (SELECT 1 FROM public.photo_capture_sessions WHERE id = '83000000-0000-4000-8000-000000000012'),
+  'blocked active-capture deletion rolls back completely'
+);
+
+UPDATE public.photo_capture_sessions
+SET completion_policy = 'warn', status = 'completed', completed_by = created_by, completed_at = now(),
+    photo_count = 1, duration_seconds = 60
+WHERE id = '83000000-0000-4000-8000-000000000012';
+INSERT INTO public.payout_entries (
+  id, dealership_id, organization_id, employee_id, vehicle_id, photo_shoot_id,
+  task_type, work_date, amount, rule_snapshot, status,
+  approved_by, approved_at, paid_by, paid_at
+) VALUES (
+  '84000000-0000-4000-8000-000000000012',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '11111111-aaaa-4000-8000-000000000001',
+  '00000000-0000-0000-0000-000000000003',
+  '10000000-0000-4000-8000-000000000012',
+  '83000000-0000-4000-8000-000000000012',
+  'photo_shoot', current_date, 25.00, '{"version":1}', 'paid',
+  '00000000-0000-0000-0000-000000000002', now(),
+  '00000000-0000-0000-0000-000000000002', now()
+);
+INSERT INTO public.generated_documents (
+  id, vehicle_id, organization_id, dealership_id, document_type,
+  template_version, vehicle_snapshot, generated_by
+) VALUES (
+  '86000000-0000-4000-8000-000000000012',
+  '10000000-0000-4000-8000-000000000012',
+  '11111111-aaaa-4000-8000-000000000001',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  'window_sticker', 1, '{"stock_number":"DEL-ACTIVE"}',
+  '00000000-0000-0000-0000-000000000001'
+);
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000001';
+SELECT public.delete_vehicle('10000000-0000-4000-8000-000000000012');
+RESET ROLE;
+SELECT test.assert_true(
+  (SELECT vehicle_id IS NULL AND status = 'completed'
+   FROM public.photo_capture_sessions WHERE id = '83000000-0000-4000-8000-000000000012')
+  AND (SELECT vehicle_id IS NULL AND amount = 25.00 AND status = 'paid'
+       AND vehicle_snapshot->>'stock_number' = 'DEL-ACTIVE'
+       FROM public.payout_entries WHERE id = '84000000-0000-4000-8000-000000000012')
+  AND NOT EXISTS (
+    SELECT 1 FROM public.generated_documents
+    WHERE id = '86000000-0000-4000-8000-000000000012'
+  ),
+  'completed capture and paid payout history survive while vehicle documents are removed'
+);
+
+INSERT INTO private.background_jobs (
+  id, job_type, payload, dealership_id, resource_type, resource_id, status,
+  lease_owner, lease_expires_at, dedupe_key
+) VALUES (
+  '85000000-0000-4000-8000-000000000013', 'media.thumbnail.generate',
+  '{"vehicle_id":"10000000-0000-4000-8000-000000000013"}',
+  'aaaaaaaa-0000-0000-0000-000000000001', 'vehicle',
+  '10000000-0000-4000-8000-000000000013', 'running',
+  'portable-worker', now() + interval '1 minute', 'delete-running-fixture'
+);
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000001';
+SELECT test.expect_sqlstate(
+  $$SELECT public.delete_vehicle('10000000-0000-4000-8000-000000000013')$$,
+  '55000',
+  'running processing blocks vehicle deletion'
+);
+RESET ROLE;
+SELECT test.assert_true(
+  EXISTS (SELECT 1 FROM public.vehicles WHERE id = '10000000-0000-4000-8000-000000000013'),
+  'running-job rejection leaves the vehicle intact'
 );
 
 DROP SCHEMA test CASCADE;
