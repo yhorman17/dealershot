@@ -27,8 +27,7 @@ type Vehicle = ExportVehicle & {
 };
 
 function ExportPage() {
-  const { dealerships, selectedDealershipId, setSelectedDealershipId, canSwitchDealerships } =
-    useAccessibleDealerships();
+  const { selectedDealershipId } = useAccessibleDealerships();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -150,21 +149,6 @@ function ExportPage() {
         eyebrow="Delivery"
         title="Photo exports"
         description="Select retail-ready vehicles and package their ordered photo sets into a ZIP archive."
-        actions={
-          canSwitchDealerships ? (
-            <ProductSelect
-              value={selectedDealershipId || ""}
-              onValueChange={(value) => setSelectedDealershipId(value || null)}
-              ariaLabel="Dealership"
-              placeholder="Select dealership"
-              className="w-full sm:w-auto"
-              options={dealerships.map((dealership) => ({
-                value: dealership.id,
-                label: dealership.name,
-              }))}
-            />
-          ) : undefined
-        }
       />
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">

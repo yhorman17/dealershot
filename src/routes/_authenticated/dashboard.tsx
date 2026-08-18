@@ -11,7 +11,6 @@ import {
   EmptyState,
   MetricCard,
   PageHeader,
-  ProductSelect,
   SectionHeader,
   StatusBadge,
 } from "@/components/product-ui";
@@ -51,12 +50,7 @@ function StaffDashboard({
   userEmail: string | null;
   profile: { full_name: string | null; role: string; dealership_id: string | null } | null;
 }) {
-  const {
-    dealerships,
-    selectedDealershipId: dealershipId,
-    setSelectedDealershipId,
-    canSwitchDealerships,
-  } = useAccessibleDealerships();
+  const { selectedDealershipId: dealershipId } = useAccessibleDealerships();
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [needsPhotosCount, setNeedsPhotosCount] = useState(0);
@@ -187,18 +181,6 @@ function StaffDashboard({
         description="Track inventory readiness and jump back into the vehicles that need attention."
         actions={
           <>
-            {canSwitchDealerships && (
-              <ProductSelect
-                value={dealershipId ?? ""}
-                onValueChange={(value) => setSelectedDealershipId(value || null)}
-                ariaLabel="Dealership"
-                placeholder="Select dealership"
-                options={dealerships.map((dealership) => ({
-                  value: dealership.id,
-                  label: dealership.name,
-                }))}
-              />
-            )}
             <Button variant="outline" asChild>
               <Link to="/inventory">View inventory</Link>
             </Button>

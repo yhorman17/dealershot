@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/product-ui";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { formatMiles, formatPrice } from "@/lib/vehicle-options";
+import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id/documents/$documentId")({
   head: () => ({ meta: [{ title: "Print vehicle document — DealerShot" }] }),
@@ -16,6 +17,7 @@ type GeneratedDocument = Database["public"]["Tables"]["generated_documents"]["Ro
 
 function PrintableVehicleDocument() {
   const { id, documentId } = Route.useParams();
+  const { setSelectedDealershipId } = useAccessibleDealerships();
   const [document, setDocument] = useState<GeneratedDocument | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -30,6 +32,9 @@ function PrintableVehicleDocument() {
         setLoading(false);
       });
   }, [documentId, id]);
+  useEffect(() => {
+    if (document?.dealership_id) setSelectedDealershipId(document.dealership_id);
+  }, [document?.dealership_id, setSelectedDealershipId]);
   if (loading) return <main className="ds-page-gutter">Loading document…</main>;
   if (!document)
     return (

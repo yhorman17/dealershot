@@ -6,6 +6,7 @@ import { ImpersonationProvider } from "@/hooks/use-impersonation";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { Button } from "@/components/ui/button";
 import { PageSkeleton } from "@/components/product-ui";
+import { ActiveDealershipProvider } from "@/hooks/use-accessible-dealerships";
 
 export const Route = createFileRoute("/_authenticated")({
   component: AuthenticatedLayout,
@@ -53,9 +54,11 @@ function AuthenticatedLayout() {
   return (
     <ImpersonationProvider>
       <ImpersonationBanner />
-      <AppNav>
-        <Outlet />
-      </AppNav>
+      <ActiveDealershipProvider>
+        <AppNav>
+          <Outlet />
+        </AppNav>
+      </ActiveDealershipProvider>
     </ImpersonationProvider>
   );
 }

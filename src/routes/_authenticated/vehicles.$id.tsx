@@ -26,6 +26,7 @@ import { VehicleOperationsPanel } from "@/components/VehicleOperationsPanel";
 import type { Database } from "@/integrations/supabase/types";
 import { CircleGauge, DollarSign, FileText, History, ListChecks, RadioTower } from "lucide-react";
 import { resolveAuthorizedMediaUrls } from "@/lib/private-media";
+import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id")({
   validateSearch: (search: Record<string, unknown>): { customize?: string } => ({
@@ -42,6 +43,7 @@ function VehicleDetailPage() {
   const { customize } = Route.useSearch();
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { setSelectedDealershipId } = useAccessibleDealerships();
   const canDelete = profile?.role === "owner" || profile?.role === "dealer_admin";
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [heroUrl, setHeroUrl] = useState<string | null>(null);
@@ -109,6 +111,10 @@ function VehicleDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (vehicle?.dealership_id) setSelectedDealershipId(vehicle.dealership_id);
+  }, [setSelectedDealershipId, vehicle?.dealership_id]);
 
   const handleDelete = async () => {
     const { error } = await supabase.from("vehicles").delete().eq("id", id);

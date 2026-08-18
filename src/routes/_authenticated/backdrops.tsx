@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Aperture, Eye, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EmptyState, PageHeader, ProductSelect } from "@/components/product-ui";
+import { EmptyState, ErrorState, PageHeader } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { MediaPreviewDialog, RenameMediaDialog } from "@/components/MediaAssetDialogs";
@@ -37,13 +37,8 @@ type Backdrop = {
 
 function BackdropsPage() {
   const { dealership } = Route.useSearch();
-  const {
-    dealerships,
-    selectedDealershipId,
-    setSelectedDealershipId,
-    loadingDealerships,
-    canSwitchDealerships,
-  } = useAccessibleDealerships(dealership);
+  const { selectedDealershipId, loadingDealerships, requestedDealershipDenied } =
+    useAccessibleDealerships(dealership);
   const [items, setItems] = useState<Backdrop[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -98,6 +93,14 @@ function BackdropsPage() {
     await load();
   };
 
+  if (requestedDealershipDenied) {
+    return (
+      <main className="ds-page-gutter">
+        <ErrorState description="This backdrop link belongs to a store you cannot access." />
+      </main>
+    );
+  }
+
   return (
     <main className="ds-page-gutter">
       <PageHeader
@@ -106,18 +109,6 @@ function BackdropsPage() {
         description="Manage approved showroom and lot backgrounds for processed vehicle photos."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {canSwitchDealerships && (
-              <ProductSelect
-                value={selectedDealershipId || ""}
-                onValueChange={(value) => setSelectedDealershipId(value || null)}
-                ariaLabel="Dealership"
-                placeholder="Select dealership"
-                options={dealerships.map((dealership) => ({
-                  value: dealership.id,
-                  label: dealership.name,
-                }))}
-              />
-            )}
             <Button onClick={() => setShowForm(true)} disabled={!selectedDealershipId}>
               <Plus className="size-4" />
               Add backdrop

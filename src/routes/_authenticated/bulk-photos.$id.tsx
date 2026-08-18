@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader, ProductSelect, StatusBadge } from "@/components/product-ui";
 import { SHOT_TYPES } from "@/components/VehiclePhotos";
 import { toast } from "sonner";
+import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import {
   archivePrivateMedia,
   resolveAuthorizedMediaUrls,
@@ -86,6 +87,7 @@ function BulkPhotoWorkspace() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const { setSelectedDealershipId } = useAccessibleDealerships();
   const [session, setSession] = useState<Session | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -141,6 +143,10 @@ function BulkPhotoWorkspace() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (session?.dealership_id) setSelectedDealershipId(session.dealership_id);
+  }, [session?.dealership_id, setSelectedDealershipId]);
 
   const uploadQueue = useMemo(
     () =>

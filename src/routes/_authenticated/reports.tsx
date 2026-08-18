@@ -69,8 +69,7 @@ type PayoutRecord = {
 type ReportView = "payouts" | "daily" | "no_photos" | "short_shoot" | "processing" | "attention";
 
 function ReportsPage() {
-  const { dealerships, selectedDealership, selectedDealershipId, setSelectedDealershipId } =
-    useAccessibleDealerships();
+  const { selectedDealership, selectedDealershipId } = useAccessibleDealerships();
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = `${today.slice(0, 8)}01`;
   const [fromDate, setFromDate] = useState(monthStart);
@@ -147,8 +146,6 @@ function ReportsPage() {
         onViewChange={setView}
         dealershipId={selectedDealershipId}
         dealershipName={selectedDealership?.name ?? "Dealership"}
-        dealerships={dealerships}
-        onDealershipChange={setSelectedDealershipId}
         fromDate={fromDate}
         toDate={toDate}
         setFromDate={setFromDate}
@@ -222,19 +219,7 @@ function ReportsPage() {
 
       <ReportNav value={view} onChange={setView} />
 
-      <section className="ds-surface mb-5 grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5 print:hidden">
-        <Select value={selectedDealershipId ?? ""} onValueChange={setSelectedDealershipId}>
-          <SelectTrigger className="h-11">
-            <SelectValue placeholder="Dealership" />
-          </SelectTrigger>
-          <SelectContent>
-            {dealerships.map((item) => (
-              <SelectItem key={item.id} value={item.id}>
-                {item.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <section className="ds-surface mb-5 grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4 print:hidden">
         <Input
           aria-label="Report start date"
           type="date"
@@ -307,8 +292,8 @@ function ReportsPage() {
       ) : (
         <>
           <div className="hidden overflow-x-auto rounded-lg border border-border bg-card lg:block">
-            <table className="w-full min-w-[1100px] text-left text-xs">
-              <thead className="sticky top-16 bg-secondary text-muted-foreground">
+            <table className="w-full min-w-[1100px] border-collapse text-left text-xs">
+              <thead className="bg-secondary text-muted-foreground">
                 <tr>
                   {[
                     "Employee",
@@ -584,8 +569,6 @@ function OperationalReport({
   onViewChange,
   dealershipId,
   dealershipName,
-  dealerships,
-  onDealershipChange,
   fromDate,
   toDate,
   setFromDate,
@@ -595,8 +578,6 @@ function OperationalReport({
   onViewChange: (value: ReportView) => void;
   dealershipId: string | null;
   dealershipName: string;
-  dealerships: Array<{ id: string; name: string }>;
-  onDealershipChange: (value: string) => void;
   fromDate: string;
   toDate: string;
   setFromDate: (value: string) => void;
@@ -744,19 +725,7 @@ function OperationalReport({
         }
       />
       <ReportNav value={view} onChange={onViewChange} />
-      <section className="ds-surface mb-5 grid gap-3 p-4 sm:grid-cols-3 print:hidden">
-        <Select value={dealershipId ?? ""} onValueChange={onDealershipChange}>
-          <SelectTrigger className="h-11">
-            <SelectValue placeholder="Dealership" />
-          </SelectTrigger>
-          <SelectContent>
-            {dealerships.map((item) => (
-              <SelectItem key={item.id} value={item.id}>
-                {item.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <section className="ds-surface mb-5 grid gap-3 p-4 sm:grid-cols-2 print:hidden">
         {view === "daily" ? (
           <>
             <Input

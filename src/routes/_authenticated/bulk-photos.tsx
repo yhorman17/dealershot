@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PageHeader, ProductSelect, StatusBadge } from "@/components/product-ui";
+import { PageHeader, StatusBadge } from "@/components/product-ui";
 import { toast } from "sonner";
 
 const VinScannerModal = lazy(() =>
@@ -34,8 +34,7 @@ type Session = {
 function BulkPhotosPage() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
-  const { dealerships, selectedDealershipId, setSelectedDealershipId, canSwitchDealerships } =
-    useAccessibleDealerships();
+  const { selectedDealership, selectedDealershipId } = useAccessibleDealerships();
   const [vin, setVin] = useState("");
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,19 +125,14 @@ function BulkPhotosPage() {
         description="Capture raw originals now. Organize and prepare them in the office later."
       />
       <section className="ds-surface mb-6 p-4 sm:p-5">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-          {canSwitchDealerships && (
-            <div>
-              <label className="mb-1.5 block text-xs font-medium">Dealership</label>
-              <ProductSelect
-                value={selectedDealershipId ?? ""}
-                onValueChange={setSelectedDealershipId}
-                ariaLabel="Dealership"
-                options={dealerships.map((item) => ({ value: item.id, label: item.name }))}
-              />
-            </div>
-          )}
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <div>
+            <p className="mb-1.5 text-xs text-muted-foreground">
+              Capturing for{" "}
+              <strong className="font-semibold text-foreground">
+                {selectedDealership?.name ?? "your active store"}
+              </strong>
+            </p>
             <label htmlFor="bulk-vin" className="mb-1.5 block text-xs font-medium">
               VIN
             </label>

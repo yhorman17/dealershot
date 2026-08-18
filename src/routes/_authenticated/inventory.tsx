@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { CONDITIONS, STATUSES, formatPrice, formatMiles } from "@/lib/vehicle-options";
-import { Camera, CarFront, Plus, SlidersHorizontal, X } from "lucide-react";
+import { Camera, CarFront, Plus, ShieldX, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -21,6 +21,7 @@ import {
 } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { resolveAuthorizedMediaUrls } from "@/lib/private-media";
+import { useAuth } from "@/hooks/use-auth";
 import {
   parseReadinessReasons,
   readinessLabel,
@@ -73,8 +74,10 @@ type Vehicle = {
 
 function InventoryPage() {
   const initialSearch = Route.useSearch();
-  const { dealerships, selectedDealershipId, setSelectedDealershipId, canSwitchDealerships } =
-    useAccessibleDealerships();
+  const { profile } = useAuth();
+  const { selectedDealershipId, capabilities, loadingCapabilities } = useAccessibleDealerships();
+  const canAccessInventory =
+    profile?.role !== "staff" || Boolean(capabilities?.capture || capabilities?.media);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(initialSearch.q ?? "");
@@ -89,7 +92,8 @@ function InventoryPage() {
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    if (!selectedDealershipId) {
+    if (loadingCapabilities || !canAccessInventory || !selectedDealershipId) {
+      setVehicles([]);
       setLoading(false);
       return;
     }
@@ -200,7 +204,7 @@ function InventoryPage() {
       setVehicles(list);
       setLoading(false);
     })();
-  }, [selectedDealershipId, reloadKey]);
+  }, [canAccessInventory, loadingCapabilities, selectedDealershipId, reloadKey]);
 
   const years = useMemo(() => {
     const set = new Set<number>();
@@ -260,6 +264,25 @@ function InventoryPage() {
     setPriceFilter("");
   };
 
+  if (!loadingCapabilities && !canAccessInventory) {
+    return (
+      <main className="ds-page-gutter">
+        <PageHeader
+          eyebrow="Vehicle operations"
+          title="Inventory access required"
+          description="Your dealership role is focused on reporting and does not include vehicle or media access."
+        />
+        <div className="ds-surface">
+          <EmptyState
+            icon={<ShieldX className="size-5" />}
+            title="Inventory is not part of this role"
+            description="Use Production & payouts for authorized accounting work. A manager can update your store capabilities when vehicle access is required."
+          />
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="ds-page-gutter">
       <PageHeader
@@ -293,23 +316,6 @@ function InventoryPage() {
             className="min-w-0 flex-1"
           />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:flex">
-            {canSwitchDealerships && (
-              <Select
-                value={selectedDealershipId || ""}
-                onValueChange={(value) => setSelectedDealershipId(value || null)}
-              >
-                <SelectTrigger className="h-11 min-w-44 bg-card">
-                  <SelectValue placeholder="Select dealership" />
-                </SelectTrigger>
-                <SelectContent>
-                  {dealerships.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
             <Select
               value={yearFilter || "all"}
               onValueChange={(value) => setYearFilter(value === "all" ? "" : value)}
@@ -487,8 +493,8 @@ function InventoryPage() {
       ) : (
         <>
           <div className="motion-content hidden overflow-x-auto rounded-lg border border-border bg-card xl:block">
-            <table className="w-full min-w-[1100px] text-left text-xs">
-              <thead className="sticky top-16 z-10 bg-secondary text-muted-foreground">
+            <table className="w-full min-w-[1100px] border-collapse text-left text-xs">
+              <thead className="bg-secondary text-muted-foreground">
                 <tr>
                   {[
                     "Vehicle",

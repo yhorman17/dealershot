@@ -6,7 +6,7 @@ import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { CONDITIONS, STATUSES } from "@/lib/vehicle-options";
 import { FileImage, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EmptyState, PageHeader, ProductSelect } from "@/components/product-ui";
+import { EmptyState, ErrorState, PageHeader, ProductSelect } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -119,13 +119,8 @@ type DocumentRow = {
 
 function DocumentsPage() {
   const { dealership } = Route.useSearch();
-  const {
-    dealerships,
-    selectedDealershipId,
-    setSelectedDealershipId,
-    loadingDealerships,
-    canSwitchDealerships,
-  } = useAccessibleDealerships(dealership);
+  const { selectedDealershipId, loadingDealerships, requestedDealershipDenied } =
+    useAccessibleDealerships(dealership);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -186,6 +181,14 @@ function DocumentsPage() {
     void load();
   };
 
+  if (requestedDealershipDenied) {
+    return (
+      <main className="ds-page-gutter">
+        <ErrorState description="This document link belongs to a store you cannot access." />
+      </main>
+    );
+  }
+
   return (
     <main className="ds-page-gutter">
       <PageHeader
@@ -194,18 +197,6 @@ function DocumentsPage() {
         description="Maintain reusable window stickers, disclosures, and supporting images, then attach them to inventory."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {canSwitchDealerships && (
-              <ProductSelect
-                value={selectedDealershipId || ""}
-                onValueChange={(value) => setSelectedDealershipId(value || null)}
-                ariaLabel="Dealership"
-                placeholder="Select dealership"
-                options={dealerships.map((dealership) => ({
-                  value: dealership.id,
-                  label: dealership.name,
-                }))}
-              />
-            )}
             <Button onClick={() => setShowForm(true)} disabled={!selectedDealershipId}>
               <Plus className="size-4" />
               Add document

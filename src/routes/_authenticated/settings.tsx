@@ -37,8 +37,7 @@ const PROCESSING_CATEGORIES = [
 
 function SettingsPage() {
   const { profile } = useAuth();
-  const { dealerships, selectedDealership, selectedDealershipId, setSelectedDealershipId } =
-    useAccessibleDealerships();
+  const { selectedDealership, selectedDealershipId } = useAccessibleDealerships();
   const [loadingAccess, setLoadingAccess] = useState(profile?.role === "staff");
   const [canManageSettings, setCanManageSettings] = useState(profile?.role !== "staff");
   const [loading, setLoading] = useState(true);
@@ -171,17 +170,6 @@ function SettingsPage() {
     return true;
   };
 
-  const storePicker = (
-    <ProductSelect
-      value={selectedDealershipId ?? ""}
-      onValueChange={setSelectedDealershipId}
-      options={dealerships.map((item) => ({ value: item.id, label: item.name }))}
-      placeholder="Select a store"
-      className="w-full sm:w-64"
-      ariaLabel="Store to configure"
-    />
-  );
-
   if (loadingAccess) {
     return (
       <main className="ds-page-gutter">
@@ -215,7 +203,13 @@ function SettingsPage() {
         eyebrow="Store configuration"
         title="Operational settings"
         description="Define what Retail Ready means for this rooftop, what photographers must capture, and how completed work is paid."
-        actions={storePicker}
+        actions={
+          selectedDealership ? (
+            <StatusBadge tone="info" className="min-h-8 px-3">
+              Configuring {selectedDealership.name}
+            </StatusBadge>
+          ) : null
+        }
       />
 
       {!selectedDealershipId ? (

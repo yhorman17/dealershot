@@ -9,11 +9,11 @@ function source(relativePath: string) {
   return readFileSync(path.join(root, relativePath), "utf8");
 }
 
-test("resource routes use the shared RLS-filtered dealership selector", () => {
+test("resource routes use the shared RLS-filtered global dealership context", () => {
   for (const name of ["overlays", "backdrops", "documents", "inventory", "export"]) {
     const route = source(`src/routes/_authenticated/${name}.tsx`);
     assert.match(route, /useAccessibleDealerships/);
-    assert.match(route, /canSwitchDealerships/);
+    assert.doesNotMatch(route, /placeholder="Select dealership"/);
   }
 });
 

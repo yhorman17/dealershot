@@ -1,5 +1,9 @@
 # DealerShot product context
 
+## Register
+
+product
+
 DealerShot is an authenticated automotive operations product for dealership staff, inventory managers, photographers, sales managers, dealer administrators, and platform owners. It keeps vehicle intake, guided photography, image processing, supporting documents, and exports in one tenant-protected workspace.
 
 The product must optimize for speed, clarity, confidence, and low-friction repetition during a busy dealership workday. It is used on desktop inside a dealership and on mobile outdoors beside vehicles, so controls must remain legible in glare, touch targets must be comfortable, and the interface must preserve useful density without becoming cluttered.

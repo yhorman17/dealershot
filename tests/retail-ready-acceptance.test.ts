@@ -117,13 +117,13 @@ test("Daily Activity uses a trusted tenant-scoped capture projection", () => {
 
 test("photographers are contained before the settings editor renders", () => {
   const settings = read("src/routes/_authenticated/settings.tsx");
-  const navigation = read("src/components/AppNav.tsx");
+  const storeContext = read("src/hooks/use-accessible-dealerships.tsx");
   const migration = read("supabase/migrations/20260817193000_hosted_capture_and_access_fixes.sql");
 
   assert.match(settings, /rpc\("get_current_user_store_capabilities"/);
-  assert.match(navigation, /rpc\("get_current_user_store_capabilities"/);
+  assert.match(storeContext, /rpc\("get_current_user_store_capabilities"/);
   assert.doesNotMatch(settings, /from\("profile_dealerships"\)/);
-  assert.doesNotMatch(navigation, /from\("profile_dealerships"\)/);
+  assert.doesNotMatch(storeContext, /from\("profile_dealerships"\)/);
   assert.match(migration, /private\.current_user_has_store_capability/);
   assert.match(settings, /if \(!canManageSettings\)/);
   assert.match(settings, /Settings access required/);

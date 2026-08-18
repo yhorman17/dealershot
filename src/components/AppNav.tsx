@@ -1,11 +1,13 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Aperture,
   BarChart3,
   Building2,
+  Check,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   FileImage,
   FileOutput,
   Images,
@@ -42,45 +44,38 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { supabase } from "@/integrations/supabase/client";
+import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
+import { isStoreSwitchLocked } from "@/lib/active-store";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard };
-type StoreCapabilities = {
-  capture: boolean;
-  media: boolean;
-  documents: boolean;
-  reports: boolean;
-  settings: boolean;
-};
-
 export function AppNav({ children }: { children: ReactNode }) {
   const { profile, user, signOut } = useAuth();
+  const {
+    dealerships,
+    selectedDealership,
+    selectedDealershipId,
+    setSelectedDealershipId,
+    loadingDealerships,
+    dealershipError,
+    canSwitchDealerships,
+    capabilities,
+  } = useAccessibleDealerships();
   const isOwner = profile?.role === "owner";
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [capabilities, setCapabilities] = useState<StoreCapabilities | null>(null);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-
-  useEffect(() => {
-    if (!profile?.id || !profile.dealership_id || profile.role !== "staff") {
-      setCapabilities(null);
-      return;
-    }
-    void supabase
-      .rpc("get_current_user_store_capabilities", { _dealership_id: profile.dealership_id })
-      .then(({ data, error }) => {
-        setCapabilities(error ? null : (data as StoreCapabilities));
-      });
-  }, [profile?.dealership_id, profile?.id, profile?.role]);
 
   const staffCanUse = (area: "capture" | "media" | "documents" | "reports" | "settings") => {
     if (profile?.role !== "staff") return true;
     return capabilities?.[area] ?? false;
   };
+  const canUseInventory =
+    profile?.role !== "staff" || Boolean(capabilities?.capture || capabilities?.media);
+  const canAddVehicle = profile?.role !== "staff" || Boolean(capabilities?.media);
 
   const items: NavItem[] = [
     { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
-    { to: "/inventory", label: "Inventory", icon: PackageSearch },
+    ...(canUseInventory ? [{ to: "/inventory", label: "Inventory", icon: PackageSearch }] : []),
     ...(staffCanUse("capture") ? [{ to: "/bulk-photos", label: "Bulk Photos", icon: Camera }] : []),
     ...(staffCanUse("media")
       ? [
@@ -116,6 +111,7 @@ export function AppNav({ children }: { children: ReactNode }) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("");
+  const switchLocked = isStoreSwitchLocked(pathname);
 
   const renderNavigation = (isCollapsed: boolean, showMobileClose = false) => (
     <>
@@ -151,6 +147,17 @@ export function AppNav({ children }: { children: ReactNode }) {
           </SheetClose>
         )}
       </div>
+      <StoreContextControl
+        collapsed={isCollapsed}
+        dealerships={dealerships}
+        selectedDealershipId={selectedDealershipId}
+        selectedDealership={selectedDealership}
+        loading={loadingDealerships}
+        error={dealershipError}
+        canSwitch={canSwitchDealerships}
+        disabled={switchLocked}
+        onSelect={setSelectedDealershipId}
+      />
       <nav aria-label="Primary navigation" className="flex-1 overflow-y-auto px-2 py-4">
         {!isCollapsed && (
           <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/45">
@@ -200,7 +207,9 @@ export function AppNav({ children }: { children: ReactNode }) {
               Protected workspace
             </div>
             <p className="mt-1 text-[11px] leading-4 text-sidebar-foreground/50">
-              Access follows your active dealership role.
+              {selectedDealership
+                ? `Operating in ${selectedDealership.name}.`
+                : "Access follows your active dealership role."}
             </p>
           </div>
         )}
@@ -268,20 +277,22 @@ export function AppNav({ children }: { children: ReactNode }) {
                 <p className="truncate text-sm font-semibold tracking-[-0.01em] text-foreground">
                   {title}
                 </p>
-                <p className="hidden truncate text-xs text-muted-foreground sm:block">
-                  Dealer operations workspace
+                <p className="truncate text-[11px] text-muted-foreground sm:text-xs">
+                  {selectedDealership?.name ?? "Dealer operations workspace"}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <Button asChild size="sm" className="hidden sm:inline-flex">
-                <Link
-                  to="/vehicles/new"
-                  search={{ dealership: profile?.dealership_id ?? undefined }}
-                >
-                  <Plus aria-hidden className="size-4" /> Add vehicle
-                </Link>
-              </Button>
+              {canAddVehicle && (
+                <Button asChild size="sm" className="hidden sm:inline-flex">
+                  <Link
+                    to="/vehicles/new"
+                    search={{ dealership: selectedDealershipId ?? undefined }}
+                  >
+                    <Plus aria-hidden className="size-4" /> Add vehicle
+                  </Link>
+                </Button>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -323,12 +334,121 @@ export function AppNav({ children }: { children: ReactNode }) {
               </DropdownMenu>
             </div>
           </header>
-          <div key={pathname} className="motion-page">
+          <div key={`${pathname}:${selectedDealershipId ?? "no-store"}`} className="motion-page">
             {children}
           </div>
         </div>
       </div>
     </TooltipProvider>
+  );
+}
+
+type StoreContextControlProps = {
+  collapsed: boolean;
+  dealerships: ReturnType<typeof useAccessibleDealerships>["dealerships"];
+  selectedDealershipId: string | null;
+  selectedDealership: ReturnType<typeof useAccessibleDealerships>["selectedDealership"];
+  loading: boolean;
+  error: string | null;
+  canSwitch: boolean;
+  disabled: boolean;
+  onSelect: (dealershipId: string | null) => void;
+};
+
+function StoreContextControl({
+  collapsed,
+  dealerships,
+  selectedDealershipId,
+  selectedDealership,
+  loading,
+  error,
+  canSwitch,
+  disabled,
+  onSelect,
+}: StoreContextControlProps) {
+  const label = loading
+    ? "Loading stores…"
+    : error
+      ? "Store access unavailable"
+      : (selectedDealership?.name ?? "No authorized store");
+  const trigger = (
+    <button
+      type="button"
+      disabled={!canSwitch || disabled || loading || Boolean(error)}
+      aria-label={
+        disabled
+          ? `Active store: ${label}. Finish the current vehicle task before switching stores.`
+          : `Active store: ${label}`
+      }
+      className={cn(
+        "motion-button flex min-h-11 w-full items-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent/45 px-2.5 text-left text-sidebar-foreground hover:bg-sidebar-accent focus-visible:outline-sidebar-ring disabled:cursor-default disabled:opacity-100",
+        collapsed && "mx-auto size-11 w-11 justify-center px-0",
+      )}
+    >
+      <Building2 aria-hidden className="size-4 shrink-0 text-sidebar-primary" />
+      {!collapsed && (
+        <>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/45">
+              {selectedDealership?.organization_name ?? "Active store"}
+            </span>
+            <span className="block truncate text-xs font-semibold">{label}</span>
+          </span>
+          {canSwitch && !disabled && (
+            <ChevronsUpDown aria-hidden className="size-4 shrink-0 text-sidebar-foreground/45" />
+          )}
+        </>
+      )}
+    </button>
+  );
+
+  return (
+    <div className={cn("border-b border-sidebar-border p-2", collapsed && "px-1.5")}>
+      {canSwitch && !disabled ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+          <DropdownMenuContent side={collapsed ? "right" : "bottom"} align="start" className="w-72">
+            <DropdownMenuLabel>
+              <span className="block text-sm font-semibold">Switch active store</span>
+              <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                The workspace follows this selection.
+              </span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {dealerships.map((dealership) => (
+              <DropdownMenuItem
+                key={dealership.id}
+                onSelect={() => onSelect(dealership.id)}
+                className="min-h-11 gap-3"
+              >
+                <Check
+                  aria-hidden
+                  className={cn(
+                    "size-4 shrink-0",
+                    selectedDealershipId === dealership.id ? "opacity-100" : "opacity-0",
+                  )}
+                />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{dealership.name}</span>
+                  {dealership.organization_name && (
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {dealership.organization_name}
+                    </span>
+                  )}
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        trigger
+      )}
+      {!collapsed && disabled && (
+        <p className="mt-1.5 px-1 text-[10px] leading-4 text-sidebar-foreground/45">
+          Finish the current vehicle task before switching stores.
+        </p>
+      )}
+    </div>
   );
 }
 

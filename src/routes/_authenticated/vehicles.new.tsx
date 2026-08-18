@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { VehicleForm } from "@/components/VehicleForm";
 import { CarFront } from "lucide-react";
-import { EmptyState, PageHeader, ProductSelect } from "@/components/product-ui";
+import { EmptyState, PageHeader, StatusBadge } from "@/components/product-ui";
 
 export const Route = createFileRoute("/_authenticated/vehicles/new")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -18,11 +18,24 @@ function NewVehiclePage() {
   const { profile } = useAuth();
   const { dealership } = Route.useSearch();
   const {
-    dealerships,
+    selectedDealership,
     selectedDealershipId: dealershipId,
-    setSelectedDealershipId: setDealershipId,
-    canSwitchDealerships,
+    requestedDealershipDenied,
   } = useAccessibleDealerships(dealership);
+
+  if (requestedDealershipDenied) {
+    return (
+      <main className="ds-page-gutter">
+        <div className="ds-surface">
+          <EmptyState
+            icon={<CarFront className="size-5" />}
+            title="Store access required"
+            description="This add-vehicle link belongs to a store you cannot access. Choose an authorized store from the global selector."
+          />
+        </div>
+      </main>
+    );
+  }
 
   if (!dealershipId) {
     return (
@@ -50,18 +63,11 @@ function NewVehiclePage() {
         description="Decode the VIN, verify the inventory details, then continue directly into the photo workspace."
       />
 
-      {canSwitchDealerships && dealerships.length > 1 && (
+      {selectedDealership && (
         <div className="mb-6">
-          <label className="block text-xs font-medium text-card-foreground mb-1.5">
-            Dealership
-          </label>
-          <ProductSelect
-            value={dealershipId || ""}
-            onValueChange={setDealershipId}
-            ariaLabel="Dealership"
-            className="max-w-sm"
-            options={dealerships.map((item) => ({ value: item.id, label: item.name }))}
-          />
+          <StatusBadge tone="info" className="min-h-8 px-3">
+            Adding to {selectedDealership.name}
+          </StatusBadge>
         </div>
       )}
 
