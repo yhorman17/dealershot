@@ -39,6 +39,7 @@ export function VehicleForm({
   const [scannerOpen, setScannerOpen] = useState(false);
   const [vinPulse, setVinPulse] = useState(false);
   const vinInputRef = useRef<HTMLInputElement | null>(null);
+  const savingRef = useRef(false);
   useEffect(() => {
     if (!vinPulse) return;
     const t = setTimeout(() => setVinPulse(false), 1000);
@@ -85,6 +86,7 @@ export function VehicleForm({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (savingRef.current) return;
     setError(null);
     const fe: { odometer?: string; price?: string } = {};
     if (values.odometer.trim() !== "" && isNaN(Number(values.odometer)))
@@ -93,6 +95,7 @@ export function VehicleForm({
       fe.price = "Enter a valid number";
     setFieldErrors(fe);
     if (fe.odometer || fe.price) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const basePayload = {
@@ -149,6 +152,7 @@ export function VehicleForm({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };

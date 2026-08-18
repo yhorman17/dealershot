@@ -11,7 +11,7 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
-const migration = read("supabase/migrations/20260818182836_bulk_first_capture_workflow.sql");
+const migration = read("supabase/migrations/20260818190335_bulk_first_capture_workflow.sql");
 
 test("Bulk is the safe default and disabled defaults fall back predictably", () => {
   assert.deepEqual(parseCaptureMethodConfiguration({}), {

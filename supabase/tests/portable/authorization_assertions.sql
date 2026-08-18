@@ -957,7 +957,7 @@ INSERT INTO public.photo_capture_sessions (
   '40000000-0000-0000-0000-000000000001',
   'aaaaaaaa-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000001',
-  '1HGCM82633A004352',
+  '1HGCM82633A004353',
   'bulk',
   '00000000-0000-0000-0000-000000000003'
 );
@@ -2110,6 +2110,22 @@ SELECT test.assert_true(
   ),
   'authorized store user can start the enabled Bulk method'
 );
+SELECT test.assert_true(
+  (public.start_photo_capture_session(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    NULL, '1HGCM82633A004352', 'bulk'
+  )).id = (
+    SELECT id FROM public.photo_capture_sessions
+    WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+      AND vin = '1HGCM82633A004352' AND mode = 'bulk' AND status = 'in_progress'
+  )
+  AND (
+    SELECT count(*) = 1 FROM public.photo_capture_sessions
+    WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+      AND vin = '1HGCM82633A004352' AND mode = 'bulk' AND status = 'in_progress'
+  ),
+  'repeated Bulk start returns the one existing active workflow'
+);
 RESET ROLE;
 SET ROLE authenticated;
 SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
@@ -2122,11 +2138,71 @@ SELECT test.expect_sqlstate(
   'capture staff cannot start Bulk in another store'
 );
 RESET ROLE;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000004';
+SELECT test.expect_sqlstate(
+  $$SELECT public.cancel_bulk_capture_workflow((
+      SELECT id FROM public.photo_capture_sessions
+      WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+        AND vin = '1HGCM82633A004352' AND mode = 'bulk' AND status = 'in_progress'
+    ))$$,
+  '42501',
+  'cross-store staff cannot cancel another store Bulk workflow'
+);
+RESET ROLE;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT public.cancel_bulk_capture_workflow((
+  SELECT id FROM public.photo_capture_sessions
+  WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+    AND vin = '1HGCM82633A004352' AND mode = 'bulk' AND status = 'in_progress'
+));
+SELECT test.assert_true(
+  (SELECT count(*) = 1 AND bool_and(canceled_at IS NOT NULL)
+   FROM public.photo_capture_sessions
+   WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+     AND vin = '1HGCM82633A004352' AND mode = 'bulk' AND status = 'canceled')
+  AND NOT EXISTS (
+    SELECT 1 FROM public.payout_entries AS payout
+    JOIN public.photo_capture_sessions AS session ON session.id = payout.photo_shoot_id
+    WHERE session.dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+      AND session.vin = '1HGCM82633A004352' AND session.status = 'canceled'
+  )
+  AND (SELECT count(*) = 1 FROM public.audit_events
+       WHERE event_type = 'bulk_photo_session.canceled'
+         AND payload->>'vin' = '1HGCM82633A004352'),
+  'cancel stops the timer, records one audit event, and creates no payout'
+);
+SELECT test.assert_true(
+  (public.cancel_bulk_capture_workflow((
+    SELECT id FROM public.photo_capture_sessions
+    WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+      AND vin = '1HGCM82633A004352' AND mode = 'bulk' AND status = 'canceled'
+  ))).status = 'canceled'
+  AND (SELECT count(*) = 1 FROM public.audit_events
+       WHERE event_type = 'bulk_photo_session.canceled'
+         AND payload->>'vin' = '1HGCM82633A004352'),
+  'double cancel is idempotent and does not duplicate audit history'
+);
+SELECT public.start_photo_capture_session(
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  NULL, '1HGCM82633A004352', 'bulk'
+);
+SELECT test.assert_true(
+  (SELECT count(*) = 1 FROM public.photo_capture_sessions
+   WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+     AND vin = '1HGCM82633A004352' AND mode = 'bulk' AND status = 'in_progress')
+  AND (SELECT count(*) = 1 FROM public.photo_capture_sessions
+       WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+         AND vin = '1HGCM82633A004352' AND mode = 'bulk' AND status = 'canceled'),
+  'a canceled workflow does not block one future Bulk capture'
+);
+RESET ROLE;
 DELETE FROM public.photo_capture_sessions
 WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
   AND vehicle_id IS NULL AND vin = '1HGCM82633A004352'
   AND created_by = '00000000-0000-0000-0000-000000000002'
-  AND mode = 'bulk' AND status = 'in_progress';
+  AND mode = 'bulk';
 SET ROLE authenticated;
 SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
 SELECT public.save_capture_method_configuration(

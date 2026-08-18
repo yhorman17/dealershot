@@ -40,7 +40,7 @@ type Session = {
   dealership_id: string;
   vehicle_id: string | null;
   vin: string | null;
-  status: "in_progress" | "completed" | "prepared";
+  status: "in_progress" | "completed" | "prepared" | "canceled";
   workflow_stage: "capture" | "review" | "processing" | "completed";
   created_by: string | null;
   started_at: string;
@@ -127,6 +127,12 @@ function BulkCaptureWorkspace() {
       image_url: urls.get(item.media_asset_id) ?? "",
     }));
     const nextSession = sessionData as Session;
+    if (nextSession.status === "canceled") {
+      setSession(nextSession);
+      setItems([]);
+      setError("This Bulk Capture workflow was canceled and can no longer be resumed.");
+      return;
+    }
     sessionRef.current = nextSession;
     itemsRef.current = nextItems;
     setSession(nextSession);

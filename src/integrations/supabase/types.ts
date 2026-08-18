@@ -240,6 +240,8 @@ export type Database = {
       photo_capture_sessions: {
         Row: {
           completion_policy: "block" | "warn";
+          canceled_at: string | null;
+          canceled_by: string | null;
           capture_ended_at: string | null;
           completed_at: string | null;
           completed_by: string | null;
@@ -263,7 +265,7 @@ export type Database = {
           retake_count: number;
           shoot_type: "standard" | "reshoot" | "bulk";
           started_at: string;
-          status: "in_progress" | "completed" | "prepared";
+          status: "in_progress" | "completed" | "prepared" | "canceled";
           updated_at: string;
           vehicle_id: string | null;
           video_count: number;
@@ -272,6 +274,8 @@ export type Database = {
         };
         Insert: {
           completion_policy?: "block" | "warn";
+          canceled_at?: string | null;
+          canceled_by?: string | null;
           capture_ended_at?: string | null;
           completed_at?: string | null;
           completed_by?: string | null;
@@ -295,7 +299,7 @@ export type Database = {
           retake_count?: number;
           shoot_type?: "standard" | "reshoot" | "bulk";
           started_at?: string;
-          status?: "in_progress" | "completed" | "prepared";
+          status?: "in_progress" | "completed" | "prepared" | "canceled";
           updated_at?: string;
           vehicle_id?: string | null;
           video_count?: number;
@@ -1537,6 +1541,10 @@ export type Database = {
       save_media_processing_configuration: {
         Args: { _dealership_id: string; _rules: Json };
         Returns: undefined;
+      };
+      cancel_bulk_capture_workflow: {
+        Args: { _session_id: string };
+        Returns: Database["public"]["Tables"]["photo_capture_sessions"]["Row"];
       };
       save_photography_configuration: {
         Args: { _completion_policy: string; _dealership_id: string; _shots: Json };

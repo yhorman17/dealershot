@@ -1,23 +1,39 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Camera, CheckCircle2, Clock3, PackageOpen, Plus } from "lucide-react";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { useCallback, useEffect, useState } from "react";
+import { Ban, Camera, CheckCircle2, Clock3, PackageOpen, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/product-ui";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { useCaptureMethods } from "@/hooks/use-capture-methods";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/bulk-photos")({
   head: () => ({ meta: [{ title: "Capture — DealerShot" }] }),
-  component: BulkPhotosPage,
+  component: BulkPhotosRoute,
 });
+
+function BulkPhotosRoute() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  return pathname.startsWith("/bulk-photos/") ? <Outlet /> : <BulkPhotosPage />;
+}
 
 type Session = {
   id: string;
   vehicle_id: string | null;
   vin: string | null;
-  status: "in_progress" | "completed" | "prepared";
+  status: "in_progress" | "completed" | "prepared" | "canceled";
   workflow_stage: "capture" | "review" | "processing" | "completed";
   created_at: string;
   completed_at: string | null;
@@ -29,41 +45,67 @@ function BulkPhotosPage() {
   const { configuration, loading: loadingConfiguration } = useCaptureMethods(selectedDealershipId);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancelTarget, setCancelTarget] = useState<Session | null>(null);
+  const [canceling, setCanceling] = useState(false);
 
-  useEffect(() => {
+  const loadSessions = useCallback(async () => {
     if (!selectedDealershipId || !configuration.bulkEnabled) {
       setSessions([]);
       setLoading(false);
       return;
     }
-    let cancelled = false;
     setLoading(true);
-    void (async () => {
-      const { data } = await supabase
-        .from("photo_capture_sessions")
-        .select("id, vehicle_id, vin, status, workflow_stage, created_at, completed_at")
-        .eq("dealership_id", selectedDealershipId)
-        .eq("mode", "bulk")
-        .order("created_at", { ascending: false })
-        .limit(30);
-      const rows = (data ?? []) as Omit<Session, "photoCount">[];
-      const ids = rows.map((row) => row.id);
-      const { data: items } = ids.length
-        ? await supabase.from("bulk_photo_items").select("session_id").in("session_id", ids)
-        : { data: [] };
-      const counts = new Map<string, number>();
-      for (const item of items ?? []) {
-        counts.set(item.session_id, (counts.get(item.session_id) ?? 0) + 1);
-      }
-      if (!cancelled) {
-        setSessions(rows.map((row) => ({ ...row, photoCount: counts.get(row.id) ?? 0 })));
-        setLoading(false);
-      }
-    })();
+    const { data } = await supabase
+      .from("photo_capture_sessions")
+      .select("id, vehicle_id, vin, status, workflow_stage, created_at, completed_at")
+      .eq("dealership_id", selectedDealershipId)
+      .eq("mode", "bulk")
+      .neq("status", "canceled")
+      .order("created_at", { ascending: false })
+      .limit(30);
+    const rows = (data ?? []) as Omit<Session, "photoCount">[];
+    const ids = rows.map((row) => row.id);
+    const { data: items } = ids.length
+      ? await supabase.from("bulk_photo_items").select("session_id").in("session_id", ids)
+      : { data: [] };
+    const counts = new Map<string, number>();
+    for (const item of items ?? []) {
+      counts.set(item.session_id, (counts.get(item.session_id) ?? 0) + 1);
+    }
+    setSessions(rows.map((row) => ({ ...row, photoCount: counts.get(row.id) ?? 0 })));
+    setLoading(false);
+  }, [configuration.bulkEnabled, selectedDealershipId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadSessions().catch(() => {
+      if (!cancelled) setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [configuration.bulkEnabled, selectedDealershipId]);
+  }, [loadSessions]);
+
+  const cancelWorkflow = async () => {
+    if (!cancelTarget || canceling) return;
+    setCanceling(true);
+    const { error } = await supabase.rpc("cancel_bulk_capture_workflow", {
+      _session_id: cancelTarget.id,
+    });
+    if (error) {
+      toast.error("Capture workflow could not be canceled", {
+        description: error.message,
+      });
+      setCanceling(false);
+      return;
+    }
+    setSessions((current) => current.filter((session) => session.id !== cancelTarget.id));
+    setCancelTarget(null);
+    setCanceling(false);
+    toast.success("Capture workflow canceled", {
+      description: "The vehicle and any uploaded photos were kept.",
+    });
+  };
 
   if (!loadingConfiguration && !configuration.bulkEnabled) {
     return (
@@ -150,15 +192,54 @@ function BulkPhotosPage() {
                   ? new Date(session.completed_at).toLocaleString()
                   : "Capture timer active"}
               </div>
-              <Button asChild className="mt-4 w-full" variant="outline">
-                <Link to="/bulk-photos/$id" params={{ id: session.id }}>
-                  {session.workflow_stage === "completed" ? "Review session" : "Continue workflow"}
-                </Link>
-              </Button>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <Button asChild className="min-h-11 w-full" variant="outline">
+                  <Link to="/bulk-photos/$id" params={{ id: session.id }}>
+                    {session.workflow_stage === "completed"
+                      ? "Review session"
+                      : "Continue workflow"}
+                  </Link>
+                </Button>
+                {session.status === "in_progress" && (
+                  <Button
+                    className="min-h-11 w-full"
+                    variant="ghost"
+                    onClick={() => setCancelTarget(session)}
+                  >
+                    <Ban className="size-4" /> Cancel workflow
+                  </Button>
+                )}
+              </div>
             </article>
           ))}
         </div>
       )}
+      <AlertDialog
+        open={!!cancelTarget}
+        onOpenChange={(open) => !open && !canceling && setCancelTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel this capture workflow?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The active timer will stop and this workflow will leave the active list. The vehicle
+              and any photos already uploaded will be kept in Inventory.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={canceling}>Keep capturing</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={canceling}
+              onClick={(event) => {
+                event.preventDefault();
+                void cancelWorkflow();
+              }}
+            >
+              {canceling ? "Canceling…" : "Cancel workflow"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }
