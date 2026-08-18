@@ -36,8 +36,38 @@ test("background removal is explicit and absent from the capture critical path",
   assert.doesNotMatch(vehiclePhotos, /cutout-queue|@imgly\/background-removal|removeBackground/);
   assert.match(editor, /const createCutout = async/);
   assert.match(editor, /await import\("@imgly\/background-removal"\)/);
+  assert.match(editor, /removeInFlightRef\.current/);
+  assert.match(editor, /removeBackground\(sourceBlob/);
+  assert.match(editor, /Your original photo was not changed\. Try again\./);
   assert.match(editor, /onClick=\{\(\) => void createCutout\(\)\}/);
   assert.equal(existsSync(path.join(root, "src/lib/cutout-queue.ts")), false);
+});
+
+test("Customize uses one persistent preview canvas across every controls tab", () => {
+  const editor = read("src/components/BackgroundEditor.tsx");
+  assert.match(editor, /data-testid="customize-preview-canvas"/);
+  assert.match(editor, /tab changes only swap controls/);
+  assert.match(editor, /ctx\.drawImage\(originalImg/);
+  assert.match(editor, /if \(cutoutImg && bounds\)/);
+  assert.doesNotMatch(editor, /adjustPreviewRef/);
+  assert.doesNotMatch(editor, /key=\{activeTab\}[\s\S]{0,300}<canvas/);
+  for (const tab of ["background", "adjust", "shadow", "reflection", "overlay"]) {
+    assert.match(editor, new RegExp(`activeTab === "${tab}"`));
+  }
+});
+
+test("private cutout references are resolved and editor capability gates UI access", () => {
+  const vehiclePhotos = read("src/components/VehiclePhotos.tsx");
+  const privateMedia = read("src/lib/private-media.ts");
+  const mediaApi = read("src/lib/api/media.functions.ts");
+  assert.match(vehiclePhotos, /resolveAuthorizedMediaReference/);
+  assert.match(vehiclePhotos, /capabilities\?\.media === true/);
+  assert.match(vehiclePhotos, /it\.photo && canCustomize/);
+  assert.match(privateMedia, /PRIVATE_MEDIA_REFERENCE/);
+  assert.match(privateMedia, /getAuthorizedMediaVariantUrl/);
+  assert.match(mediaApi, /get_media_delivery_manifest/);
+  assert.match(mediaApi, /_variant_id: data\.variant_id/);
+  assert.match(mediaApi, /requireSupabaseAuth/);
 });
 
 test("mobile operational controls prevent accidental tap zoom without disabling pinch zoom", () => {

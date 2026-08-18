@@ -35,10 +35,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
+import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { createUploadQueue, type UploadEntry } from "@/lib/upload-queue";
 import { EditorLoading, PhotoEditorBoundary } from "@/components/PhotoEditorBoundary";
 import {
   archivePrivateMedia,
+  resolveAuthorizedMediaReference,
   resolveAuthorizedMediaUrls,
   uploadPrivateOriginal,
 } from "@/lib/private-media";
@@ -176,8 +178,12 @@ export function VehiclePhotos({
   vehicleId: string;
   initialCustomizePhotoId?: string;
 }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const { capabilities, loadingCapabilities } = useAccessibleDealerships();
   const userId = user?.id;
+  const canCustomize =
+    !loadingCapabilities &&
+    (profile?.role === "owner" || profile?.role === "dealer_admin" || capabilities?.media === true);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [docLinks, setDocLinks] = useState<VehicleDocument[]>([]);
   const [mode, setMode] = useState<"guided" | "free">("guided");
@@ -217,14 +223,22 @@ export function VehiclePhotos({
 
   const openCustomize = useCallback(async (photo: Photo) => {
     try {
-      const [editorUrls, originalUrls] = await Promise.all([
+      const cutoutReference = photo.corrected_cutout_url || photo.cutout_image_url;
+      const [editorUrls, originalUrls, cutoutUrl] = await Promise.all([
         resolveAuthorizedMediaUrls([photo.media_asset_id], "editor"),
         resolveAuthorizedMediaUrls([photo.media_asset_id], "original"),
+        resolveAuthorizedMediaReference(photo.media_asset_id, cutoutReference, "editor"),
       ]);
       const editorUrl = editorUrls.get(photo.media_asset_id);
       const originalUrl = originalUrls.get(photo.media_asset_id);
       if (!editorUrl || !originalUrl) throw new Error("The private photo is unavailable.");
-      setBgPhoto({ ...photo, image_url: editorUrl, original_image_url: originalUrl });
+      setBgPhoto({
+        ...photo,
+        image_url: editorUrl,
+        original_image_url: originalUrl,
+        cutout_image_url: cutoutUrl,
+        corrected_cutout_url: cutoutUrl,
+      });
     } catch (error) {
       toast.error("Photo editor could not open", {
         description: error instanceof Error ? error.message : "Try again.",
@@ -356,14 +370,19 @@ export function VehiclePhotos({
   }, [load]);
 
   useEffect(() => {
-    if (!initialCustomizePhotoId || initialCustomizeOpenedRef.current || photos.length === 0)
+    if (
+      !canCustomize ||
+      !initialCustomizePhotoId ||
+      initialCustomizeOpenedRef.current ||
+      photos.length === 0
+    )
       return;
     const requestedPhoto = photos.find((photo) => photo.id === initialCustomizePhotoId);
     initialCustomizeOpenedRef.current = true;
     if (!requestedPhoto) return;
-    setBgPhoto(requestedPhoto);
+    void openCustomize(requestedPhoto);
     window.history.replaceState(window.history.state, "", window.location.pathname);
-  }, [initialCustomizePhotoId, photos]);
+  }, [canCustomize, initialCustomizePhotoId, openCustomize, photos]);
 
   const items: GalleryItem[] = useMemo(() => {
     const all: GalleryItem[] = [
@@ -1156,7 +1175,7 @@ export function VehiclePhotos({
                         </div>
                       )}
                       <div className="flex flex-wrap items-stretch gap-1.5">
-                        {!isDoc && dealershipId && it.photo && (
+                        {!isDoc && dealershipId && it.photo && canCustomize && (
                           <button
                             onClick={() => void openCustomize(it.photo!)}
                             className="hidden min-h-[44px] min-w-[6.5rem] flex-1 rounded bg-secondary px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-secondary/80 md:block"

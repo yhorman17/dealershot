@@ -456,6 +456,7 @@ export function BackgroundEditor({
   const [overlayImg, setOverlayImg] = useState<HTMLImageElement | null>(null);
   const [baseSize, setBaseSize] = useState<{ w: number; h: number } | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [removeProgress, setRemoveProgress] = useState<number | null>(null);
   const [removeErr, setRemoveErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -463,6 +464,8 @@ export function BackgroundEditor({
   const [activeTab, setActiveTab] = useState<TabKey>("background");
   const [maskOpen, setMaskOpen] = useState(false);
   const pendingCutoutBlobRef = useRef<Blob | null>(null);
+  const sourceBlobRef = useRef<Blob | null>(null);
+  const removeInFlightRef = useRef(false);
 
   // Compositing state
   const [shadowEnabled, setShadowEnabled] = useState(DEFAULTS.shadowEnabled);
@@ -489,9 +492,9 @@ export function BackgroundEditor({
   const [pendingCrop, setPendingCrop] = useState<CropRect | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const adjustPreviewRef = useRef<HTMLCanvasElement>(null);
   const previewWrapRef = useRef<HTMLDivElement>(null);
   const cutoutUrlRef = useRef<string | null>(null);
+  const originalObjectUrlRef = useRef<string | null>(null);
 
   // Undo history
   const historyRef = useRef<Snapshot[]>([]);
@@ -691,12 +694,38 @@ export function BackgroundEditor({
     photo.cutout_image_url ||
     (photo.is_cutout ? photo.image_url : null);
 
-  // Load the immutable source once for compare and mask restoration.
+  // Materialize the authorized private source into memory once. The editor can
+  // then outlive the signed delivery URL without losing its working preview.
   useEffect(() => {
-    void loadImage(originalUrl)
-      .then(setOriginalImg)
-      .catch(() => setError("Original photo could not be loaded."));
-  }, [originalUrl]);
+    let cancelled = false;
+    setError(null);
+    void (async () => {
+      try {
+        const response = await fetch(originalUrl, { mode: "cors", credentials: "omit" });
+        if (!response.ok) throw new Error(`Source request failed (${response.status}).`);
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const image = await loadImage(objectUrl);
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+        if (originalObjectUrlRef.current) URL.revokeObjectURL(originalObjectUrlRef.current);
+        originalObjectUrlRef.current = objectUrl;
+        sourceBlobRef.current = blob;
+        setOriginalImg(image);
+      } catch (reason) {
+        console.error("[bg-editor] private source initialization failed", {
+          photoId: photo.id,
+          reason,
+        });
+        if (!cancelled) setError("Original photo could not be loaded. Close Customize and retry.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [originalUrl, photo.id]);
 
   // Load an existing cutout when present. Background removal itself is only
   // imported and invoked by the explicit Remove Background action below.
@@ -724,20 +753,38 @@ export function BackgroundEditor({
   }, [persistedCutoutUrl]);
 
   const createCutout = async () => {
+    if (removeInFlightRef.current) return;
+    const sourceBlob = sourceBlobRef.current;
+    if (!sourceBlob) {
+      setRemoveErr("The photo is still loading. Wait a moment and try again.");
+      return;
+    }
+    removeInFlightRef.current = true;
     setRemoving(true);
+    setRemoveProgress(0);
     setRemoveErr(null);
     try {
       const { removeBackground } = await import("@imgly/background-removal");
-      const blob = await removeBackground(originalUrl, { model: "isnet_quint8", debug: false });
+      const blob = await removeBackground(sourceBlob, {
+        model: "isnet_quint8",
+        debug: false,
+        output: { format: "image/png", quality: 1 },
+        progress: (_key, current, total) => {
+          if (total > 0) setRemoveProgress(Math.min(100, Math.round((current / total) * 100)));
+        },
+      });
       pendingCutoutBlobRef.current = blob;
       const url = URL.createObjectURL(blob);
       if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
       cutoutUrlRef.current = url;
       setRawCutoutImg(await loadImage(url));
     } catch (reason) {
-      setRemoveErr(reason instanceof Error ? reason.message : "Background removal failed.");
+      console.error("[bg-editor] background removal failed", { photoId: photo.id, reason });
+      setRemoveErr("Background removal failed. Your original photo was not changed. Try again.");
     } finally {
+      removeInFlightRef.current = false;
       setRemoving(false);
+      setRemoveProgress(null);
     }
   };
 
@@ -759,6 +806,7 @@ export function BackgroundEditor({
   useEffect(() => {
     return () => {
       if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
+      if (originalObjectUrlRef.current) URL.revokeObjectURL(originalObjectUrlRef.current);
     };
   }, []);
 
@@ -832,35 +880,66 @@ export function BackgroundEditor({
     };
   }, [overlayId, overlays]);
 
-  // Composite canvas render
+  // One persistent preview canvas serves every control tab. Before a cutout is
+  // available it deliberately renders the immutable source; after removal it
+  // renders the same cutout/composition while tabs only change controls.
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !cutoutImg || !backdropImg || !baseSize || !bounds) return;
-    canvas.width = baseSize.w;
-    canvas.height = baseSize.h;
+    if (!canvas || !originalImg) return;
+    const targetSize =
+      cutoutImg && baseSize
+        ? baseSize
+        : { w: originalImg.naturalWidth, h: originalImg.naturalHeight };
+    canvas.width = targetSize.w;
+    canvas.height = targetSize.h;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    compose(ctx, {
-      cutout: cutoutImg,
-      bounds,
-      backdrop: backdropImg,
-      overlay: overlayImg,
-      overlayPos,
-      targetW: baseSize.w,
-      targetH: baseSize.h,
-      shadowEnabled,
-      shadowOpacity: shadowOpacity / 100,
-      shadowScale,
-      shadowX,
-      shadowY,
-      reflectionEnabled,
-      reflectionOpacity: reflectionOpacity / 100,
-      reflectionScale,
-      reflectionX,
-      reflectionY,
-      carOpts: { offsetXPct: carX, offsetYPct: carY, scalePct: carScale },
-    });
+    ctx.clearRect(0, 0, targetSize.w, targetSize.h);
+
+    if (cutoutImg && bounds) {
+      if (backdropImg) {
+        compose(ctx, {
+          cutout: cutoutImg,
+          bounds,
+          backdrop: backdropImg,
+          overlay: overlayImg,
+          overlayPos,
+          targetW: targetSize.w,
+          targetH: targetSize.h,
+          shadowEnabled,
+          shadowOpacity: shadowOpacity / 100,
+          shadowScale,
+          shadowX,
+          shadowY,
+          reflectionEnabled,
+          reflectionOpacity: reflectionOpacity / 100,
+          reflectionScale,
+          reflectionX,
+          reflectionY,
+          carOpts: { offsetXPct: carX, offsetYPct: carY, scalePct: carScale },
+        });
+      } else {
+        const rect = carRect(cutoutImg, targetSize.w, targetSize.h, {
+          offsetXPct: carX,
+          offsetYPct: carY,
+          scalePct: carScale,
+        });
+        ctx.drawImage(cutoutImg, rect.x, rect.y, rect.w, rect.h);
+      }
+      return;
+    }
+
+    if (adjustStraighten !== 0) {
+      ctx.save();
+      ctx.translate(targetSize.w / 2, targetSize.h / 2);
+      ctx.rotate((adjustStraighten * Math.PI) / 180);
+      ctx.drawImage(originalImg, -targetSize.w / 2, -targetSize.h / 2);
+      ctx.restore();
+    } else {
+      ctx.drawImage(originalImg, 0, 0, targetSize.w, targetSize.h);
+    }
   }, [
+    originalImg,
     cutoutImg,
     bounds,
     backdropImg,
@@ -880,43 +959,8 @@ export function BackgroundEditor({
     carX,
     carY,
     carScale,
+    adjustStraighten,
   ]);
-
-  // Adjust-tab live preview render
-  useEffect(() => {
-    if (activeTab !== "adjust") return;
-    const cv = adjustPreviewRef.current;
-    if (!cv || !originalImg) return;
-    const ow = originalImg.naturalWidth;
-    const oh = originalImg.naturalHeight;
-    cv.width = ow;
-    cv.height = oh;
-    const ctx = cv.getContext("2d")!;
-    ctx.clearRect(0, 0, ow, oh);
-    if (adjustStraighten !== 0) {
-      ctx.save();
-      ctx.translate(ow / 2, oh / 2);
-      ctx.rotate((adjustStraighten * Math.PI) / 180);
-      ctx.drawImage(originalImg, -ow / 2, -oh / 2);
-      ctx.restore();
-    } else {
-      ctx.drawImage(originalImg, 0, 0);
-    }
-    // Show committed crop as a dimmed mask outside the crop rect
-    if (adjustCrop) {
-      ctx.save();
-      ctx.fillStyle = "rgba(0,0,0,0.55)";
-      const cx = adjustCrop.x * ow;
-      const cy = adjustCrop.y * oh;
-      const cw = adjustCrop.w * ow;
-      const ch = adjustCrop.h * oh;
-      ctx.fillRect(0, 0, ow, cy);
-      ctx.fillRect(0, cy + ch, ow, oh - (cy + ch));
-      ctx.fillRect(0, cy, cx, ch);
-      ctx.fillRect(cx + cw, cy, ow - (cx + cw), ch);
-      ctx.restore();
-    }
-  }, [activeTab, originalImg, adjustStraighten, adjustCrop]);
 
   // Crop drag interaction
   const cropDragRef = useRef<{ startX: number; startY: number; aspect: number | null } | null>(
@@ -1068,7 +1112,12 @@ export function BackgroundEditor({
               </div>
 
               <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-secondary/30 p-3">
-                <Button type="button" onClick={() => void createCutout()} disabled={removing}>
+                <Button
+                  type="button"
+                  onClick={() => void createCutout()}
+                  disabled={removing || !originalImg}
+                  aria-busy={removing}
+                >
                   <Scissors className="size-4" />
                   {rawCutoutImg ? "Create New Cutout" : "Remove Background"}
                 </Button>
@@ -1088,7 +1137,7 @@ export function BackgroundEditor({
               </div>
               {removeErr && (
                 <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  Cutout failed: {removeErr} You can close Customize or retry.
+                  {removeErr}
                 </div>
               )}
 
@@ -1129,18 +1178,12 @@ export function BackgroundEditor({
                     className="relative w-full rounded-lg overflow-hidden bg-background border border-border select-none"
                     style={{ aspectRatio: previewAspect }}
                   >
-                    {/* Composite canvas — visible on every tab except Adjust */}
+                    {/* Persistent composition canvas — tab changes only swap controls. */}
                     <canvas
                       ref={canvasRef}
+                      data-testid="customize-preview-canvas"
                       className="absolute inset-0 w-full h-full"
-                      style={{ visibility: comparing || adjusting ? "hidden" : "visible" }}
-                    />
-
-                    {/* Adjust live preview canvas */}
-                    <canvas
-                      ref={adjustPreviewRef}
-                      className="absolute inset-0 w-full h-full object-contain"
-                      style={{ display: adjusting && !comparing ? "block" : "none" }}
+                      style={{ visibility: comparing ? "hidden" : "visible" }}
                     />
 
                     {/* Straighten grid overlay */}
@@ -1212,7 +1255,9 @@ export function BackgroundEditor({
                         <div className="text-center">
                           <div className="h-8 w-8 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
                           <p className="text-sm font-medium text-foreground">
-                            Cutting out the car…
+                            {removeProgress === null
+                              ? "Preparing background removal…"
+                              : `Removing background… ${removeProgress}%`}
                           </p>
                           <p className="text-[11px] text-muted-foreground mt-1">
                             First use downloads a ~12MB model. This happens entirely in your

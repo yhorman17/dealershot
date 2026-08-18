@@ -240,6 +240,42 @@ export const getAuthorizedMediaUrls = createServerFn({ method: "POST" })
     return urls;
   });
 
+const variantDeliveryInput = z.object({
+  media_asset_id: uuidSchema,
+  variant_id: uuidSchema,
+  purpose: purposeSchema,
+});
+
+export const getAuthorizedMediaVariantUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => variantDeliveryInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: manifestValue, error } = await context.supabase.rpc(
+      "get_media_delivery_manifest",
+      {
+        _media_asset_id: data.media_asset_id,
+        _purpose: data.purpose,
+        _variant_id: data.variant_id,
+      },
+    );
+    if (error) throw new Error(error.message);
+    const manifest = parseJsonObject<DeliveryManifest>(manifestValue);
+    const expiresIn = ttlForPurpose(data.purpose);
+    const { data: signed, error: signError } = await supabaseAdmin.storage
+      .from(manifest.bucket)
+      .createSignedUrl(manifest.path, expiresIn, { download: data.purpose === "download" });
+    if (signError || !signed?.signedUrl) {
+      throw new Error(signError?.message || "Media access could not be issued.");
+    }
+    return {
+      media_asset_id: manifest.media_asset_id,
+      variant_id: manifest.variant_id,
+      variant_type: manifest.variant_type,
+      url: signed.signedUrl,
+      expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
+    };
+  });
+
 const prepareVariantInput = z.object({
   photo_id: uuidSchema,
   variant_type: z.enum(["cutout", "corrected_cutout", "customized", "enhanced", "dealer_render"]),

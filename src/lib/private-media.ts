@@ -4,6 +4,7 @@ import {
   finalizePrivateMediaUpload,
   finalizePrivateVariantUpload,
   getAuthorizedMediaUrls,
+  getAuthorizedMediaVariantUrl,
   preparePrivateMediaUpload,
   preparePrivateVariantUpload,
 } from "@/lib/api/media.functions";
@@ -36,6 +37,13 @@ export function normalizedImageMime(type: string, filename = "") {
 function cacheKey(mediaAssetId: string, purpose: MediaPurpose) {
   return `${purpose}:${mediaAssetId}`;
 }
+
+function variantCacheKey(mediaAssetId: string, variantId: string, purpose: MediaPurpose) {
+  return `${purpose}:${mediaAssetId}:variant:${variantId}`;
+}
+
+const PRIVATE_MEDIA_REFERENCE =
+  /^private-media:\/\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
 export function clearAuthorizedMediaCache() {
   cache.clear();
@@ -74,6 +82,30 @@ export async function resolveAuthorizedMediaUrls(
 
 export async function resolveAuthorizedMediaUrl(mediaAssetId: string, purpose: MediaPurpose) {
   return (await resolveAuthorizedMediaUrls([mediaAssetId], purpose)).get(mediaAssetId) ?? null;
+}
+
+export async function resolveAuthorizedMediaReference(
+  mediaAssetId: string,
+  reference: string | null | undefined,
+  purpose: MediaPurpose,
+) {
+  if (!reference) return null;
+  const match = PRIVATE_MEDIA_REFERENCE.exec(reference);
+  if (!match) return reference;
+  const variantId = match[1];
+  const key = variantCacheKey(mediaAssetId, variantId, purpose);
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt - CACHE_SAFETY_MS > Date.now()) return cached.url;
+  const resolved = await getAuthorizedMediaVariantUrl({
+    data: { media_asset_id: mediaAssetId, variant_id: variantId, purpose },
+  });
+  cache.set(key, {
+    url: resolved.url,
+    expiresAt: Date.parse(resolved.expires_at),
+    variantId: resolved.variant_id,
+    variantType: resolved.variant_type,
+  });
+  return resolved.url;
 }
 
 export async function uploadPrivateOriginal(input: {
