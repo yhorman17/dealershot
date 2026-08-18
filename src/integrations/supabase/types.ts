@@ -240,6 +240,7 @@ export type Database = {
       photo_capture_sessions: {
         Row: {
           completion_policy: "block" | "warn";
+          capture_ended_at: string | null;
           completed_at: string | null;
           completed_by: string | null;
           created_at: string;
@@ -259,6 +260,7 @@ export type Database = {
           reshoot_of: string | null;
           review_status: "unreviewed" | "awaiting_review" | "approved" | "rejected";
           requirements_snapshot: Json;
+          retake_count: number;
           shoot_type: "standard" | "reshoot" | "bulk";
           started_at: string;
           status: "in_progress" | "completed" | "prepared";
@@ -266,9 +268,11 @@ export type Database = {
           vehicle_id: string | null;
           video_count: number;
           vin: string | null;
+          workflow_stage: "capture" | "review" | "processing" | "completed";
         };
         Insert: {
           completion_policy?: "block" | "warn";
+          capture_ended_at?: string | null;
           completed_at?: string | null;
           completed_by?: string | null;
           created_at?: string;
@@ -288,6 +292,7 @@ export type Database = {
           reshoot_of?: string | null;
           review_status?: "unreviewed" | "awaiting_review" | "approved" | "rejected";
           requirements_snapshot?: Json;
+          retake_count?: number;
           shoot_type?: "standard" | "reshoot" | "bulk";
           started_at?: string;
           status?: "in_progress" | "completed" | "prepared";
@@ -295,6 +300,7 @@ export type Database = {
           vehicle_id?: string | null;
           video_count?: number;
           vin?: string | null;
+          workflow_stage?: "capture" | "review" | "processing" | "completed";
         };
         Update: never;
         Relationships: [];
@@ -302,6 +308,9 @@ export type Database = {
       photography_settings: TableDefinition<{
         dealership_id: string;
         completion_policy: "block" | "warn";
+        bulk_capture_enabled: boolean;
+        guided_capture_enabled: boolean;
+        default_capture_method: "bulk" | "guided";
         updated_by: string | null;
         updated_at: string;
       }>;
@@ -1390,6 +1399,10 @@ export type Database = {
         Args: { _session_id: string };
         Returns: Database["public"]["Tables"]["photo_capture_sessions"]["Row"];
       };
+      complete_bulk_capture_workflow: {
+        Args: { _session_id: string };
+        Returns: Database["public"]["Tables"]["photo_capture_sessions"]["Row"];
+      };
       commit_photo_variant: {
         Args: {
           _image_url: string;
@@ -1420,6 +1433,27 @@ export type Database = {
           _work_date?: string;
         };
         Returns: Database["public"]["Tables"]["payout_entries"]["Row"];
+      };
+      get_capture_method_configuration: {
+        Args: { _dealership_id: string };
+        Returns: Json;
+      };
+      mark_bulk_capture_ended: {
+        Args: { _session_id: string };
+        Returns: Database["public"]["Tables"]["photo_capture_sessions"]["Row"];
+      };
+      queue_bulk_background_removal: {
+        Args: { _item_ids: string[]; _session_id: string };
+        Returns: number;
+      };
+      save_capture_method_configuration: {
+        Args: {
+          _bulk_enabled: boolean;
+          _dealership_id: string;
+          _default_method: string;
+          _guided_enabled: boolean;
+        };
+        Returns: Json;
       };
       disable_payout_rule: {
         Args: { _rule_id: string };

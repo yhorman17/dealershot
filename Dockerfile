@@ -33,6 +33,11 @@ COPY --from=build --chown=node:node /app/.worker ./.worker
 # Vite can bundle Sharp's JavaScript, but the linux-musl addon and libvips
 # packages must remain available at runtime in the Alpine image.
 COPY --from=build --chown=node:node /app/node_modules/@img ./node_modules/@img
+# Bulk Capture can queue private background removal. The verified model chunks
+# live in .output/public and inference loads lazily; only ONNX's native runtime
+# must remain available beside the worker bundle.
+COPY --from=build --chown=node:node /app/node_modules/onnxruntime-node ./node_modules/onnxruntime-node
+COPY --from=build --chown=node:node /app/node_modules/onnxruntime-common ./node_modules/onnxruntime-common
 
 USER node
 

@@ -951,8 +951,6 @@ WHERE vehicle_id = '10000000-0000-0000-0000-000000000001'
   AND created_by = '00000000-0000-0000-0000-000000000003'
   AND mode = 'guided'
   AND status = 'in_progress';
-SET ROLE authenticated;
-SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
 INSERT INTO public.photo_capture_sessions (
   id, dealership_id, vehicle_id, vin, mode, created_by
 ) VALUES (
@@ -963,6 +961,8 @@ INSERT INTO public.photo_capture_sessions (
   'bulk',
   '00000000-0000-0000-0000-000000000003'
 );
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
 SELECT test.expect_sqlstate(
   $$INSERT INTO public.photo_capture_sessions (
       dealership_id, vin, mode, created_by
@@ -1195,8 +1195,6 @@ SELECT public.create_payout_rule(
 );
 RESET ROLE;
 
-SET ROLE authenticated;
-SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
 INSERT INTO public.photo_capture_sessions (
   id, dealership_id, vehicle_id, vin, mode, created_by
 ) VALUES (
@@ -1206,7 +1204,6 @@ INSERT INTO public.photo_capture_sessions (
   '1HGCM82633A004352', 'guided',
   '00000000-0000-0000-0000-000000000003'
 );
-RESET ROLE;
 SET ROLE service_role;
 SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
 SELECT public.finalize_private_photo_upload(
@@ -1412,6 +1409,7 @@ SELECT public.save_photography_configuration(
   'aaaaaaaa-0000-0000-0000-000000000001', 'block',
   '[{"shot_key":"front","label":"Front","guidance":"Centered front view","category":"exterior","required":true,"enabled":true,"minimum_count":1,"applies_to":["new","used","certified"],"sort_order":10}]'::jsonb
 );
+RESET ROLE;
 INSERT INTO public.photo_capture_sessions (
   id, dealership_id, vehicle_id, vin, mode, created_by
 ) VALUES (
@@ -1421,6 +1419,8 @@ INSERT INTO public.photo_capture_sessions (
   '1HGCM82633A004352', 'guided',
   '00000000-0000-0000-0000-000000000002'
 );
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
 SELECT test.expect_sqlstate(
   $$SELECT public.complete_photo_capture_session(
     '40000000-0000-0000-0000-000000000004'
@@ -2054,6 +2054,85 @@ SELECT test.assert_true(
   EXISTS (SELECT 1 FROM public.vehicles WHERE id = '10000000-0000-4000-8000-000000000013'),
   'running-job rejection leaves the vehicle intact'
 );
+
+-- Bulk-first store settings and route enforcement remain capability and tenant scoped.
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT public.save_capture_method_configuration(
+  'aaaaaaaa-0000-0000-0000-000000000001', true, false, 'bulk'
+);
+SELECT test.assert_true(
+  public.get_capture_method_configuration(
+    'aaaaaaaa-0000-0000-0000-000000000001'
+  ) @> '{"bulk_enabled":true,"guided_enabled":false,"default_method":"bulk"}'::jsonb,
+  'authorized administrator configures Bulk as the only enabled default'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.save_capture_method_configuration(
+      'aaaaaaaa-0000-0000-0000-000000000001', false, false, 'bulk'
+    )$$,
+  '22023',
+  'capture configuration cannot disable every method'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT test.expect_sqlstate(
+  $$SELECT public.save_capture_method_configuration(
+      'aaaaaaaa-0000-0000-0000-000000000001', true, true, 'bulk'
+    )$$,
+  '42501',
+  'capture staff cannot change store capture settings'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.start_photo_capture_session(
+      'aaaaaaaa-0000-0000-0000-000000000001',
+      '10000000-0000-0000-0000-000000000001', NULL, 'guided'
+    )$$,
+  '42501',
+  'a disabled Guided method is rejected by the capture RPC'
+);
+RESET ROLE;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT public.start_photo_capture_session(
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  NULL, '1HGCM82633A004352', 'bulk'
+);
+SELECT test.assert_true(
+  EXISTS (
+    SELECT 1 FROM public.photo_capture_sessions
+    WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+      AND vehicle_id IS NULL AND vin = '1HGCM82633A004352'
+      AND created_by = '00000000-0000-0000-0000-000000000002'
+      AND mode = 'bulk' AND status = 'in_progress'
+  ),
+  'authorized store user can start the enabled Bulk method'
+);
+RESET ROLE;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT test.expect_sqlstate(
+  $$SELECT public.start_photo_capture_session(
+      'bbbbbbbb-0000-0000-0000-000000000001',
+      '10000000-0000-0000-0000-000000000002', NULL, 'bulk'
+    )$$,
+  '42501',
+  'capture staff cannot start Bulk in another store'
+);
+RESET ROLE;
+DELETE FROM public.photo_capture_sessions
+WHERE dealership_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+  AND vehicle_id IS NULL AND vin = '1HGCM82633A004352'
+  AND created_by = '00000000-0000-0000-0000-000000000002'
+  AND mode = 'bulk' AND status = 'in_progress';
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT public.save_capture_method_configuration(
+  'aaaaaaaa-0000-0000-0000-000000000001', true, true, 'bulk'
+);
+RESET ROLE;
 
 DROP SCHEMA test CASCADE;
 

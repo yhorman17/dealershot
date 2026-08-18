@@ -3,23 +3,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowLeft,
+  ArrowRight,
   ArrowUp,
   Camera,
   Check,
+  CheckCircle2,
   ImagePlus,
   RefreshCw,
+  RotateCcw,
   Star,
   Trash2,
-  Upload,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
-import { createUploadQueue, type UploadEntry } from "@/lib/upload-queue";
-import { Button } from "@/components/ui/button";
-import { PageHeader, ProductSelect, StatusBadge } from "@/components/product-ui";
-import { SHOT_TYPES } from "@/components/VehiclePhotos";
 import { toast } from "sonner";
+
+import { BulkCamera } from "@/components/BulkCamera";
+import { SHOT_TYPES } from "@/components/VehiclePhotos";
+import { PageHeader, ProductSelect, StatusBadge } from "@/components/product-ui";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
+import { supabase } from "@/integrations/supabase/client";
+import { createUploadQueue, type UploadEntry } from "@/lib/upload-queue";
 import {
   archivePrivateMedia,
   resolveAuthorizedMediaUrls,
@@ -27,8 +31,8 @@ import {
 } from "@/lib/private-media";
 
 export const Route = createFileRoute("/_authenticated/bulk-photos/$id")({
-  head: () => ({ meta: [{ title: "Bulk Photo Package — DealerShot" }] }),
-  component: BulkPhotoWorkspace,
+  head: () => ({ meta: [{ title: "Bulk Capture — DealerShot" }] }),
+  component: BulkCaptureWorkspace,
 });
 
 type Session = {
@@ -37,9 +41,15 @@ type Session = {
   vehicle_id: string | null;
   vin: string | null;
   status: "in_progress" | "completed" | "prepared";
+  workflow_stage: "capture" | "review" | "processing" | "completed";
   created_by: string | null;
+  started_at: string;
+  capture_ended_at: string | null;
   completed_at: string | null;
+  duration_seconds: number | null;
+  retake_count: number;
 };
+
 type Item = {
   id: string;
   session_id: string;
@@ -47,62 +57,42 @@ type Item = {
   media_asset_id: string;
   storage_path: string;
   shot_type: string | null;
+  media_category: string;
   sort_order: number;
   is_main: boolean;
   photo_id: string | null;
   created_at: string;
 };
-type BulkUpload = { file: File };
 
-async function decodeVehicleVin(vin: string) {
-  try {
-    const response = await fetch(
-      `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin)}?format=json`,
-    );
-    if (!response.ok) return {};
-    const decoded = (await response.json())?.Results?.[0];
-    if (!decoded) return {};
-    const year = Number.parseInt(decoded.ModelYear, 10);
-    const cylinders = Number.parseInt(decoded.EngineCylinders, 10);
-    return {
-      year: Number.isFinite(year) ? year : null,
-      make: decoded.Make || null,
-      model: decoded.Model || null,
-      trim: decoded.Trim || null,
-      body_class: decoded.BodyClass || null,
-      engine: decoded.EngineModel || decoded.DisplacementL || null,
-      cylinders: Number.isFinite(cylinders) ? cylinders : null,
-      transmission: decoded.TransmissionStyle || null,
-      drivetrain: decoded.DriveType || null,
-      fuel_type: decoded.FuelTypePrimary || null,
-    };
-  } catch {
-    // VIN decoding improves the lightweight intake, but never blocks durable
-    // association when NHTSA is temporarily unavailable.
-    return {};
-  }
-}
+type BulkUpload = { file: File; replaceItemId?: string };
 
-function BulkPhotoWorkspace() {
+function BulkCaptureWorkspace() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
   const { setSelectedDealershipId } = useAccessibleDealerships();
   const [session, setSession] = useState<Session | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedForProcessing, setSelectedForProcessing] = useState<Set<string>>(new Set());
   const [queueEntries, setQueueEntries] = useState<UploadEntry<BulkUpload>[]>([]);
-  const [completing, setCompleting] = useState(false);
-  const [associating, setAssociating] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [replaceItemId, setReplaceItemId] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const nextSortRef = useRef(0);
+  const sessionRef = useRef<Session | null>(null);
+  const itemsRef = useRef<Item[]>([]);
+  const loadRef = useRef<() => Promise<void>>(async () => undefined);
 
   const load = useCallback(async () => {
     const [{ data: sessionData, error: sessionError }, { data: itemData, error: itemError }] =
       await Promise.all([
         supabase
           .from("photo_capture_sessions")
-          .select("id, dealership_id, vehicle_id, vin, status, created_by, completed_at")
+          .select(
+            "id, dealership_id, vehicle_id, vin, status, workflow_stage, created_by, started_at, capture_ended_at, completed_at, duration_seconds, retake_count",
+          )
           .eq("id", id)
           .maybeSingle(),
         supabase
@@ -115,108 +105,171 @@ function BulkPhotoWorkspace() {
           .order("created_at"),
       ]);
     if (sessionError || itemError || !sessionData) {
-      setError("This Bulk Photos package is unavailable or outside your dealership access.");
+      setError("This Bulk Capture session is unavailable or outside your store access.");
       return;
     }
-    setSession(sessionData as Session);
-    const rawItems = (itemData ?? []) as Item[];
+    const rawItems = (itemData ?? []) as Omit<Item, "media_category">[];
+    const photoIds = rawItems
+      .map((item) => item.photo_id)
+      .filter((value): value is string => !!value);
+    const { data: photoRows } = photoIds.length
+      ? await supabase.from("photos").select("id, media_category").in("id", photoIds)
+      : { data: [] };
+    const categories = new Map((photoRows ?? []).map((photo) => [photo.id, photo.media_category]));
     const urls = await resolveAuthorizedMediaUrls(
       rawItems.map((item) => item.media_asset_id),
       "thumbnail",
     );
     const nextItems = rawItems.map((item) => ({
       ...item,
+      media_category:
+        (item.photo_id && categories.get(item.photo_id)) || classifyShot(item.shot_type),
       image_url: urls.get(item.media_asset_id) ?? "",
     }));
+    const nextSession = sessionData as Session;
+    sessionRef.current = nextSession;
+    itemsRef.current = nextItems;
+    setSession(nextSession);
     setItems(nextItems);
-    nextSortRef.current = Math.max(
-      nextSortRef.current,
-      ...nextItems.map((item) => item.sort_order + 1),
-    );
     setSelectedId((current) =>
       current && nextItems.some((item) => item.id === current)
         ? current
         : (nextItems[0]?.id ?? null),
     );
-  }, [id]);
+    nextSortRef.current = Math.max(0, ...nextItems.map((item) => item.sort_order + 1));
+    setSelectedDealershipId(nextSession.dealership_id);
+    setError(null);
+  }, [id, setSelectedDealershipId]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  loadRef.current = load;
+  useEffect(() => void load(), [load]);
 
-  useEffect(() => {
-    if (session?.dealership_id) setSelectedDealershipId(session.dealership_id);
-  }, [session?.dealership_id, setSelectedDealershipId]);
-
-  const uploadQueue = useMemo(
-    () =>
-      createUploadQueue<BulkUpload>(
-        async ({ file }) => {
-          if (!user || !session || session.status !== "in_progress")
-            throw new Error("This package is no longer accepting photos.");
-          const sortOrder = nextSortRef.current;
-          nextSortRef.current += 1;
-          await uploadPrivateOriginal({
-            file,
-            bulkSessionId: session.id,
-            sortOrder,
-          });
-          await load();
-        },
-        { concurrency: 2 },
-      ),
-    [load, session, user],
-  );
+  const uploadQueueRef = useRef<ReturnType<typeof createUploadQueue<BulkUpload>> | null>(null);
+  if (!uploadQueueRef.current) {
+    uploadQueueRef.current = createUploadQueue<BulkUpload>(
+      async ({ file, replaceItemId: replacementId }) => {
+        const activeSession = sessionRef.current;
+        if (!activeSession || activeSession.status !== "in_progress") {
+          throw new Error("This capture session is no longer accepting photos.");
+        }
+        const replaced = replacementId
+          ? itemsRef.current.find((item) => item.id === replacementId)
+          : undefined;
+        const sortOrder = replaced?.sort_order ?? nextSortRef.current++;
+        await uploadPrivateOriginal({
+          file,
+          bulkSessionId: activeSession.id,
+          sortOrder,
+        });
+        if (replaced) await archivePrivateMedia(replaced.media_asset_id);
+        await loadRef.current();
+      },
+      { concurrency: 2 },
+    );
+  }
+  const uploadQueue = uploadQueueRef.current;
   useEffect(() => uploadQueue.subscribe(setQueueEntries), [uploadQueue]);
 
   const pending = queueEntries.filter(
     (entry) => entry.state === "queued" || entry.state === "uploading",
   ).length;
   const failed = queueEntries.filter((entry) => entry.state === "failed").length;
-  const isAdmin = profile?.role === "owner" || profile?.role === "dealer_admin";
+  const acceptedCount = items.length + pending + failed;
   const selected = items.find((item) => item.id === selectedId) ?? null;
+  const workflowStage = session?.workflow_stage;
 
-  const complete = async () => {
-    setCompleting(true);
-    await uploadQueue.waitForIdle();
-    const failures = uploadQueue.getSnapshot().filter((entry) => entry.state === "failed").length;
-    if (failures) {
-      toast.error(`${failures} photos still need to upload`);
-      setCompleting(false);
+  useEffect(() => {
+    if (!session) return;
+    const update = () => {
+      const end = session.capture_ended_at ? Date.parse(session.capture_ended_at) : Date.now();
+      setElapsedSeconds(Math.max(0, Math.floor((end - Date.parse(session.started_at)) / 1000)));
+    };
+    update();
+    if (session.capture_ended_at) return;
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [session]);
+
+  useEffect(() => {
+    if (workflowStage !== "capture") return;
+    setCameraOpen(true);
+  }, [session?.id, workflowStage]);
+
+  useEffect(() => {
+    const active = workflowStage === "capture" || pending > 0;
+    if (!active) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [pending, workflowStage]);
+
+  const addCapture = (file: File) => {
+    const replacementId = replaceItemId ?? undefined;
+    uploadQueue.add({ file, replaceItemId: replacementId });
+    if (replacementId) {
+      setCameraOpen(false);
+      setReplaceItemId(null);
+      toast.message("Replacement uploading", {
+        description: "You can keep reviewing the other photos while it finishes.",
+      });
+    }
+  };
+
+  const finishTakingPhotos = async () => {
+    if (!session || busy) return;
+    setBusy("finish");
+    setCameraOpen(false);
+    const { error: endError } = await supabase.rpc("mark_bulk_capture_ended", {
+      _session_id: session.id,
+    });
+    if (endError) {
+      toast.error("Photo capture could not finish", { description: endError.message });
+      setBusy(null);
       return;
     }
-    const { error: completeError } = await supabase.rpc("complete_photo_capture_session", {
-      _session_id: id,
-    });
-    if (completeError)
-      toast.error("Package could not be completed", { description: completeError.message });
-    else {
-      toast.success("Bulk Photos ready for office review");
-      await load();
+    await uploadQueue.waitForIdle();
+    if (uploadQueue.getSnapshot().some((entry) => entry.state === "failed")) {
+      toast.error("Some photos still need attention", {
+        description: "Retry failed uploads before continuing from Review.",
+      });
     }
-    setCompleting(false);
+    await load();
+    setBusy(null);
   };
 
-  const updateItem = async (item: Item, changes: Pick<Partial<Item>, "shot_type">) => {
+  const remove = async (item: Item) => {
+    setBusy(`remove:${item.id}`);
+    try {
+      await archivePrivateMedia(item.media_asset_id);
+      await load();
+      toast.success("Photo removed from this vehicle");
+    } catch (reason) {
+      toast.error("Photo could not be removed", {
+        description: reason instanceof Error ? reason.message : "Try again.",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const updateClassification = async (item: Item, shotType: string | null) => {
     const { error: updateError } = await supabase
       .from("bulk_photo_items")
-      .update(changes)
+      .update({ shot_type: shotType })
       .eq("id", item.id);
-    if (updateError) toast.error("Photo update failed", { description: updateError.message });
+    if (updateError) toast.error("Photo label could not be saved");
     else await load();
   };
+
   const setMain = async (item: Item) => {
     const { error: updateError } = await supabase.rpc("set_bulk_primary_item", {
       _session_id: id,
       _item_id: item.id,
     });
-    if (updateError)
-      toast.error("Main image could not be changed", { description: updateError.message });
-    else {
-      toast.success("Main image updated");
-      await load();
-    }
+    if (updateError) toast.error("Main image could not be changed");
+    else await load();
   };
+
   const move = async (item: Item, direction: -1 | 1) => {
     const index = items.findIndex((candidate) => candidate.id === item.id);
     if (!items[index + direction]) return;
@@ -226,337 +279,571 @@ function BulkPhotoWorkspace() {
       _session_id: id,
       _item_ids: next.map((candidate) => candidate.id),
     });
-    if (reorderError) {
-      toast.error("Photo order could not be updated", {
-        description: reorderError.message,
-      });
-      return;
-    }
-    await load();
-  };
-  const remove = async (item: Item) => {
-    try {
-      await archivePrivateMedia(item.media_asset_id);
-      await load();
-    } catch (error) {
-      toast.error("Photo could not be removed", {
-        description: error instanceof Error ? error.message : "Try again.",
-      });
-    }
+    if (reorderError) toast.error("Photo order changed. Reload and try again.");
+    else await load();
   };
 
-  const associate = async (customizeItemId?: string) => {
-    if (!session || !session.vin) return;
-    setAssociating(true);
+  const continueToProcessing = async () => {
+    if (!session?.vehicle_id || busy || pending > 0 || failed > 0) return;
+    setBusy("next");
     try {
-      let vehicleId = session.vehicle_id;
-      if (!vehicleId) {
-        const decoded = await decodeVehicleVin(session.vin);
-        const { data: vehicle, error: vehicleError } = await supabase
-          .from("vehicles")
-          .insert({
-            dealership_id: session.dealership_id,
-            vin: session.vin,
-            status: "Available",
-            condition: "Used",
-            ...decoded,
-          })
-          .select("id")
-          .single();
-        if (vehicleError) throw vehicleError;
-        vehicleId = vehicle.id;
-      }
+      const { error: completeError } = await supabase.rpc("complete_photo_capture_session", {
+        _session_id: session.id,
+      });
+      if (completeError) throw completeError;
       const { error: associateError } = await supabase.rpc("associate_bulk_photo_session", {
         _session_id: session.id,
-        _vehicle_id: vehicleId,
+        _vehicle_id: session.vehicle_id,
       });
       if (associateError) throw associateError;
-      let customizePhotoId: string | null = null;
-      if (customizeItemId) {
-        const { data: linkedItem, error: linkedItemError } = await supabase
-          .from("bulk_photo_items")
-          .select("photo_id")
-          .eq("id", customizeItemId)
-          .single();
-        if (linkedItemError || !linkedItem?.photo_id) {
-          toast.warning("Package associated, but the selected photo could not open automatically", {
-            description: "Open Customize from the vehicle gallery to continue.",
-          });
-        } else {
-          customizePhotoId = linkedItem.photo_id;
-        }
-      }
-      toast.success("Bulk package associated without re-uploading photos", {
-        description: session.vehicle_id
-          ? "The originals are ready in the vehicle workspace."
-          : "VIN details were loaded when available; review missing inventory fields next.",
-      });
-      navigate({
-        to: "/vehicles/$id",
-        params: { id: vehicleId },
-        search: customizePhotoId ? { customize: customizePhotoId } : undefined,
-      });
+      await load();
     } catch (reason) {
-      toast.error("Package could not be associated", {
+      toast.error("Review could not be completed", {
         description: reason instanceof Error ? reason.message : "Try again.",
       });
     } finally {
-      setAssociating(false);
+      setBusy(null);
     }
   };
 
-  if (error)
+  const finishWorkflow = async () => {
+    if (!session || busy) return;
+    setBusy("processing");
+    try {
+      const selectedIds = [...selectedForProcessing];
+      const { data: queued, error: queueError } = await supabase.rpc(
+        "queue_bulk_background_removal",
+        { _session_id: session.id, _item_ids: selectedIds },
+      );
+      if (queueError) throw queueError;
+      const { error: finishError } = await supabase.rpc("complete_bulk_capture_workflow", {
+        _session_id: session.id,
+      });
+      if (finishError) throw finishError;
+      toast.success("Vehicle capture complete", {
+        description: queued
+          ? `${queued} background-removal ${queued === 1 ? "job" : "jobs"} queued. You can continue immediately.`
+          : "No background processing was queued.",
+      });
+      await load();
+    } catch (reason) {
+      toast.error("Capture workflow could not finish", {
+        description: reason instanceof Error ? reason.message : "Try again.",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (error) {
     return (
       <main className="ds-page-gutter">
         <div className="ds-surface p-8 text-center text-sm text-destructive">{error}</div>
       </main>
     );
-  if (!session)
+  }
+  if (!session) {
     return (
       <main className="ds-page-gutter">
-        <div className="ds-surface p-8 text-center text-sm text-muted-foreground">
-          Loading package…
+        <div className="ds-surface p-8 text-center text-sm text-muted-foreground" aria-busy>
+          Loading capture workflow…
         </div>
       </main>
     );
+  }
 
   return (
     <main className="ds-page-gutter">
       <Button asChild variant="ghost" className="mb-3 -ml-3">
         <Link to="/bulk-photos">
-          <ArrowLeft className="size-4" />
-          Bulk Photos
+          <ArrowLeft className="size-4" /> Capture
         </Link>
       </Button>
       <PageHeader
-        eyebrow="Photo intake package"
-        title={session.vin ?? "Bulk Photos"}
-        description={`${items.length} raw originals · ${session.status === "completed" ? "Ready for office preparation" : session.status === "prepared" ? "Associated with inventory" : "Capture in progress"}`}
+        eyebrow={`Bulk Capture · ${stageLabel(session.workflow_stage)}`}
+        title={session.vin ?? "Vehicle photos"}
+        description={`${acceptedCount} captured · ${formatElapsed(elapsedSeconds)} photo time`}
         actions={
-          <StatusBadge tone={session.status === "completed" ? "success" : "info"}>
-            {session.status === "completed"
-              ? "Ready"
-              : session.status === "prepared"
-                ? "Prepared"
-                : "In Progress"}
+          <StatusBadge tone={session.workflow_stage === "completed" ? "success" : "info"}>
+            {session.workflow_stage === "completed"
+              ? "Complete"
+              : stageLabel(session.workflow_stage)}
           </StatusBadge>
         }
       />
 
-      {session.status === "in_progress" && (
-        <section className="ds-surface mb-5 p-4 sm:p-5">
-          <label className="motion-upload-target ds-grid-lines flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-input bg-secondary/25 p-6 text-center hover:border-primary/60">
-            <span className="grid size-12 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <Camera className="size-6" />
-            </span>
-            <strong className="mt-3 text-base">Capture or add photos</strong>
-            <span className="mt-1 text-xs text-muted-foreground">
-              Choose many files; uploads run two at a time while you continue.
-            </span>
-            <input
-              className="hidden"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              multiple
-              onChange={(event) => {
-                if (event.target.files)
-                  Array.from(event.target.files).forEach((file) => uploadQueue.add({ file }));
-                event.target.value = "";
-              }}
-            />
-          </label>
-          <div
-            className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-            aria-live="polite"
-          >
-            <div>
-              <p className="text-sm font-semibold">{items.length} photos captured</p>
-              <p className="text-xs text-muted-foreground">
-                {failed
-                  ? `${failed} failed — retry required`
-                  : pending
-                    ? `${pending} uploading`
-                    : "All originals uploaded"}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {failed > 0 && (
-                <Button variant="outline" onClick={() => uploadQueue.retryFailed()}>
-                  <RefreshCw className="size-4" />
-                  Retry Uploads
-                </Button>
-              )}
-              <Button
-                className="min-h-12 flex-1"
-                onClick={() => void complete()}
-                disabled={completing || items.length + pending + failed === 0}
-              >
-                <Check className="size-4" />
-                {completing ? "Completing…" : "Complete Bulk Photos"}
-              </Button>
-            </div>
-          </div>
-        </section>
+      {session.workflow_stage === "capture" && (
+        <CaptureStage
+          items={items}
+          acceptedCount={acceptedCount}
+          pending={pending}
+          failed={failed}
+          busy={busy}
+          onOpenCamera={() => setCameraOpen(true)}
+          onRetry={() => uploadQueue.retryFailed()}
+          onFinish={() => void finishTakingPhotos()}
+        />
       )}
 
-      {isAdmin && session.status === "completed" && (
-        <section className="ds-surface mb-5 p-4 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="font-semibold">Office preparation</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Order and tag the grid, then associate it to inventory. The same stored originals
-                become vehicle photos.
-              </p>
-            </div>
-            <Button onClick={() => void associate()} disabled={associating}>
-              {associating
-                ? "Associating…"
-                : session.vehicle_id
-                  ? "Associate Package"
-                  : "Create Vehicle & Associate"}
-            </Button>
-          </div>
-        </section>
+      {session.workflow_stage === "review" && (
+        <ReviewStage
+          items={items}
+          selected={selected}
+          selectedId={selectedId}
+          pending={pending}
+          failed={failed}
+          busy={busy}
+          onSelect={setSelectedId}
+          onAddMore={() => setCameraOpen(true)}
+          onRetry={() => uploadQueue.retryFailed()}
+          onRetake={(item) => {
+            setReplaceItemId(item.id);
+            setCameraOpen(true);
+          }}
+          onRemove={(item) => void remove(item)}
+          onClassify={(item, value) => void updateClassification(item, value)}
+          onSetMain={(item) => void setMain(item)}
+          onMove={(item, direction) => void move(item, direction)}
+          onNext={() => void continueToProcessing()}
+          hasVehicle={Boolean(session.vehicle_id)}
+        />
       )}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Photo grid</h2>
-            <span className="text-xs text-muted-foreground">Select a photo to organize</span>
-          </div>
-          {items.length === 0 ? (
-            <div className="ds-surface p-10 text-center">
-              <ImagePlus className="mx-auto size-8 text-muted-foreground" />
-              <p className="mt-3 text-sm font-medium">No photos yet</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {items.map((item, index) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  onClick={() => setSelectedId(item.id)}
-                  className={`motion-card overflow-hidden rounded-lg border bg-card text-left ${selectedId === item.id ? "border-primary ring-2 ring-primary/25" : "border-border"}`}
-                >
-                  <div className="relative aspect-square bg-secondary">
-                    <img
-                      src={item.image_url}
-                      alt={`Bulk photo ${index + 1}`}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                    {item.is_main && (
-                      <span className="absolute left-2 top-2 rounded bg-primary px-2 py-1 text-[10px] font-bold text-primary-foreground">
-                        MAIN
-                      </span>
-                    )}
-                    <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-[10px] font-bold text-white">
-                      {index + 1}
-                    </span>
-                  </div>
-                  <div className="truncate p-2 text-xs font-medium">
-                    {item.shot_type || "Additional photo"}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-        <aside className="ds-surface h-fit p-4 xl:sticky xl:top-20">
-          {selected ? (
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Selected photo
-                </p>
-                <p className="mt-1 text-sm font-semibold">
-                  #{items.findIndex((item) => item.id === selected.id) + 1} ·{" "}
-                  {selected.shot_type || "Unassigned"}
-                </p>
-              </div>
-              {isAdmin && session.status !== "prepared" ? (
-                <>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium">
-                      Guided shot assignment
-                    </label>
-                    <ProductSelect
-                      value={selected.shot_type ?? ""}
-                      onValueChange={(value) =>
-                        void updateItem(selected, { shot_type: value || null })
-                      }
-                      ariaLabel="Shot assignment"
-                      emptyLabel="Additional gallery photo"
-                      options={SHOT_TYPES.map((shot) => ({ value: shot.name, label: shot.name }))}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => void move(selected, -1)}
-                      disabled={items[0]?.id === selected.id}
-                    >
-                      <ArrowUp className="size-4" />
-                      Earlier
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => void move(selected, 1)}
-                      disabled={items.at(-1)?.id === selected.id}
-                    >
-                      <ArrowDown className="size-4" />
-                      Later
-                    </Button>
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => void setMain(selected)}
-                    disabled={selected.is_main}
-                  >
-                    <Star className="size-4" />
-                    Mark Main Image
-                  </Button>
-                  {session.status === "completed" && (
-                    <Button
-                      className="w-full"
-                      onClick={() => void associate(selected.id)}
-                      disabled={associating}
-                    >
-                      {associating ? "Opening Customize…" : "Customize Selected"}
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    className="w-full text-destructive hover:text-destructive"
-                    onClick={() => void remove(selected)}
-                  >
-                    <Trash2 className="size-4" />
-                    Remove Photo
-                  </Button>
-                  <p className="rounded-md bg-secondary/60 p-3 text-xs leading-5 text-muted-foreground">
-                    Customize and Fix Cutout become available in the vehicle workspace immediately
-                    after association. Originals are not re-uploaded.
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Capture controls remain focused on upload and completion. Office organization is
-                  limited to Dealer Admin and Owner.
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              <Upload className="mx-auto mb-2 size-6" />
-              Select a photo
-            </div>
-          )}
-        </aside>
-      </div>
+      {session.workflow_stage === "processing" && (
+        <ProcessingStage
+          items={items}
+          selected={selectedForProcessing}
+          busy={busy}
+          onChange={setSelectedForProcessing}
+          onDone={() => void finishWorkflow()}
+        />
+      )}
+
+      {session.workflow_stage === "completed" && (
+        <CompletionStage
+          photoCount={items.length}
+          vehicleId={session.vehicle_id}
+          onAnother={() => navigate({ to: "/vehicles/new", search: { dealership: undefined } })}
+          onDashboard={() => navigate({ to: "/dashboard" })}
+        />
+      )}
+
+      {cameraOpen && (
+        <BulkCamera
+          capturedCount={acceptedCount}
+          uploadingCount={pending}
+          failedCount={failed}
+          doneLabel={replaceItemId ? "Cancel retake" : "Finish photos"}
+          onCapture={addCapture}
+          onDone={() => {
+            if (replaceItemId) {
+              setReplaceItemId(null);
+              setCameraOpen(false);
+              return;
+            }
+            void finishTakingPhotos();
+          }}
+        />
+      )}
     </main>
   );
+}
+
+function CaptureStage({
+  items,
+  acceptedCount,
+  pending,
+  failed,
+  busy,
+  onOpenCamera,
+  onRetry,
+  onFinish,
+}: {
+  items: Item[];
+  acceptedCount: number;
+  pending: number;
+  failed: number;
+  busy: string | null;
+  onOpenCamera: () => void;
+  onRetry: () => void;
+  onFinish: () => void;
+}) {
+  return (
+    <section className="ds-surface p-4 sm:p-5">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div>
+          <h2 className="text-lg font-semibold">Take photos consecutively</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The camera stays ready while private originals upload two at a time.
+          </p>
+          <p className="mt-3 text-sm font-semibold" aria-live="polite">
+            {acceptedCount} captured · {items.length} uploaded
+            {pending ? ` · ${pending} uploading` : ""}
+            {failed ? ` · ${failed} failed` : ""}
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {failed > 0 && (
+            <Button variant="outline" onClick={onRetry}>
+              <RefreshCw className="size-4" /> Retry failed
+            </Button>
+          )}
+          <Button className="min-h-12" onClick={onOpenCamera}>
+            <Camera className="size-4" /> Open camera
+          </Button>
+          <Button
+            className="min-h-12"
+            variant="outline"
+            onClick={onFinish}
+            disabled={busy !== null || acceptedCount === 0}
+          >
+            <Check className="size-4" /> {busy === "finish" ? "Finishing…" : "Finish photos"}
+          </Button>
+        </div>
+      </div>
+      <ThumbnailStrip items={items} />
+    </section>
+  );
+}
+
+function ReviewStage({
+  items,
+  selected,
+  selectedId,
+  pending,
+  failed,
+  busy,
+  onSelect,
+  onAddMore,
+  onRetry,
+  onRetake,
+  onRemove,
+  onClassify,
+  onSetMain,
+  onMove,
+  onNext,
+  hasVehicle,
+}: {
+  items: Item[];
+  selected: Item | null;
+  selectedId: string | null;
+  pending: number;
+  failed: number;
+  busy: string | null;
+  onSelect: (id: string) => void;
+  onAddMore: () => void;
+  onRetry: () => void;
+  onRetake: (item: Item) => void;
+  onRemove: (item: Item) => void;
+  onClassify: (item: Item, value: string | null) => void;
+  onSetMain: (item: Item) => void;
+  onMove: (item: Item, direction: -1 | 1) => void;
+  onNext: () => void;
+  hasVehicle: boolean;
+}) {
+  return (
+    <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Review photos</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Remove accidents or retake a selected photo without restarting the vehicle.
+            </p>
+          </div>
+          <Button variant="outline" onClick={onAddMore}>
+            <ImagePlus className="size-4" /> Add more
+          </Button>
+        </div>
+        {failed > 0 && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+            <span>{failed} uploads failed. Successful photos are still safe.</span>
+            <Button size="sm" variant="outline" onClick={onRetry}>
+              Retry
+            </Button>
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {items.map((item, index) => (
+            <button
+              type="button"
+              key={item.id}
+              onClick={() => onSelect(item.id)}
+              className={`overflow-hidden rounded-lg border bg-card text-left ${
+                selectedId === item.id ? "border-primary ring-2 ring-primary/25" : "border-border"
+              }`}
+            >
+              <div className="relative aspect-square bg-secondary">
+                <img
+                  src={item.image_url}
+                  alt={`Captured photo ${index + 1}`}
+                  className="h-full w-full object-cover"
+                />
+                {item.is_main && (
+                  <span className="absolute left-2 top-2 rounded bg-primary px-2 py-1 text-[10px] font-bold text-primary-foreground">
+                    MAIN
+                  </span>
+                )}
+                <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-[10px] font-bold text-white">
+                  {index + 1}
+                </span>
+              </div>
+              <div className="truncate p-2 text-xs font-medium">
+                {item.shot_type || "Unclassified"}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+      <aside className="ds-surface h-fit p-4 xl:sticky xl:top-20">
+        {selected ? (
+          <div className="space-y-3">
+            <p className="text-sm font-semibold">Selected photo</p>
+            <ProductSelect
+              value={selected.shot_type ?? ""}
+              onValueChange={(value) => onClassify(selected, value || null)}
+              ariaLabel="Optional photo classification"
+              emptyLabel="Unclassified"
+              options={SHOT_TYPES.map((shot) => ({ value: shot.name, label: shot.name }))}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                onClick={() => onMove(selected, -1)}
+                disabled={items[0]?.id === selected.id}
+              >
+                <ArrowUp className="size-4" /> Earlier
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => onMove(selected, 1)}
+                disabled={items.at(-1)?.id === selected.id}
+              >
+                <ArrowDown className="size-4" /> Later
+              </Button>
+            </div>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => onSetMain(selected)}
+              disabled={selected.is_main}
+            >
+              <Star className="size-4" /> Mark main
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => onRetake(selected)}>
+              <RotateCcw className="size-4" /> Retake / replace
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full text-destructive hover:text-destructive"
+              onClick={() => onRemove(selected)}
+              disabled={busy !== null}
+            >
+              <Trash2 className="size-4" /> Remove photo
+            </Button>
+          </div>
+        ) : (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Select a photo to review.
+          </p>
+        )}
+        <Button
+          className="mt-5 min-h-12 w-full"
+          onClick={onNext}
+          disabled={busy !== null || pending > 0 || failed > 0 || items.length === 0 || !hasVehicle}
+        >
+          {busy === "next" ? "Preparing…" : "Next"} <ArrowRight className="size-4" />
+        </Button>
+        {!hasVehicle && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            This legacy package must first be associated by an office administrator.
+          </p>
+        )}
+      </aside>
+    </section>
+  );
+}
+
+function ProcessingStage({
+  items,
+  selected,
+  busy,
+  onChange,
+  onDone,
+}: {
+  items: Item[];
+  selected: Set<string>;
+  busy: string | null;
+  onChange: (value: Set<string>) => void;
+  onDone: () => void;
+}) {
+  const choose = (ids: string[]) => onChange(new Set(ids));
+  return (
+    <section className="ds-surface p-4 sm:p-6">
+      <div className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+            Optional background work
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
+            Select photos to process
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Jobs run privately in the background. You can move to the next vehicle immediately.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              choose(
+                items.filter((item) => item.media_category === "exterior").map((item) => item.id),
+              )
+            }
+          >
+            Select exterior
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => choose(items.map((item) => item.id))}>
+            Select all
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => choose([])}>
+            Clear
+          </Button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 py-5 sm:grid-cols-3 lg:grid-cols-5">
+        {items.map((item) => {
+          const checked = selected.has(item.id);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                const next = new Set(selected);
+                if (checked) next.delete(item.id);
+                else next.add(item.id);
+                onChange(next);
+              }}
+              className={`overflow-hidden rounded-lg border text-left ${checked ? "border-primary ring-2 ring-primary/25" : "border-border"}`}
+            >
+              <div className="relative aspect-square bg-secondary">
+                <img src={item.image_url} alt="" className="h-full w-full object-cover" />
+                <Checkbox
+                  checked={checked}
+                  className="pointer-events-none absolute left-2 top-2 bg-background"
+                />
+              </div>
+              <div className="p-2 text-xs font-medium">{item.shot_type || "Photo"}</div>
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground">
+          {selected.size} selected · processing does not block capture completion
+        </p>
+        <Button className="min-h-12" onClick={onDone} disabled={busy !== null}>
+          {busy === "processing" ? "Finishing…" : "Done"} <Check className="size-4" />
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function CompletionStage({
+  photoCount,
+  vehicleId,
+  onAnother,
+  onDashboard,
+}: {
+  photoCount: number;
+  vehicleId: string | null;
+  onAnother: () => void;
+  onDashboard: () => void;
+}) {
+  return (
+    <section className="ds-surface mx-auto max-w-2xl p-6 text-center sm:p-10">
+      <span className="mx-auto grid size-14 place-items-center rounded-full bg-success/15 text-success">
+        <CheckCircle2 className="size-7" />
+      </span>
+      <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em]">Vehicle capture complete</h2>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {photoCount} private originals are safely registered. Background jobs continue
+        independently.
+      </p>
+      <h3 className="mt-7 font-semibold">Photograph another vehicle?</h3>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Button className="min-h-12" onClick={onAnother}>
+          <Camera className="size-4" /> Yes, next vehicle
+        </Button>
+        <Button className="min-h-12" variant="outline" onClick={onDashboard}>
+          No, go to Dashboard
+        </Button>
+      </div>
+      {vehicleId && (
+        <Button asChild variant="link" className="mt-4">
+          <Link to="/vehicles/$id" params={{ id: vehicleId }}>
+            Open vehicle workspace
+          </Link>
+        </Button>
+      )}
+    </section>
+  );
+}
+
+function ThumbnailStrip({ items }: { items: Item[] }) {
+  if (!items.length)
+    return (
+      <div className="mt-5 rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+        Your captured photos will appear here as uploads finish.
+      </div>
+    );
+  return (
+    <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
+      {items.map((item) => (
+        <img
+          key={item.id}
+          src={item.image_url}
+          alt=""
+          className="size-20 shrink-0 rounded-md border border-border object-cover"
+        />
+      ))}
+    </div>
+  );
+}
+
+function classifyShot(value: string | null) {
+  const label = (value ?? "").toLowerCase();
+  if (
+    [
+      "front",
+      "rear",
+      "driver side",
+      "passenger side",
+      "front 3/4",
+      "rear 3/4",
+      "wheel",
+      "engine bay",
+    ].includes(label)
+  )
+    return "exterior";
+  if (label.includes("interior") || ["dashboard", "seats", "trunk"].includes(label))
+    return "interior";
+  if (label.includes("odometer")) return "odometer";
+  if (label === "vin") return "vin";
+  return "misc";
+}
+
+function stageLabel(stage: Session["workflow_stage"]) {
+  if (stage === "review") return "Review Photos";
+  if (stage === "processing") return "Processing Selection";
+  if (stage === "completed") return "Complete";
+  return "Taking Photos";
+}
+
+function formatElapsed(total: number) {
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }

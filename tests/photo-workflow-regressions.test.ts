@@ -120,24 +120,23 @@ test("phone capture hides office preparation controls below the md breakpoint", 
   assert.match(source, /capture="environment"/);
 });
 
-test("Bulk Photos supports raw intake, completion, organization, and no-reupload association", () => {
+test("Bulk Capture supports vehicle-first intake, durable review, and background selection", () => {
   const list = read("src/routes/_authenticated/bulk-photos.tsx");
   const workspace = read("src/routes/_authenticated/bulk-photos.$id.tsx");
+  const addVehicle = read("src/routes/_authenticated/vehicles.new.tsx");
 
-  assert.match(list, /mode: "bulk"/);
-  assert.match(list, /vin: normalizedVin/);
-  assert.match(list, /rpc\("start_photo_capture_session"/);
-  assert.match(list, /import\("@\/components\/VinScannerModal"\)/);
-  assert.match(list, /aria-label="Scan VIN"/);
+  assert.match(list, /Add vehicle & start photos/);
+  assert.match(addVehicle, /_mode: method/);
+  assert.match(addVehicle, /rpc\("start_photo_capture_session"/);
+  assert.match(addVehicle, /to: "\/bulk-photos\/\$id"/);
   assert.match(workspace, /createUploadQueue<BulkUpload>/);
-  assert.match(workspace, /Complete Bulk Photos/);
-  assert.match(workspace, /Guided shot assignment/);
-  assert.match(workspace, /Mark Main Image/);
-  assert.match(workspace, /Customize Selected/);
-  assert.match(workspace, /customize: customizePhotoId/);
+  assert.match(workspace, /Finish photos/);
+  assert.match(workspace, /Review photos/);
+  assert.match(workspace, /Retake \/ replace/);
+  assert.match(workspace, /Select photos to process/);
   assert.match(workspace, /associate_bulk_photo_session/);
-  assert.match(workspace, /without re-uploading photos/);
-  assert.match(workspace, /DecodeVinValues/);
+  assert.match(workspace, /queue_bulk_background_removal/);
+  assert.match(workspace, /Yes, next vehicle/);
 });
 
 test("capture-session migration preserves originals and enforces tenant-scoped state changes", () => {

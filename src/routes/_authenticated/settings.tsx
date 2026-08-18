@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Plus, Save, Settings2, X } from "lucide-react";
+import { AlertTriangle, Camera, CheckCircle2, Plus, Save, Settings2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,12 @@ import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
+import {
+  DEFAULT_CAPTURE_METHOD_CONFIGURATION,
+  parseCaptureMethodConfiguration,
+  type CaptureMethod,
+  type CaptureMethodConfiguration,
+} from "@/hooks/use-capture-methods";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Store settings — DealerShot" }] }),
@@ -45,6 +51,9 @@ function SettingsPage() {
   const [readiness, setReadiness] = useState<ReadinessRule[]>([]);
   const [shots, setShots] = useState<ShotRequirement[]>([]);
   const [completionPolicy, setCompletionPolicy] = useState<"block" | "warn">("warn");
+  const [captureMethods, setCaptureMethods] = useState<CaptureMethodConfiguration>(
+    DEFAULT_CAPTURE_METHOD_CONFIGURATION,
+  );
   const [processing, setProcessing] = useState<ProcessingRule[]>([]);
   const [documents, setDocuments] = useState<DocumentRequirement[]>([]);
   const [payoutRules, setPayoutRules] = useState<PayoutRule[]>([]);
@@ -108,7 +117,9 @@ function SettingsPage() {
         .order("sort_order"),
       supabase
         .from("photography_settings")
-        .select("completion_policy")
+        .select(
+          "completion_policy, bulk_capture_enabled, guided_capture_enabled, default_capture_method",
+        )
         .eq("dealership_id", selectedDealershipId)
         .maybeSingle(),
       supabase
@@ -143,6 +154,13 @@ function SettingsPage() {
       setReadiness(readinessResult.data ?? []);
       setShots(shotResult.data ?? []);
       setCompletionPolicy(photoSettingsResult.data?.completion_policy ?? "warn");
+      setCaptureMethods(
+        parseCaptureMethodConfiguration({
+          bulk_enabled: photoSettingsResult.data?.bulk_capture_enabled ?? true,
+          guided_enabled: photoSettingsResult.data?.guided_capture_enabled ?? true,
+          default_method: photoSettingsResult.data?.default_capture_method ?? "bulk",
+        }),
+      );
       setProcessing(processingResult.data ?? []);
       setDocuments(documentResult.data ?? []);
       setPayoutRules(payoutResult.data ?? []);
@@ -314,6 +332,94 @@ function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="photography">
+            <SettingsCard
+              title="Capture methods"
+              description="Choose the photo workflow this store starts by default. Bulk Capture is optimized for fast, consecutive lot photography."
+            >
+              <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_16rem] lg:items-start">
+                <div className="space-y-3">
+                  <CaptureMethodToggle
+                    label="Bulk Capture"
+                    description="Fast consecutive camera capture, review, retakes, and optional background processing."
+                    checked={captureMethods.bulkEnabled}
+                    onCheckedChange={(checked) =>
+                      setCaptureMethods((current) => {
+                        if (!checked && !current.guidedEnabled) return current;
+                        return {
+                          ...current,
+                          bulkEnabled: checked,
+                          defaultMethod:
+                            !checked && current.defaultMethod === "bulk"
+                              ? "guided"
+                              : current.defaultMethod,
+                        };
+                      })
+                    }
+                  />
+                  <CaptureMethodToggle
+                    label="Guided Capture"
+                    description="The configured shot-by-shot checklist remains available when this method is enabled."
+                    checked={captureMethods.guidedEnabled}
+                    onCheckedChange={(checked) =>
+                      setCaptureMethods((current) => {
+                        if (!checked && !current.bulkEnabled) return current;
+                        return {
+                          ...current,
+                          guidedEnabled: checked,
+                          defaultMethod:
+                            !checked && current.defaultMethod === "guided"
+                              ? "bulk"
+                              : current.defaultMethod,
+                        };
+                      })
+                    }
+                  />
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    At least one method must stay enabled. Disabled methods are removed from normal
+                    capture entry points and rejected by the server.
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-secondary/35 p-4">
+                  <div className="mb-3 grid size-9 place-items-center rounded-md bg-primary text-primary-foreground">
+                    <Camera className="size-4" />
+                  </div>
+                  <Label htmlFor="default-capture-method">Default capture method</Label>
+                  <ProductSelect
+                    id="default-capture-method"
+                    className="mt-2"
+                    value={captureMethods.defaultMethod}
+                    onValueChange={(value) =>
+                      setCaptureMethods((current) => ({
+                        ...current,
+                        defaultMethod: value as CaptureMethod,
+                      }))
+                    }
+                    options={[
+                      ...(captureMethods.bulkEnabled
+                        ? [{ value: "bulk", label: "Bulk Capture" }]
+                        : []),
+                      ...(captureMethods.guidedEnabled
+                        ? [{ value: "guided", label: "Guided Capture" }]
+                        : []),
+                    ]}
+                  />
+                </div>
+              </div>
+              <SaveBar
+                saving={saving === "Capture Methods"}
+                onSave={() =>
+                  void runSave("Capture Methods", () =>
+                    supabase.rpc("save_capture_method_configuration", {
+                      _dealership_id: selectedDealershipId,
+                      _bulk_enabled: captureMethods.bulkEnabled,
+                      _guided_enabled: captureMethods.guidedEnabled,
+                      _default_method: captureMethods.defaultMethod,
+                    }),
+                  )
+                }
+              />
+            </SettingsCard>
+
             <SettingsCard
               title="Required shot list"
               description="This ordered checklist is shown during guided capture. Existing shoots keep the snapshot they started with."
@@ -856,6 +962,28 @@ function RuleToggle({
           aria-label={`${label}: ${checked ? "required" : "not required"}`}
         />
       </div>
+    </div>
+  );
+}
+
+function CaptureMethodToggle({
+  label,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex min-h-20 items-center justify-between gap-4 rounded-lg border border-border bg-card p-4">
+      <div>
+        <p className="text-sm font-semibold">{label}</p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={`Enable ${label}`} />
     </div>
   );
 }

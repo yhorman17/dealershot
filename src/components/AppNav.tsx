@@ -46,6 +46,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { isStoreSwitchLocked } from "@/lib/active-store";
+import { useCaptureMethods } from "@/hooks/use-capture-methods";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard };
 export function AppNav({ children }: { children: ReactNode }) {
@@ -72,11 +73,14 @@ export function AppNav({ children }: { children: ReactNode }) {
   const canUseInventory =
     profile?.role !== "staff" || Boolean(capabilities?.capture || capabilities?.media);
   const canAddVehicle = profile?.role !== "staff" || Boolean(capabilities?.media);
+  const { configuration: captureMethods } = useCaptureMethods(selectedDealershipId);
 
   const items: NavItem[] = [
     { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
     ...(canUseInventory ? [{ to: "/inventory", label: "Inventory", icon: PackageSearch }] : []),
-    ...(staffCanUse("capture") ? [{ to: "/bulk-photos", label: "Bulk Photos", icon: Camera }] : []),
+    ...(staffCanUse("capture") && captureMethods.bulkEnabled
+      ? [{ to: "/bulk-photos", label: "Capture", icon: Camera }]
+      : []),
     ...(staffCanUse("media")
       ? [
           { to: "/overlays", label: "Overlays", icon: Images },

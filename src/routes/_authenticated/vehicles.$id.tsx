@@ -31,8 +31,11 @@ import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { deleteVehicle } from "@/lib/api/vehicles.functions";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id")({
-  validateSearch: (search: Record<string, unknown>): { customize?: string } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { customize?: string; capture?: "guided" } => ({
     customize: typeof search.customize === "string" ? search.customize : undefined,
+    capture: search.capture === "guided" ? "guided" : undefined,
   }),
   head: () => ({ meta: [{ title: "Vehicle — DealerShot" }] }),
   component: VehicleDetailPage,
@@ -42,7 +45,7 @@ type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 
 function VehicleDetailPage() {
   const { id } = Route.useParams();
-  const { customize } = Route.useSearch();
+  const { customize, capture } = Route.useSearch();
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { setSelectedDealershipId } = useAccessibleDealerships();
@@ -261,7 +264,7 @@ function VehicleDetailPage() {
         </div>
       </section>
 
-      <Tabs defaultValue={customize ? "media" : "overview"} className="space-y-4">
+      <Tabs defaultValue={customize || capture ? "media" : "overview"} className="space-y-4">
         <TabsList className="h-11 w-full justify-start overflow-x-auto rounded-lg border border-border bg-card p-1 sm:w-auto">
           <TabsTrigger value="overview" className="min-h-9 gap-2">
             <CircleGauge className="size-4" />
@@ -291,7 +294,11 @@ function VehicleDetailPage() {
           <VehicleOperationsPanel section="overview" vehicle={vehicle} />
         </TabsContent>
         <TabsContent value="media" className="motion-tab-panel mt-0">
-          <VehiclePhotos vehicleId={id} initialCustomizePhotoId={customize} />
+          <VehiclePhotos
+            vehicleId={id}
+            initialCustomizePhotoId={customize}
+            initialStartGuided={capture === "guided"}
+          />
         </TabsContent>
         {(["equipment", "pricing", "documents", "activity", "publishing"] as const).map(
           (section) => (

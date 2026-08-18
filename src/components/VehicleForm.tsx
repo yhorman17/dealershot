@@ -19,12 +19,14 @@ export function VehicleForm({
   vehicleId,
   onSaved,
   onCancel,
+  submitLabel,
 }: {
   initial?: VehicleFormValues;
   dealershipId: string;
   vehicleId?: string;
-  onSaved: (id: string) => void;
+  onSaved: (id: string) => void | Promise<void>;
   onCancel: () => void;
+  submitLabel?: string;
 }) {
   const isEdit = Boolean(vehicleId);
   const [formState, dispatch] = useReducer(vehicleFormReducer, initial, createVehicleFormState);
@@ -134,7 +136,7 @@ export function VehicleForm({
           .eq("id", vehicleId);
         if (upErr) throw upErr;
         toast.success("Vehicle updated.");
-        onSaved(vehicleId);
+        await onSaved(vehicleId);
       } else {
         const { data, error: insErr } = await supabase
           .from("vehicles")
@@ -142,7 +144,7 @@ export function VehicleForm({
           .select("id")
           .single();
         if (insErr) throw insErr;
-        onSaved(data.id);
+        await onSaved(data.id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -406,7 +408,7 @@ export function VehicleForm({
           disabled={saving}
           className="w-full sm:w-auto rounded-md bg-primary px-4 py-2 min-h-[44px] text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
         >
-          {saving ? "Saving…" : vehicleId ? "Save changes" : "Create vehicle"}
+          {saving ? "Saving…" : vehicleId ? "Save changes" : (submitLabel ?? "Create vehicle")}
         </button>
       </div>
     </form>

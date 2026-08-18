@@ -1,4 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { access, readFile } from "node:fs/promises";
+import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import sharp from "sharp";
 
@@ -9,6 +11,8 @@ const PRIVATE_BUCKET = "dealer-media-private";
 const LEGACY_PRIVATE_BUCKET = "dealer-media-legacy-private";
 const LEGACY_BUCKET = "vehicle-photos";
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+const SEGMENTATION_SIZE = 1024;
+const BACKGROUND_REMOVAL_MODEL_KEY = "/models/isnet_quint8";
 
 type MigrationRecord = {
   migration_id: string;
@@ -42,6 +46,33 @@ type VehicleDeletionOperation = {
   storage_manifest: Array<{ bucket: string; path: string }>;
 };
 
+type BackgroundRemovalSource = {
+  job_id: string;
+  actor_id: string;
+  media_asset_id: string;
+  dealership_id: string;
+  vehicle_id: string;
+  photo_id: string;
+  source_variant_id: string;
+  bucket: string;
+  path: string;
+  content_type: string;
+};
+
+type BackgroundRemovalManifest = Record<
+  string,
+  {
+    size: number;
+    chunks: Array<{ name: string; hash: string; offsets: [number, number] }>;
+  }
+>;
+
+type OnnxRuntime = typeof import("onnxruntime-node");
+let backgroundRemovalRuntime: Promise<{
+  ort: OnnxRuntime;
+  session: import("onnxruntime-node").InferenceSession;
+}> | null = null;
+
 const VEHICLE_DELETE_BUCKETS = new Set([
   "dealer-media-private",
   "dealer-media-legacy-private",
@@ -66,6 +97,126 @@ function payloadId(job: BackgroundJob, key: string) {
 
 function hash(bytes: Buffer) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+async function backgroundRemovalAssetDirectory() {
+  const candidates = [
+    path.resolve(process.cwd(), ".output/public/background-removal"),
+    path.resolve(process.cwd(), "public/background-removal"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      await access(path.join(candidate, "resources.json"));
+      return candidate;
+    } catch {
+      // Production serves verified model chunks from .output; source is a local test fallback.
+    }
+  }
+  throw new Error("background_model_unavailable");
+}
+
+async function loadBackgroundRemovalModel() {
+  const directory = await backgroundRemovalAssetDirectory();
+  const manifest = JSON.parse(
+    await readFile(path.join(directory, "resources.json"), "utf8"),
+  ) as BackgroundRemovalManifest;
+  const resource = manifest[BACKGROUND_REMOVAL_MODEL_KEY];
+  if (!resource || !Number.isSafeInteger(resource.size) || !Array.isArray(resource.chunks)) {
+    throw new Error("background_model_manifest_invalid");
+  }
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for (const chunk of resource.chunks) {
+    if (!/^[a-f0-9]{64}$/.test(chunk.name) || chunk.hash !== chunk.name) {
+      throw new Error("background_model_manifest_invalid");
+    }
+    const bytes = await readFile(path.join(directory, chunk.name));
+    if (hash(bytes) !== chunk.hash || chunk.offsets[0] !== total) {
+      throw new Error("background_model_integrity_failed");
+    }
+    total += bytes.length;
+    if (chunk.offsets[1] !== total) throw new Error("background_model_integrity_failed");
+    chunks.push(bytes);
+  }
+  if (total !== resource.size) throw new Error("background_model_integrity_failed");
+  return Buffer.concat(chunks, total);
+}
+
+function getBackgroundRemovalRuntime() {
+  backgroundRemovalRuntime ??= (async () => {
+    const [ort, model] = await Promise.all([
+      import("onnxruntime-node"),
+      loadBackgroundRemovalModel(),
+    ]);
+    const session = await ort.InferenceSession.create(model, {
+      executionProviders: ["cpu"],
+      graphOptimizationLevel: "all",
+      executionMode: "parallel",
+      enableCpuMemArena: true,
+    });
+    return { ort, session };
+  })();
+  return backgroundRemovalRuntime;
+}
+
+async function createTransparentVehicleCutout(original: Buffer) {
+  const { data: normalized, info: normalizedInfo } = await sharp(original, {
+    failOn: "warning",
+  })
+    .rotate()
+    .removeAlpha()
+    .resize(SEGMENTATION_SIZE, SEGMENTATION_SIZE, { fit: "fill" })
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  if (normalizedInfo.channels !== 3) throw new Error("background_source_decode_failed");
+
+  const stride = SEGMENTATION_SIZE * SEGMENTATION_SIZE;
+  const input = new Float32Array(stride * 3);
+  for (let pixel = 0; pixel < stride; pixel += 1) {
+    const source = pixel * 3;
+    input[pixel] = (normalized[source] - 128) / 256;
+    input[pixel + stride] = (normalized[source + 1] - 128) / 256;
+    input[pixel + stride * 2] = (normalized[source + 2] - 128) / 256;
+  }
+
+  const { ort, session } = await getBackgroundRemovalRuntime();
+  const outputs = await session.run({
+    input: new ort.Tensor("float32", input, [1, 3, SEGMENTATION_SIZE, SEGMENTATION_SIZE]),
+  });
+  const prediction = outputs.output ?? Object.values(outputs)[0];
+  if (!prediction || prediction.data.length !== stride) {
+    throw new Error("background_inference_output_invalid");
+  }
+  const mask = Buffer.allocUnsafe(stride);
+  let minimum = 255;
+  let maximum = 0;
+  for (let index = 0; index < stride; index += 1) {
+    const value = Math.max(0, Math.min(255, Math.round(Number(prediction.data[index]) * 255)));
+    mask[index] = value;
+    minimum = Math.min(minimum, value);
+    maximum = Math.max(maximum, value);
+  }
+  if (minimum === maximum) throw new Error("background_inference_mask_invalid");
+
+  const { data: sourcePixels, info } = await sharp(original, { failOn: "warning" })
+    .rotate()
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const alpha = await sharp(mask, {
+    raw: { width: SEGMENTATION_SIZE, height: SEGMENTATION_SIZE, channels: 1 },
+  })
+    .resize(info.width, info.height, { fit: "fill", kernel: "linear" })
+    .raw()
+    .toBuffer();
+  for (let pixel = 0; pixel < info.width * info.height; pixel += 1) {
+    sourcePixels[pixel * 4 + 3] = alpha[pixel];
+  }
+  return sharp(sourcePixels, {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  })
+    .png({ compressionLevel: 9 })
+    .toBuffer();
 }
 
 async function imageMetadata(bytes: Buffer, allowLegacySvg = false) {
@@ -250,6 +401,60 @@ async function generateThumbnails(client: SupabaseClient<Database>, job: Backgro
   return { media_asset_id: mediaAssetId, derivatives: outputs };
 }
 
+async function removeMediaBackground(client: SupabaseClient<Database>, job: BackgroundJob) {
+  const { data, error } = await client.rpc(
+    "worker_get_background_removal_source" as never,
+    { _job_id: job.job_id } as never,
+  );
+  if (error) throw new Error("background_source_lookup_failed");
+  const source = asObject<BackgroundRemovalSource>(data as Json | null);
+  const original = await downloadBytes(client, source.bucket, source.path);
+  await imageMetadata(original);
+
+  let bytes: Buffer;
+  try {
+    bytes = await createTransparentVehicleCutout(original);
+  } catch {
+    throw new Error("background_inference_failed");
+  }
+  const metadata = await sharp(bytes, { failOn: "warning" }).metadata();
+  if (
+    metadata.format !== "png" ||
+    !metadata.width ||
+    !metadata.height ||
+    !metadata.hasAlpha ||
+    bytes.length < 1 ||
+    bytes.length > MAX_IMAGE_BYTES
+  ) {
+    throw new Error("background_output_invalid");
+  }
+  const variantId = randomUUID();
+  const path = `stores/${source.dealership_id}/vehicles/${source.vehicle_id}/media/${source.media_asset_id}/variants/cutout/${job.job_id}.png`;
+  await uploadVerified(client, PRIVATE_BUCKET, path, bytes, "image/png");
+  const { data: committed, error: commitError } = await client.rpc(
+    "worker_commit_background_cutout" as never,
+    {
+      _job_id: job.job_id,
+      _variant_id: variantId,
+      _storage_bucket: PRIVATE_BUCKET,
+      _storage_path: path,
+      _byte_size: bytes.length,
+      _width: metadata.width,
+      _height: metadata.height,
+      _checksum_sha256: hash(bytes),
+    } as never,
+  );
+  if (commitError || !committed) throw new Error("background_variant_finalize_failed");
+  return {
+    media_asset_id: source.media_asset_id,
+    photo_id: source.photo_id,
+    variant_id: committed,
+    width: metadata.width,
+    height: metadata.height,
+    bytes: bytes.length,
+  };
+}
+
 async function lockdownLegacyBucket(client: SupabaseClient<Database>) {
   const { data, error } = await client.rpc("worker_get_media_migration_status");
   if (error) throw new Error("migration_status_failed");
@@ -334,6 +539,7 @@ export function createMediaJobHandlers(
   return {
     "media.legacy.migrate": (job) => migrateLegacyMedia(client, job),
     "media.thumbnail.generate": (job) => generateThumbnails(client, job),
+    "media.background.remove": (job) => removeMediaBackground(client, job),
     "media.legacy.lockdown": () => lockdownLegacyBucket(client),
     "vehicle.storage.cleanup": (job) => cleanupDeletedVehicleStorage(client, job),
   };

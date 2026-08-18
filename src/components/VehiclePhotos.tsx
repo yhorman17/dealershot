@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -44,6 +45,7 @@ import {
   resolveAuthorizedMediaUrls,
   uploadPrivateOriginal,
 } from "@/lib/private-media";
+import { useCaptureMethods } from "@/hooks/use-capture-methods";
 
 const BackgroundEditor = lazy(() =>
   import("@/components/BackgroundEditor").then((module) => ({ default: module.BackgroundEditor })),
@@ -174,10 +176,13 @@ type LibraryDoc = { id: string; name: string; image_url: string };
 export function VehiclePhotos({
   vehicleId,
   initialCustomizePhotoId,
+  initialStartGuided = false,
 }: {
   vehicleId: string;
   initialCustomizePhotoId?: string;
+  initialStartGuided?: boolean;
 }) {
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
   const { capabilities, loadingCapabilities } = useAccessibleDealerships();
   const userId = user?.id;
@@ -190,6 +195,8 @@ export function VehiclePhotos({
   const [customLabel, setCustomLabel] = useState("");
   const [addingCustom, setAddingCustom] = useState(false);
   const [dealershipId, setDealershipId] = useState<string | null>(null);
+  const { configuration: captureMethods, loading: loadingCaptureMethods } =
+    useCaptureMethods(dealershipId);
   const [guidedShots, setGuidedShots] = useState<GuidedShot[]>(FALLBACK_GUIDED_SHOTS);
   const [captureStatus, setCaptureStatus] = useState<"idle" | "in_progress" | "completed">("idle");
   const [starting, setStarting] = useState(false);
@@ -210,6 +217,7 @@ export function VehiclePhotos({
   const photosRef = useRef<Photo[]>([]);
   const nextSortRef = useRef(0);
   const initialCustomizeOpenedRef = useRef(false);
+  const initialGuidedStartedRef = useRef(false);
   const [bgPhoto, setBgPhoto] = useState<Photo | null>(null);
   const [showAttachDoc, setShowAttachDoc] = useState(false);
   const [activeShotName, setActiveShotName] = useState<string>("Front");
@@ -476,7 +484,7 @@ export function VehiclePhotos({
     };
   }, [userId, vehicleId]);
 
-  const startShoot = async () => {
+  const startShoot = useCallback(async () => {
     if (starting || captureStatus === "in_progress") return;
     setStarting(true);
     try {
@@ -492,7 +500,52 @@ export function VehiclePhotos({
     } finally {
       setStarting(false);
     }
-  };
+  }, [captureStatus, ensureCaptureSession, starting]);
+
+  const startBulkCapture = useCallback(async () => {
+    if (starting || !dealershipId || !captureMethods.bulkEnabled) return;
+    setStarting(true);
+    try {
+      const context = await getCaptureContext();
+      const { data, error } = await supabase.rpc("start_photo_capture_session", {
+        _dealership_id: context.dealershipId,
+        _vehicle_id: vehicleId,
+        _vin: context.vin,
+        _mode: "bulk",
+      });
+      if (error) throw error;
+      await navigate({ to: "/bulk-photos/$id", params: { id: data.id } });
+    } catch (reason) {
+      toast.error("Bulk Capture could not start", {
+        description: reason instanceof Error ? reason.message : "Try again.",
+      });
+    } finally {
+      setStarting(false);
+    }
+  }, [captureMethods.bulkEnabled, dealershipId, getCaptureContext, navigate, starting, vehicleId]);
+
+  useEffect(() => {
+    if (
+      !initialStartGuided ||
+      initialGuidedStartedRef.current ||
+      loadingCaptureMethods ||
+      !dealershipId
+    )
+      return;
+    initialGuidedStartedRef.current = true;
+    if (!captureMethods.guidedEnabled) {
+      toast.error("Guided Capture is disabled for this store.");
+      return;
+    }
+    void startShoot();
+    window.history.replaceState(window.history.state, "", window.location.pathname);
+  }, [
+    captureMethods.guidedEnabled,
+    dealershipId,
+    initialStartGuided,
+    loadingCaptureMethods,
+    startShoot,
+  ]);
 
   const uploadQueue = useMemo(
     () =>
@@ -711,31 +764,37 @@ export function VehiclePhotos({
 
   return (
     <div className="ds-surface overflow-hidden">
-      <div className="flex border-b border-border bg-secondary/35 p-1">
-        {(["guided", "free"] as const).map((m) => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            className={`motion-tab flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold ${
-              mode === m
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {m === "guided" ? (
-              <>
-                <Camera className="size-4" />
-                Guided capture
-              </>
-            ) : (
-              <>
-                <Upload className="size-4" />
-                Free upload
-              </>
-            )}
-          </button>
-        ))}
-      </div>
+      {captureMethods.guidedEnabled ? (
+        <div className="flex border-b border-border bg-secondary/35 p-1">
+          {(["guided", "free"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`motion-tab flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold ${
+                mode === m
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {m === "guided" ? (
+                <>
+                  <Camera className="size-4" />
+                  Guided capture
+                </>
+              ) : (
+                <>
+                  <Upload className="size-4" />
+                  Free upload
+                </>
+              )}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="border-b border-border bg-secondary/35 px-4 py-3 text-sm text-muted-foreground">
+          Guided Capture is disabled for this store. Use the store's Bulk Capture workflow.
+        </div>
+      )}
 
       <div className="border-b border-border p-4 sm:p-5">
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -773,20 +832,50 @@ export function VehiclePhotos({
                 {completing ? "Completing…" : "Complete Photos"}
               </Button>
             ) : (
-              <Button
-                className="min-h-12 flex-1 sm:flex-none"
-                onClick={() => void startShoot()}
-                disabled={starting}
-              >
-                <Camera className="size-4" />
-                {starting ? "Starting…" : "Start Shoot"}
-              </Button>
+              <>
+                {captureMethods.guidedEnabled && (
+                  <Button
+                    className="min-h-12 flex-1 sm:flex-none"
+                    variant={captureMethods.defaultMethod === "bulk" ? "outline" : "default"}
+                    onClick={() => void startShoot()}
+                    disabled={starting || loadingCaptureMethods}
+                  >
+                    <Camera className="size-4" />
+                    {starting ? "Starting…" : "Start Guided"}
+                  </Button>
+                )}
+                {captureMethods.bulkEnabled && (
+                  <Button
+                    className="min-h-12 flex-1 sm:flex-none"
+                    variant={captureMethods.defaultMethod === "bulk" ? "default" : "outline"}
+                    onClick={() => void startBulkCapture()}
+                    disabled={starting || loadingCaptureMethods}
+                  >
+                    <Camera className="size-4" />
+                    {starting ? "Starting…" : "Start Bulk Capture"}
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
 
-      {mode === "guided" ? (
+      {!captureMethods.guidedEnabled ? (
+        <div className="p-5 sm:p-6">
+          <div className="rounded-lg border border-border bg-secondary/35 p-6 text-center">
+            <Camera className="mx-auto size-8 text-primary" />
+            <h3 className="mt-3 font-semibold">Bulk Capture is ready</h3>
+            <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
+              Open the consecutive camera, photograph the vehicle, review retakes, and queue
+              selected background work without leaving the capture flow.
+            </p>
+            <Button className="mt-4 min-h-12" onClick={() => void startBulkCapture()}>
+              Start Bulk Capture
+            </Button>
+          </div>
+        </div>
+      ) : mode === "guided" ? (
         <div key="guided" className="motion-content">
           <div className="border-b border-border p-4 sm:p-5">
             <div className="flex items-center justify-between gap-4">
