@@ -6,6 +6,11 @@ import sharp from "sharp";
 
 import type { Database, Json } from "../src/integrations/supabase/types";
 import type { BackgroundJob, JobHandler } from "./runtime";
+import {
+  createVehicleAwareCutout,
+  VEHICLE_AWARE_PIPELINE_VERSION,
+  type VehicleAwareCutoutResult,
+} from "./vehicle-aware-cutout.ts";
 
 const PRIVATE_BUCKET = "dealer-media-private";
 const LEGACY_PRIVATE_BUCKET = "dealer-media-legacy-private";
@@ -159,7 +164,7 @@ function getBackgroundRemovalRuntime() {
   return backgroundRemovalRuntime;
 }
 
-async function createTransparentVehicleCutout(original: Buffer) {
+export async function createTransparentVehicleCutout(original: Buffer) {
   const { data: normalized, info: normalizedInfo } = await sharp(original, {
     failOn: "warning",
   })
@@ -412,8 +417,46 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
   await imageMetadata(original);
 
   let bytes: Buffer;
+  let vehicleAware: VehicleAwareCutoutResult | null = null;
+  const vehicleAwareEnabled = process.env.VEHICLE_AWARE_BACKGROUND_REMOVAL?.trim() === "1";
   try {
-    bytes = await createTransparentVehicleCutout(original);
+    if (vehicleAwareEnabled) {
+      try {
+        vehicleAware = await createVehicleAwareCutout(original, createTransparentVehicleCutout);
+        bytes = vehicleAware.bytes;
+      } catch {
+        bytes = await createTransparentVehicleCutout(original);
+        vehicleAware = {
+          bytes,
+          method: "standard_fallback",
+          detector: {
+            model: "unavailable",
+            selected: null,
+            candidateCount: 0,
+            ambiguous: false,
+          },
+          roi: null,
+          quality: {
+            rating: "bad",
+            score: 0,
+            reasons: ["vehicle_aware_pipeline_failed"],
+            metrics: {
+              detectorConfidence: 0,
+              detectorMaskCoverage: 0,
+              maskBoxCoverage: 0,
+              primaryComponentRatio: 0,
+              centerOccupancy: 0,
+              edgeContactRatio: 0,
+              enclosedHoleRatio: 0,
+              ambiguous: false,
+            },
+          },
+          framing: null,
+        };
+      }
+    } else {
+      bytes = await createTransparentVehicleCutout(original);
+    }
   } catch {
     throw new Error("background_inference_failed");
   }
@@ -431,18 +474,36 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
   const variantId = randomUUID();
   const path = `stores/${source.dealership_id}/vehicles/${source.vehicle_id}/media/${source.media_asset_id}/variants/cutout/${job.job_id}.png`;
   await uploadVerified(client, PRIVATE_BUCKET, path, bytes, "image/png");
+  const commitRpc = vehicleAware
+    ? "worker_commit_vehicle_aware_cutout"
+    : "worker_commit_background_cutout";
+  const commitArguments = {
+    _job_id: job.job_id,
+    _variant_id: variantId,
+    _storage_bucket: PRIVATE_BUCKET,
+    _storage_path: path,
+    _byte_size: bytes.length,
+    _width: metadata.width,
+    _height: metadata.height,
+    _checksum_sha256: hash(bytes),
+    ...(vehicleAware
+      ? {
+          _quality_class: vehicleAware.quality.rating,
+          _quality_score: vehicleAware.quality.score,
+          _metadata: {
+            pipeline_version: VEHICLE_AWARE_PIPELINE_VERSION,
+            method: vehicleAware.method,
+            detector: vehicleAware.detector,
+            roi: vehicleAware.roi,
+            quality: vehicleAware.quality,
+            framing: vehicleAware.framing,
+          },
+        }
+      : {}),
+  };
   const { data: committed, error: commitError } = await client.rpc(
-    "worker_commit_background_cutout" as never,
-    {
-      _job_id: job.job_id,
-      _variant_id: variantId,
-      _storage_bucket: PRIVATE_BUCKET,
-      _storage_path: path,
-      _byte_size: bytes.length,
-      _width: metadata.width,
-      _height: metadata.height,
-      _checksum_sha256: hash(bytes),
-    } as never,
+    commitRpc as never,
+    commitArguments as never,
   );
   if (commitError || !committed) throw new Error("background_variant_finalize_failed");
   return {
@@ -452,6 +513,9 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
     width: metadata.width,
     height: metadata.height,
     bytes: bytes.length,
+    strategy: vehicleAware ? vehicleAware.method : "standard",
+    quality: vehicleAware?.quality.rating ?? "legacy_unscored",
+    quality_score: vehicleAware?.quality.score ?? null,
   };
 }
 

@@ -2252,6 +2252,25 @@ SELECT public.save_capture_method_configuration(
 );
 RESET ROLE;
 
+SELECT test.assert_true(
+  NOT has_function_privilege(
+    'anon',
+    'public.worker_commit_vehicle_aware_cutout(uuid,uuid,text,text,bigint,integer,integer,text,text,numeric,jsonb)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'authenticated',
+    'public.worker_commit_vehicle_aware_cutout(uuid,uuid,text,text,bigint,integer,integer,text,text,numeric,jsonb)',
+    'EXECUTE'
+  )
+  AND has_function_privilege(
+    'service_role',
+    'public.worker_commit_vehicle_aware_cutout(uuid,uuid,text,text,bigint,integer,integer,text,text,numeric,jsonb)',
+    'EXECUTE'
+  ),
+  'vehicle-aware cutout finalization is service-only and cannot be called cross-store by browser roles'
+);
+
 DROP SCHEMA test CASCADE;
 
 \echo 'DealerShot portable authorization assertions passed.'

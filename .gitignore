@@ -13,6 +13,7 @@ dist-ssr
 .output
 .worker
 public/background-removal/
+public/vehicle-detection/
 .vinxi
 .tanstack/**
 .nitro
