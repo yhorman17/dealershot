@@ -21,7 +21,12 @@ export type QueueAdapter = {
 export type WorkerLogger = (entry: Record<string, unknown>) => void;
 
 function safeErrorCode(error: unknown) {
-  const source = error instanceof Error ? error.name : "unknown_error";
+  const message = error instanceof Error ? error.message.trim() : "";
+  const source = /^[a-z][a-z0-9_.-]{2,119}$/i.test(message)
+    ? message
+    : error instanceof Error
+      ? error.name
+      : "unknown_error";
   return source
     .toLowerCase()
     .replace(/[^a-z0-9_.-]+/g, "_")

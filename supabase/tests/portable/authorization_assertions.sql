@@ -2356,6 +2356,224 @@ SELECT test.assert_true(
   'a canceled workflow does not block one future Bulk capture'
 );
 RESET ROLE;
+
+-- Background-removal controls synchronize the durable queue with photo-facing
+-- state, preserve immutable originals, and remain store/capability authorized.
+SELECT test.assert_true(
+  has_function_privilege('authenticated', 'public.retry_background_removal(uuid)', 'EXECUTE')
+  AND has_function_privilege('authenticated', 'public.cancel_background_removal(uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'public.retry_background_removal(uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'public.cancel_background_removal(uuid)', 'EXECUTE'),
+  'background-removal controls are authenticated-only'
+);
+
+INSERT INTO public.vehicles (
+  id, dealership_id, vin, stock_number, year, make, model
+) VALUES (
+  'fc000000-0000-4000-8000-000000000001',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  '1TESTBACKGROUND0001', 'BG-CTRL-1', 2026, 'Test', 'Processing Controls'
+);
+INSERT INTO public.media_assets (
+  id, organization_id, dealership_id, vehicle_id, uploaded_by,
+  source_type, content_type, byte_size, checksum_sha256,
+  storage_bucket, storage_object_path
+) VALUES (
+  'fc100000-0000-4000-8000-000000000001',
+  '11111111-aaaa-4000-8000-000000000001',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  'fc000000-0000-4000-8000-000000000001',
+  '00000000-0000-0000-0000-000000000002',
+  'capture', 'image/jpeg', 100, repeat('c', 64), 'dealer-media-private',
+  'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/fc000000-0000-4000-8000-000000000001/media/fc100000-0000-4000-8000-000000000001/original/source.jpg'
+);
+INSERT INTO public.photos (
+  id, vehicle_id, media_asset_id, image_url, original_image_url
+) VALUES (
+  'fc200000-0000-4000-8000-000000000001',
+  'fc000000-0000-4000-8000-000000000001',
+  'fc100000-0000-4000-8000-000000000001',
+  'private-media://fc300000-0000-4000-8000-000000000001',
+  'private-media://fc300000-0000-4000-8000-000000000001'
+);
+UPDATE public.media_variants
+SET storage_bucket = 'dealer-media-private',
+    storage_path = 'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/fc000000-0000-4000-8000-000000000001/media/fc100000-0000-4000-8000-000000000001/original/source.jpg',
+    content_type = 'image/jpeg',
+    byte_size = 100,
+    checksum = repeat('c', 64)
+WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000001'
+  AND variant_type = 'original';
+
+INSERT INTO private.background_jobs (
+  id, job_type, payload, dealership_id, resource_type, resource_id,
+  status, priority, attempt_count, max_attempts, dedupe_key,
+  created_by, completed_at
+) VALUES (
+  'fc400000-0000-4000-8000-000000000001',
+  'media.background.remove',
+  '{"media_asset_id":"fc100000-0000-4000-8000-000000000001","photo_id":"fc200000-0000-4000-8000-000000000001"}',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  'media_asset', 'fc100000-0000-4000-8000-000000000001',
+  'dead_letter', 100, 1, 1,
+  'background-remove:fc100000-0000-4000-8000-000000000001:v1',
+  '00000000-0000-0000-0000-000000000002', now()
+);
+SELECT test.assert_true(
+  (SELECT processing_status = 'failed' AND processing_error = 'background_removal_failed'
+   FROM public.photos WHERE id = 'fc200000-0000-4000-8000-000000000001'),
+  'terminal durable failure synchronizes the photo to Failed'
+);
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT test.expect_sqlstate(
+  $$SELECT public.retry_background_removal('fc400000-0000-4000-8000-000000000001')$$,
+  '42501',
+  'capture-only staff cannot retry office media processing'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000004';
+SELECT test.expect_sqlstate(
+  $$SELECT public.cancel_background_removal('fc400000-0000-4000-8000-000000000001')$$,
+  '42501',
+  'cross-store staff cannot cancel media processing'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT public.retry_background_removal('fc400000-0000-4000-8000-000000000001')->>'status'
+  AS processing_retry_status \gset
+SELECT public.retry_background_removal('fc400000-0000-4000-8000-000000000001')->>'status'
+  AS processing_retry_duplicate_status \gset
+RESET ROLE;
+SELECT test.assert_true(
+  :'processing_retry_status' = 'queued'
+  AND :'processing_retry_duplicate_status' = 'queued'
+  AND (
+    SELECT count(*) = 1 FROM private.background_jobs
+    WHERE id = 'fc400000-0000-4000-8000-000000000001' AND status = 'queued'
+  )
+  AND (
+    SELECT processing_status = 'queued' FROM public.photos
+    WHERE id = 'fc200000-0000-4000-8000-000000000001'
+  ),
+  'manual Retry is idempotent and synchronizes Retry queued'
+);
+
+SET ROLE service_role;
+SELECT (public.worker_claim_background_job('processing-controls-worker', 60)->>'job_id')
+  AS processing_control_claimed_id \gset
+SELECT test.assert_true(
+  :'processing_control_claimed_id' = 'fc400000-0000-4000-8000-000000000001'
+  AND (
+    SELECT processing_status = 'processing' FROM public.photos
+    WHERE id = 'fc200000-0000-4000-8000-000000000001'
+  ),
+  'worker claim synchronizes the photo to Processing'
+);
+SELECT public.worker_fail_background_job(
+  'processing-controls-worker', 'fc400000-0000-4000-8000-000000000001',
+  'background_inference_failed', false
+) AS processing_control_failure_status \gset
+SELECT test.assert_true(
+  :'processing_control_failure_status' = 'dead_letter'
+  AND (
+    SELECT processing_status = 'failed' FROM public.photos
+    WHERE id = 'fc200000-0000-4000-8000-000000000001'
+  ),
+  'worker failure synchronizes the photo back to Failed'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT public.cancel_background_removal('fc400000-0000-4000-8000-000000000001')->>'status'
+  AS processing_failed_cancel_status \gset
+SELECT test.assert_true(
+  :'processing_failed_cancel_status' = 'canceled'
+  AND (
+    SELECT processing_status = 'not_required' AND processing_action = 'keep_original'
+    FROM public.photos WHERE id = 'fc200000-0000-4000-8000-000000000001'
+  )
+  AND (
+    SELECT count(*) = 1 FROM public.media_variants
+    WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000001'
+      AND variant_type = 'original'
+  ),
+  'canceling a failed request closes processing and preserves its immutable original'
+);
+SELECT public.retry_background_removal('fc400000-0000-4000-8000-000000000001')->>'status'
+  AS processing_canceled_retry_status \gset
+SELECT test.assert_true(
+  :'processing_canceled_retry_status' = 'queued',
+  'an explicitly canceled request can be manually retried'
+);
+RESET ROLE;
+
+SET ROLE service_role;
+SELECT (public.worker_claim_background_job('processing-controls-worker-2', 60)->>'job_id')
+  AS processing_control_running_id \gset
+RESET ROLE;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT public.cancel_background_removal('fc400000-0000-4000-8000-000000000001')->>'status'
+  AS processing_running_cancel_status \gset
+SELECT test.assert_true(
+  :'processing_control_running_id' = 'fc400000-0000-4000-8000-000000000001'
+  AND :'processing_running_cancel_status' = 'cancel_requested'
+  AND (
+    SELECT processing_status = 'not_required' FROM public.photos
+    WHERE id = 'fc200000-0000-4000-8000-000000000001'
+  ),
+  'running cancellation is cooperative and immediately returns the photo to Original'
+);
+RESET ROLE;
+SET ROLE service_role;
+SELECT public.worker_fail_background_job(
+  'processing-controls-worker-2', 'fc400000-0000-4000-8000-000000000001',
+  'background_processing_cancelled', true
+) AS processing_control_cancel_final_status \gset
+RESET ROLE;
+SELECT test.assert_true(
+  :'processing_control_cancel_final_status' = 'cancelled'
+  AND (
+    SELECT status = 'cancelled' AND cancel_requested_at IS NOT NULL
+    FROM private.background_jobs WHERE id = 'fc400000-0000-4000-8000-000000000001'
+  )
+  AND (
+    SELECT outcome = 'cancelled' FROM private.background_job_attempts
+    WHERE job_id = 'fc400000-0000-4000-8000-000000000001' AND attempt_number = 3
+  ),
+  'worker finalizes a cooperative cancellation without promoting output'
+);
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT public.cancel_background_removal('fc400000-0000-4000-8000-000000000001')->>'status'
+  AS processing_double_cancel_status \gset
+SELECT test.assert_true(
+  :'processing_double_cancel_status' = 'canceled'
+  AND (
+    SELECT count(*) = 2 FROM public.audit_events
+    WHERE event_type = 'vehicle_media.background_removal_cancelled'
+      AND payload->>'job_id' = 'fc400000-0000-4000-8000-000000000001'
+  ),
+  'double cancellation is idempotent and does not duplicate audit history'
+);
+RESET ROLE;
+
+DELETE FROM private.background_jobs
+WHERE id = 'fc400000-0000-4000-8000-000000000001';
+DELETE FROM public.media_variants
+WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000001';
+DELETE FROM public.photos WHERE id = 'fc200000-0000-4000-8000-000000000001';
+DELETE FROM public.media_assets WHERE id = 'fc100000-0000-4000-8000-000000000001';
+DELETE FROM public.vehicles WHERE id = 'fc000000-0000-4000-8000-000000000001';
+
 DELETE FROM private.background_jobs
 WHERE resource_type = 'media_asset'
   AND resource_id = 'fa000000-0000-4000-8000-000000000001';

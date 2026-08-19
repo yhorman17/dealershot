@@ -77,3 +77,20 @@ test("worker reports safe handler error codes and schedules failure", async () =
   assert.equal(outcome, "dead_letter");
   assert.deepEqual(calls, ["claim", "fail:typeerror"]);
 });
+
+test("worker preserves repository-defined safe failure codes", async () => {
+  const { adapter, calls } = adapterFor(job);
+  const outcome = await runOneJob(
+    adapter,
+    {
+      "system.noop": async () => {
+        throw new Error("background_variant_finalize_failed");
+      },
+    },
+    "worker-1",
+    60,
+    () => undefined,
+  );
+  assert.equal(outcome, "dead_letter");
+  assert.deepEqual(calls, ["claim", "fail:background_variant_finalize_failed"]);
+});

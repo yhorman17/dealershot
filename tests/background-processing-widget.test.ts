@@ -25,14 +25,30 @@ test("processing widget is authenticated, capability-gated, and active-store sco
 
 test("processing widget renders honest durable queue states and compact camera mode", () => {
   const widget = read("src/components/BackgroundProcessingStatus.tsx");
-  assert.match(widget, /"queued" \| "processing" \| "completed" \| "failed"/);
-  assert.match(widget, /finished · \$\{activeCount\} active/);
+  assert.match(widget, /"queued" \| "processing" \| "completed" \| "failed" \| "canceled"/);
+  assert.match(widget, /\$\{activeCount\} active/);
   assert.match(widget, /Retry queued/);
   assert.match(widget, /Removing background/);
-  assert.match(widget, /Failed — review or retry from Photo Manager/);
+  assert.match(widget, /Canceled — original retained/);
   assert.match(widget, /MutationObserver/);
   assert.match(widget, /cameraOpen/);
   assert.doesNotMatch(widget, /Math\.random|setInterval\([^,]+,\s*100/);
+});
+
+test("processing widget exposes authoritative retry/cancel actions and scoped scrollbar", () => {
+  const widget = read("src/components/BackgroundProcessingStatus.tsx");
+  const styles = read("src/styles.css");
+  assert.match(widget, /retry_background_removal/);
+  assert.match(widget, /cancel_background_removal/);
+  assert.match(widget, /job\.retryable/);
+  assert.match(widget, /job\.cancelable/);
+  assert.match(widget, /Cancel processing/);
+  assert.match(widget, /announceBackgroundProcessingChange/);
+  assert.match(widget, /activeStoreRef\.current === storeAtSubmit/);
+  assert.match(widget, /processing-widget-scrollbar/);
+  assert.match(styles, /\.processing-widget-scrollbar\s*\{[\s\S]*scrollbar-width: thin/);
+  assert.match(styles, /\.processing-widget-scrollbar::-webkit-scrollbar-thumb:hover/);
+  assert.doesNotMatch(styles, /^\*::-(webkit-)?scrollbar/m);
 });
 
 test("queue completion announces an immediate authoritative refresh", () => {
@@ -46,7 +62,7 @@ test("queue completion announces an immediate authoritative refresh", () => {
 
 test("job projection keeps the private queue hidden and uses narrow grants", () => {
   const migration = read(
-    "supabase/migrations/20260819175146_background_removal_activity_projection.sql",
+    "supabase/migrations/20260819210739_background_processing_state_controls.sql",
   );
   assert.match(migration, /private\.current_user_has_store_capability\(_dealership_id, 'media'\)/);
   assert.match(migration, /job\.dealership_id = _dealership_id/);

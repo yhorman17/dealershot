@@ -471,6 +471,15 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
   ) {
     throw new Error("background_output_invalid");
   }
+
+  // Cancellation is cooperative: inference may already have finished, but a
+  // canceled request must never write or promote a new derivative.
+  const { data: activeSource, error: activeSourceError } = await client.rpc(
+    "worker_get_background_removal_source" as never,
+    { _job_id: job.job_id } as never,
+  );
+  if (activeSourceError || !activeSource) throw new Error("background_processing_cancelled");
+
   const variantId = randomUUID();
   const path = `stores/${source.dealership_id}/vehicles/${source.vehicle_id}/media/${source.media_asset_id}/variants/cutout/${job.job_id}.png`;
   await uploadVerified(client, PRIVATE_BUCKET, path, bytes, "image/png");
@@ -505,7 +514,15 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
     commitRpc as never,
     commitArguments as never,
   );
-  if (commitError || !committed) throw new Error("background_variant_finalize_failed");
+  if (commitError || !committed) {
+    // Storage and Postgres are separate transactions. Remove only the exact
+    // just-produced object when finalization/cancellation rejects promotion.
+    await client.storage
+      .from(PRIVATE_BUCKET)
+      .remove([path])
+      .catch(() => undefined);
+    throw new Error("background_variant_finalize_failed");
+  }
   return {
     media_asset_id: source.media_asset_id,
     photo_id: source.photo_id,

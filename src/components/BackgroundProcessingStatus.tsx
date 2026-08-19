@@ -1,22 +1,28 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Ban,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   ImageMinus,
   LoaderCircle,
+  RotateCcw,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { BACKGROUND_PROCESSING_CHANGED_EVENT } from "@/lib/background-processing-events";
+import {
+  announceBackgroundProcessingChange,
+  BACKGROUND_PROCESSING_CHANGED_EVENT,
+} from "@/lib/background-processing-events";
 import { cn } from "@/lib/utils";
 
-type ActivityStatus = "queued" | "processing" | "completed" | "failed";
+type ActivityStatus = "queued" | "processing" | "completed" | "failed" | "canceled";
 
 type BackgroundActivity = {
   job_id: string;
@@ -26,6 +32,10 @@ type BackgroundActivity = {
   stock_number: string | null;
   vehicle_label: string | null;
   status: ActivityStatus;
+  retryable: boolean;
+  cancelable: boolean;
+  cancel_requested: boolean;
+  safe_failure_label: string | null;
   attempt_count: number;
   max_attempts: number;
   created_at: string;
@@ -45,8 +55,24 @@ function isActivity(value: unknown): value is BackgroundActivity {
     (candidate.status === "queued" ||
       candidate.status === "processing" ||
       candidate.status === "completed" ||
-      candidate.status === "failed")
+      candidate.status === "failed" ||
+      candidate.status === "canceled")
   );
+}
+
+type ProcessingAction = "retry" | "cancel";
+
+function actionResultStatus(value: unknown, fallback: ActivityStatus): ActivityStatus {
+  if (!value || typeof value !== "object") return fallback;
+  const status = (value as { status?: unknown }).status;
+  if (status === "queued" || status === "retry_scheduled") return "queued";
+  if (status === "processing" || status === "running") return "processing";
+  if (status === "completed" || status === "succeeded") return "completed";
+  if (status === "failed" || status === "dead_letter") return "failed";
+  if (status === "canceled" || status === "cancelled" || status === "cancel_requested") {
+    return "canceled";
+  }
+  return fallback;
 }
 
 export function BackgroundProcessingStatus() {
@@ -58,8 +84,14 @@ export function BackgroundProcessingStatus() {
   const [jobs, setJobs] = useState<BackgroundActivity[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [hiddenCompleted, setHiddenCompleted] = useState<Set<string>>(new Set());
+  const [hiddenFinished, setHiddenFinished] = useState<Set<string>>(new Set());
   const [refreshToken, setRefreshToken] = useState(0);
+  const [submitting, setSubmitting] = useState<string | null>(null);
+  const activeStoreRef = useRef(selectedDealershipId);
+
+  useEffect(() => {
+    activeStoreRef.current = selectedDealershipId;
+  }, [selectedDealershipId]);
 
   const refresh = useCallback(async () => {
     if (!selectedDealershipId || !canView) return [];
@@ -73,8 +105,9 @@ export function BackgroundProcessingStatus() {
 
   useEffect(() => {
     setJobs([]);
-    setHiddenCompleted(new Set());
+    setHiddenFinished(new Set());
     setExpanded(false);
+    setSubmitting(null);
   }, [selectedDealershipId]);
 
   useEffect(() => {
@@ -111,8 +144,13 @@ export function BackgroundProcessingStatus() {
   }, [canView, refresh, refreshToken]);
 
   const visibleJobs = useMemo(
-    () => jobs.filter((job) => job.status !== "completed" || !hiddenCompleted.has(job.job_id)),
-    [hiddenCompleted, jobs],
+    () =>
+      jobs.filter(
+        (job) =>
+          (job.status !== "completed" && job.status !== "canceled") ||
+          !hiddenFinished.has(job.job_id),
+      ),
+    [hiddenFinished, jobs],
   );
   const counts = useMemo(
     () => ({
@@ -120,11 +158,70 @@ export function BackgroundProcessingStatus() {
       processing: visibleJobs.filter((job) => job.status === "processing").length,
       completed: visibleJobs.filter((job) => job.status === "completed").length,
       failed: visibleJobs.filter((job) => job.status === "failed").length,
+      canceled: visibleJobs.filter((job) => job.status === "canceled").length,
     }),
     [visibleJobs],
   );
   const activeCount = counts.queued + counts.processing;
-  const finishedCount = counts.completed + counts.failed;
+  const finishedCount = counts.completed + counts.failed + counts.canceled;
+
+  const performAction = async (job: BackgroundActivity, action: ProcessingAction) => {
+    if (submitting) return;
+    const storeAtSubmit = selectedDealershipId;
+    if (!storeAtSubmit) return;
+    setSubmitting(`${action}:${job.job_id}`);
+    try {
+      const rpc = action === "retry" ? "retry_background_removal" : "cancel_background_removal";
+      const { data, error } = await supabase.rpc(rpc, { _job_id: job.job_id });
+      if (error) throw error;
+      const nextStatus = actionResultStatus(data, action === "retry" ? "queued" : "canceled");
+
+      if (activeStoreRef.current === storeAtSubmit) {
+        setJobs((current) =>
+          current.map((item) =>
+            item.job_id === job.job_id
+              ? {
+                  ...item,
+                  status: nextStatus,
+                  retryable: false,
+                  cancelable: action === "retry",
+                  cancel_requested: action === "cancel" && nextStatus === "canceled",
+                  updated_at: new Date().toISOString(),
+                }
+              : item,
+          ),
+        );
+      }
+      announceBackgroundProcessingChange();
+      const authoritative = await refresh();
+      if (activeStoreRef.current === storeAtSubmit) setJobs(authoritative);
+      const completedDuringAction = nextStatus === "completed";
+      toast.success(
+        completedDuringAction
+          ? "Background removal already completed"
+          : action === "retry"
+            ? "Retry queued"
+            : "Processing canceled",
+        {
+          description: completedDuringAction
+            ? "The completed cutout remains available for review."
+            : action === "retry"
+              ? "DealerShot will retry this photo without changing the original."
+              : "The original photo remains unchanged.",
+        },
+      );
+    } catch {
+      toast.error(
+        action === "retry" ? "Retry could not be queued" : "Processing could not be canceled",
+        {
+          description: "Your original photo was not changed. Try again.",
+        },
+      );
+      announceBackgroundProcessingChange();
+    } finally {
+      if (activeStoreRef.current === storeAtSubmit) setSubmitting(null);
+    }
+  };
 
   if (!canView || visibleJobs.length === 0) return null;
 
@@ -181,9 +278,9 @@ export function BackgroundProcessingStatus() {
             <span className="block truncate text-sm font-semibold">Background removal</span>
             <span className="block truncate text-xs text-white/65">
               {activeCount > 0
-                ? `${finishedCount} of ${visibleJobs.length} finished · ${activeCount} active`
+                ? `${activeCount} active${counts.failed > 0 ? ` · ${counts.failed} failed` : ""}`
                 : counts.failed > 0
-                  ? `${counts.completed} complete · ${counts.failed} failed`
+                  ? `${counts.failed} failed · ${counts.completed} complete`
                   : `${counts.completed} completed`}
             </span>
           </span>
@@ -202,23 +299,65 @@ export function BackgroundProcessingStatus() {
               <Metric label="Done" value={counts.completed} />
               <Metric label="Failed" value={counts.failed} danger={counts.failed > 0} />
             </div>
-            <div className="max-h-64 overflow-y-auto overscroll-contain p-2">
+            <div className="processing-widget-scrollbar max-h-64 overflow-y-auto overscroll-contain p-2">
               <ul className="space-y-1" aria-live="polite">
                 {visibleJobs.map((job) => (
-                  <li
-                    key={job.job_id}
-                    className="flex min-h-11 items-center gap-2 rounded-lg px-2.5 py-2 hover:bg-white/5"
-                  >
-                    <JobIcon status={job.status} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-medium">
-                        {job.vehicle_label?.trim() || job.stock_number || "Vehicle photo"}
+                  <li key={job.job_id} className="rounded-lg px-2.5 py-2 hover:bg-white/5">
+                    <div className="flex min-h-7 items-center gap-2">
+                      <JobIcon status={job.status} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-medium">
+                          {job.vehicle_label?.trim() || job.stock_number || "Vehicle photo"}
+                        </span>
+                        <span className="block truncate text-[11px] text-white/55">
+                          {job.stock_number ? `Stock ${job.stock_number} · ` : ""}
+                          {statusLabel(job)}
+                        </span>
                       </span>
-                      <span className="block truncate text-[11px] text-white/55">
-                        {job.stock_number ? `Stock ${job.stock_number} · ` : ""}
-                        {statusLabel(job)}
-                      </span>
-                    </span>
+                    </div>
+                    {(job.retryable || job.cancelable) && (
+                      <div className="mt-2 flex flex-wrap justify-end gap-1.5">
+                        {job.retryable && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-10 touch-manipulation px-3 text-xs text-blue-200 hover:bg-blue-400/15 hover:text-blue-100"
+                            disabled={submitting !== null}
+                            onClick={() => void performAction(job, "retry")}
+                          >
+                            {submitting === `retry:${job.job_id}` ? (
+                              <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+                            ) : (
+                              <RotateCcw className="size-3.5" aria-hidden />
+                            )}
+                            Retry
+                          </Button>
+                        )}
+                        {job.cancelable && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-10 touch-manipulation px-3 text-xs text-white/65 hover:bg-white/10 hover:text-white"
+                            disabled={submitting !== null}
+                            onClick={() => void performAction(job, "cancel")}
+                          >
+                            {submitting === `cancel:${job.job_id}` ? (
+                              <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+                            ) : (
+                              <Ban className="size-3.5" aria-hidden />
+                            )}
+                            {job.status === "processing" ? "Cancel processing" : "Cancel"}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    {job.status === "failed" && job.safe_failure_label && (
+                      <p className="mt-1.5 text-[11px] leading-4 text-amber-100/75">
+                        {job.safe_failure_label}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -233,16 +372,18 @@ export function BackgroundProcessingStatus() {
               >
                 <X className="size-3.5" aria-hidden /> Minimize
               </Button>
-              {counts.completed > 0 && (
+              {counts.completed + counts.canceled > 0 && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="h-9 text-xs text-white/65 hover:bg-white/10 hover:text-white"
                   onClick={() => {
-                    setHiddenCompleted(
+                    setHiddenFinished(
                       new Set(
-                        jobs.filter((job) => job.status === "completed").map((job) => job.job_id),
+                        jobs
+                          .filter((job) => job.status === "completed" || job.status === "canceled")
+                          .map((job) => job.job_id),
                       ),
                     );
                     setRefreshToken((value) => value + 1);
@@ -288,6 +429,9 @@ function JobIcon({ status }: { status: ActivityStatus }) {
   if (status === "failed") {
     return <AlertTriangle className="size-4 shrink-0 text-amber-300" aria-hidden />;
   }
+  if (status === "canceled") {
+    return <Ban className="size-4 shrink-0 text-white/45" aria-hidden />;
+  }
   return <ImageMinus className="size-4 shrink-0 text-white/55" aria-hidden />;
 }
 
@@ -297,5 +441,6 @@ function statusLabel(job: BackgroundActivity) {
   }
   if (job.status === "processing") return "Removing background";
   if (job.status === "completed") return "Completed";
-  return "Failed — review or retry from Photo Manager";
+  if (job.status === "canceled") return "Canceled — original retained";
+  return "Failed";
 }
