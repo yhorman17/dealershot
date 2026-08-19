@@ -157,7 +157,7 @@ function SettingsPage() {
       setCaptureMethods(
         parseCaptureMethodConfiguration({
           bulk_enabled: photoSettingsResult.data?.bulk_capture_enabled ?? true,
-          guided_enabled: photoSettingsResult.data?.guided_capture_enabled ?? true,
+          guided_enabled: photoSettingsResult.data?.guided_capture_enabled ?? false,
           default_method: photoSettingsResult.data?.default_capture_method ?? "bulk",
         }),
       );

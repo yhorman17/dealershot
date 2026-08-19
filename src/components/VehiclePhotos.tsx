@@ -764,7 +764,7 @@ export function VehiclePhotos({
 
   return (
     <div className="ds-surface overflow-hidden">
-      {captureMethods.guidedEnabled ? (
+      {captureMethods.guidedEnabled && (
         <div className="flex border-b border-border bg-secondary/35 p-1">
           {(["guided", "free"] as const).map((m) => (
             <button
@@ -789,10 +789,6 @@ export function VehiclePhotos({
               )}
             </button>
           ))}
-        </div>
-      ) : (
-        <div className="border-b border-border bg-secondary/35 px-4 py-3 text-sm text-muted-foreground">
-          Guided Capture is disabled for this store. Use the store's Bulk Capture workflow.
         </div>
       )}
 
@@ -861,21 +857,7 @@ export function VehiclePhotos({
         </div>
       </div>
 
-      {!captureMethods.guidedEnabled ? (
-        <div className="p-5 sm:p-6">
-          <div className="rounded-lg border border-border bg-secondary/35 p-6 text-center">
-            <Camera className="mx-auto size-8 text-primary" />
-            <h3 className="mt-3 font-semibold">Bulk Capture is ready</h3>
-            <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
-              Open the consecutive camera, photograph the vehicle, review retakes, and queue
-              selected background work without leaving the capture flow.
-            </p>
-            <Button className="mt-4 min-h-12" onClick={() => void startBulkCapture()}>
-              Start Bulk Capture
-            </Button>
-          </div>
-        </div>
-      ) : mode === "guided" ? (
+      {captureMethods.guidedEnabled && mode === "guided" ? (
         <div key="guided" className="motion-content">
           <div className="border-b border-border p-4 sm:p-5">
             <div className="flex items-center justify-between gap-4">
@@ -1164,7 +1146,11 @@ export function VehiclePhotos({
               compact
               icon={<ImagePlus className="size-5" />}
               title="No photos in this workspace"
-              description="Use guided capture for the standard set or free upload for existing photos."
+              description={
+                captureMethods.guidedEnabled
+                  ? "Use Guided Capture for the standard set or free upload for existing photos."
+                  : "Start Bulk Capture or upload existing photos to build this vehicle's gallery."
+              }
             />
           ) : (
             <div className="motion-content grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">

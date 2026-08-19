@@ -932,6 +932,19 @@ SELECT test.assert_true(
 
 -- Photo capture sessions exercise ordinary-user grants, RLS checks, Storage
 -- paths, completion RPC authorization, and cross-tenant isolation.
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT test.assert_true(
+  public.get_capture_method_configuration(
+    'aaaaaaaa-0000-0000-0000-000000000001'
+  ) @> '{"bulk_enabled":true,"guided_enabled":false,"default_method":"bulk"}'::jsonb,
+  'stores without an explicit capture choice default to Bulk-only'
+);
+SELECT public.save_capture_method_configuration(
+  'aaaaaaaa-0000-0000-0000-000000000001', true, true, 'bulk'
+);
+RESET ROLE;
+
 INSERT INTO public.photo_capture_sessions (
   id, dealership_id, vehicle_id, vin, mode, created_by
 ) VALUES (

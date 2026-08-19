@@ -12,11 +12,14 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 const migration = read("supabase/migrations/20260818190335_bulk_first_capture_workflow.sql");
+const guidedDefaultMigration = read(
+  "supabase/migrations/20260819194500_guided_capture_disabled_by_default.sql",
+);
 
 test("Bulk is the safe default and disabled defaults fall back predictably", () => {
   assert.deepEqual(parseCaptureMethodConfiguration({}), {
     bulkEnabled: true,
-    guidedEnabled: true,
+    guidedEnabled: false,
     defaultMethod: "bulk",
   });
   const guidedOnly = parseCaptureMethodConfiguration({
@@ -39,6 +42,18 @@ test("store settings enforce one enabled method and an enabled default", () => {
   assert.match(settings, /title="Capture methods"/);
   assert.match(settings, /save_capture_method_configuration/);
   assert.match(settings, /Default capture method/);
+});
+
+test("Guided is opt-in for new and inherited store configuration", () => {
+  assert.match(guidedDefaultMigration, /guided_capture_enabled SET DEFAULT false/);
+  assert.match(guidedDefaultMigration, /coalesce\(settings\.guided_capture_enabled, false\)/);
+  assert.match(guidedDefaultMigration, /configuration\.capture_methods_changed/);
+  assert.match(guidedDefaultMigration, /configuration\.guided_capture_default_disabled/);
+  assert.match(guidedDefaultMigration, /SET search_path = ''/);
+  assert.match(
+    guidedDefaultMigration,
+    /REVOKE ALL ON FUNCTION public\.get_capture_method_configuration\(uuid\)/,
+  );
 });
 
 test("Add Vehicle starts the configured method without returning to Inventory", () => {
@@ -117,9 +132,14 @@ test("capture method and cross-store authorization are server-enforced", () => {
 test("Guided Capture remains available only when enabled", () => {
   const photos = read("src/components/VehiclePhotos.tsx");
   const nav = read("src/components/AppNav.tsx");
-  assert.match(photos, /captureMethods\.guidedEnabled/);
-  assert.match(photos, /Guided Capture is disabled for this store/);
+  assert.match(photos, /captureMethods\.guidedEnabled && mode === "guided"/);
+  assert.match(photos, /captureMethods\.guidedEnabled && \(/);
   assert.match(photos, /Start Guided/);
   assert.match(photos, /Start Bulk Capture/);
+  assert.match(
+    photos,
+    /captureMethods\.guidedEnabled[\s\S]*Guided Capture[\s\S]*free upload for existing photos/,
+  );
+  assert.match(photos, /Start Bulk Capture or upload existing photos/);
   assert.match(nav, /captureMethods\.bulkEnabled/);
 });

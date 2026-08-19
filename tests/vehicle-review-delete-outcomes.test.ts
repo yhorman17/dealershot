@@ -45,18 +45,24 @@ test("confirmed deletion always preserves a visible pending, blocked, failed, or
 });
 
 test("vehicle Review is capability-gated and available from workspace and Inventory", () => {
-  const route = read("src/routes/_authenticated/vehicles.$id.review.tsx");
+  const route = read("src/routes/_authenticated/vehicles.$id_.review.tsx");
   const workspace = read("src/routes/_authenticated/vehicles.$id.tsx");
   const inventory = read("src/routes/_authenticated/inventory.tsx");
+  const routeTree = read("src/routeTree.gen.ts");
   assert.match(route, /capabilities\?\.media === true/);
   assert.match(route, /Media review access required/);
+  assert.match(route, /createFileRoute\("\/_authenticated\/vehicles\/\$id_\/review"\)/);
+  assert.match(
+    routeTree,
+    /AuthenticatedVehiclesIdReviewRouteImport\.update\(\{[^}]*getParentRoute: \(\) => AuthenticatedRoute,[^}]*\} as any\)/,
+  );
   assert.match(workspace, /to="\/vehicles\/\$id\/review"/);
-  assert.match(inventory, /to="\/vehicles\/\$id\/review"/);
+  assert.equal(inventory.match(/to="\/vehicles\/\$id\/review"/g)?.length, 2);
   assert.match(inventory, /canReview && vehicle\.photo_count > 0/);
 });
 
 test("existing vehicle review reuses Bulk stages without creating capture production", () => {
-  const route = read("src/routes/_authenticated/vehicles.$id.review.tsx");
+  const route = read("src/routes/_authenticated/vehicles.$id_.review.tsx");
   const bulk = read("src/routes/_authenticated/bulk-photos.$id.tsx");
   assert.match(route, /VehiclePhotoReviewStage/);
   assert.match(route, /VehiclePhotoProcessingStage/);
@@ -67,7 +73,7 @@ test("existing vehicle review reuses Bulk stages without creating capture produc
 });
 
 test("review replacement appends a private original before archiving the old gallery item", () => {
-  const route = read("src/routes/_authenticated/vehicles.$id.review.tsx");
+  const route = read("src/routes/_authenticated/vehicles.$id_.review.tsx");
   const upload = route.indexOf("await uploadPrivateOriginal");
   const archive = route.indexOf("await archivePrivateMedia(retakeItem.media_asset_id)");
   assert.ok(upload >= 0 && archive > upload);
@@ -77,7 +83,7 @@ test("review replacement appends a private original before archiving the old gal
 
 test("existing photo processing is idempotent, authorized, and asynchronous", () => {
   const migration = read("supabase/migrations/20260819123000_vehicle_review_background_queue.sql");
-  const route = read("src/routes/_authenticated/vehicles.$id.review.tsx");
+  const route = read("src/routes/_authenticated/vehicles.$id_.review.tsx");
   assert.match(migration, /current_user_has_store_capability\(target\.dealership_id, 'media'\)/);
   assert.match(migration, /ON CONFLICT \(job_type, dedupe_key\) DO NOTHING/);
   assert.match(migration, /variant_type IN \('cutout', 'corrected_cutout'\)/);
@@ -89,7 +95,7 @@ test("existing photo processing is idempotent, authorized, and asynchronous", ()
 });
 
 test("Review returns to the route that launched it", () => {
-  const route = read("src/routes/_authenticated/vehicles.$id.review.tsx");
+  const route = read("src/routes/_authenticated/vehicles.$id_.review.tsx");
   assert.match(route, /from === "inventory"/);
   assert.match(route, /to: "\/inventory"/);
   assert.match(route, /to: "\/vehicles\/\$id"/);

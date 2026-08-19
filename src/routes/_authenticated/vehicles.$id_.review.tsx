@@ -23,7 +23,7 @@ import {
 
 type ReviewSearch = { from?: "inventory" | "vehicle" };
 
-export const Route = createFileRoute("/_authenticated/vehicles/$id/review")({
+export const Route = createFileRoute("/_authenticated/vehicles/$id_/review")({
   validateSearch: (search: Record<string, unknown>): ReviewSearch => ({
     from: search.from === "inventory" ? "inventory" : "vehicle",
   }),

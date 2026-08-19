@@ -10,7 +10,7 @@ export type CaptureMethodConfiguration = {
 
 export const DEFAULT_CAPTURE_METHOD_CONFIGURATION: CaptureMethodConfiguration = {
   bulkEnabled: true,
-  guidedEnabled: true,
+  guidedEnabled: false,
   defaultMethod: "bulk",
 };
 
@@ -21,7 +21,7 @@ function asRecord(value: Json): Record<string, Json | undefined> {
 export function parseCaptureMethodConfiguration(value: Json): CaptureMethodConfiguration {
   const record = asRecord(value);
   const bulkEnabled = record.bulk_enabled !== false;
-  const guidedEnabled = record.guided_enabled !== false;
+  const guidedEnabled = record.guided_enabled === true;
   const requestedDefault = record.default_method === "guided" ? "guided" : "bulk";
   const defaultMethod =
     requestedDefault === "guided" && guidedEnabled ? "guided" : bulkEnabled ? "bulk" : "guided";
