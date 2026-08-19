@@ -123,6 +123,7 @@ test("phone capture hides office preparation controls below the md breakpoint", 
 test("Bulk Capture supports vehicle-first intake, durable review, and background selection", () => {
   const list = read("src/routes/_authenticated/bulk-photos.tsx");
   const workspace = read("src/routes/_authenticated/bulk-photos.$id.tsx");
+  const reviewStages = read("src/components/VehiclePhotoReviewStages.tsx");
   const addVehicle = read("src/routes/_authenticated/vehicles.new.tsx");
 
   assert.match(list, /Add vehicle & start photos/);
@@ -131,9 +132,9 @@ test("Bulk Capture supports vehicle-first intake, durable review, and background
   assert.match(addVehicle, /to: "\/bulk-photos\/\$id"/);
   assert.match(workspace, /createUploadQueue<BulkUpload>/);
   assert.match(workspace, /Finish photos/);
-  assert.match(workspace, /Review photos/);
-  assert.match(workspace, /Retake \/ replace/);
-  assert.match(workspace, /Select photos to process/);
+  assert.match(reviewStages, /Review photos/);
+  assert.match(reviewStages, /Retake \/ replace/);
+  assert.match(reviewStages, /Select photos to process/);
   assert.match(workspace, /associate_bulk_photo_session/);
   assert.match(workspace, /queue_bulk_background_removal/);
   assert.match(workspace, /Yes, next vehicle/);

@@ -3,7 +3,15 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { CONDITIONS, STATUSES, formatPrice, formatMiles } from "@/lib/vehicle-options";
-import { Camera, CarFront, Plus, ShieldX, SlidersHorizontal, X } from "lucide-react";
+import {
+  Camera,
+  CarFront,
+  ClipboardCheck,
+  Plus,
+  ShieldX,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -78,6 +86,9 @@ function InventoryPage() {
   const { selectedDealershipId, capabilities, loadingCapabilities } = useAccessibleDealerships();
   const canAccessInventory =
     profile?.role !== "staff" || Boolean(capabilities?.capture || capabilities?.media);
+  const canReview =
+    !loadingCapabilities &&
+    (profile?.role === "owner" || profile?.role === "dealer_admin" || capabilities?.media === true);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(initialSearch.q ?? "");
@@ -493,7 +504,7 @@ function InventoryPage() {
       ) : (
         <>
           <div className="motion-content hidden overflow-x-auto rounded-lg border border-border bg-card xl:block">
-            <table className="w-full min-w-[1100px] border-collapse text-left text-xs">
+            <table className="w-full min-w-[1180px] border-collapse text-left text-xs">
               <thead className="bg-secondary text-muted-foreground">
                 <tr>
                   {[
@@ -505,6 +516,7 @@ function InventoryPage() {
                     "Media",
                     "Readiness",
                     "Photographer",
+                    "Actions",
                   ].map((label) => (
                     <th key={label} className="px-3 py-3 font-semibold">
                       {label}
@@ -574,6 +586,26 @@ function InventoryPage() {
                       )}
                     </td>
                     <td className="px-3 py-3">{vehicle.photographer_name || "Unassigned"}</td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <Button asChild size="sm" variant="ghost">
+                          <Link to="/vehicles/$id" params={{ id: vehicle.id }}>
+                            Open
+                          </Link>
+                        </Button>
+                        {canReview && vehicle.photo_count > 0 && (
+                          <Button asChild size="sm" variant="outline">
+                            <Link
+                              to="/vehicles/$id/review"
+                              params={{ id: vehicle.id }}
+                              search={{ from: "inventory" }}
+                            >
+                              <ClipboardCheck className="size-3.5" /> Review
+                            </Link>
+                          </Button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -581,10 +613,8 @@ function InventoryPage() {
           </div>
           <div className="motion-content grid gap-4 sm:grid-cols-2 xl:hidden">
             {visibleVehicles.map((v) => (
-              <Link
+              <article
                 key={v.id}
-                to="/vehicles/$id"
-                params={{ id: v.id }}
                 className="motion-card group ds-surface overflow-hidden hover:border-primary/45 hover:shadow-[0_10px_30px_-22px_oklch(0.25_0.03_252)]"
               >
                 <div className="relative aspect-[16/10] overflow-hidden bg-secondary text-muted-foreground">
@@ -656,8 +686,26 @@ function InventoryPage() {
                       Needs: {v.readiness_reasons[0].label}
                     </p>
                   )}
+                  <div className="mt-4 flex gap-2 border-t border-border pt-3">
+                    <Button asChild size="sm" variant="ghost" className="flex-1">
+                      <Link to="/vehicles/$id" params={{ id: v.id }}>
+                        Open vehicle
+                      </Link>
+                    </Button>
+                    {canReview && v.photo_count > 0 && (
+                      <Button asChild size="sm" variant="outline" className="flex-1">
+                        <Link
+                          to="/vehicles/$id/review"
+                          params={{ id: v.id }}
+                          search={{ from: "inventory" }}
+                        >
+                          <ClipboardCheck className="size-3.5" /> Review
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </Link>
+              </article>
             ))}
           </div>
         </>

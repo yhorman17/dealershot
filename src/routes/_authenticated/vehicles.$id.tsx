@@ -8,7 +8,16 @@ import { VehicleExportModal } from "@/components/VehicleExportModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { VehicleForm } from "@/components/VehicleForm";
 import { type VehicleFormValues, emptyVehicleValues } from "@/lib/vehicle-form-state";
-import { ArrowLeft, Camera, CarFront, FileOutput, Gauge, Pencil, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Camera,
+  CarFront,
+  ClipboardCheck,
+  FileOutput,
+  Gauge,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,6 +38,7 @@ import { CircleGauge, DollarSign, FileText, History, ListChecks, RadioTower } fr
 import { clearAuthorizedMediaCache, resolveAuthorizedMediaUrls } from "@/lib/private-media";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { deleteVehicle } from "@/lib/api/vehicles.functions";
+import { vehicleDeletionIsBlocked } from "@/lib/vehicle-deletion";
 
 export const Route = createFileRoute("/_authenticated/vehicles/$id")({
   validateSearch: (
@@ -48,8 +58,11 @@ function VehicleDetailPage() {
   const { customize, capture } = Route.useSearch();
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { setSelectedDealershipId } = useAccessibleDealerships();
+  const { capabilities, loadingCapabilities, setSelectedDealershipId } = useAccessibleDealerships();
   const canDelete = profile?.role === "owner" || profile?.role === "dealer_admin";
+  const canReview =
+    !loadingCapabilities &&
+    (profile?.role === "owner" || profile?.role === "dealer_admin" || capabilities?.media === true);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [heroUrl, setHeroUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +70,10 @@ function VehicleDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState<{
+    kind: "blocked" | "failed";
+    message: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,9 +142,12 @@ function VehicleDetailPage() {
   const handleDelete = async () => {
     if (deleting) return;
     setDeleting(true);
+    setDeleteNotice(null);
     try {
       const outcome = await deleteVehicle({ data: { vehicle_id: id } });
       if (!outcome.ok) {
+        const blocked = vehicleDeletionIsBlocked(outcome.error.code);
+        setDeleteNotice({ kind: blocked ? "blocked" : "failed", message: outcome.error.message });
         toast.error("Vehicle could not be deleted", { description: outcome.error.message });
         return;
       }
@@ -140,6 +160,13 @@ function VehicleDetailPage() {
       );
       setDeleteOpen(false);
       await navigate({ to: "/inventory", replace: true });
+    } catch (reason) {
+      const message =
+        reason instanceof Error && /network|fetch|connection/i.test(reason.message)
+          ? "DealerShot could not reach the secure deletion service. Check your connection and try again."
+          : "DealerShot couldn't safely delete this vehicle. No partial database deletion occurred.";
+      setDeleteNotice({ kind: "failed", message });
+      toast.error("Vehicle could not be deleted", { description: message });
     } finally {
       setDeleting(false);
     }
@@ -195,12 +222,23 @@ function VehicleDetailPage() {
               <FileOutput className="size-4" />
               Export photos
             </Button>
+            {canReview && (
+              <Button asChild variant="outline">
+                <Link to="/vehicles/$id/review" params={{ id }} search={{ from: "vehicle" }}>
+                  <ClipboardCheck className="size-4" />
+                  Review
+                </Link>
+              </Button>
+            )}
             {canDelete && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => setDeleteOpen(true)}
+                onClick={() => {
+                  setDeleteNotice(null);
+                  setDeleteOpen(true);
+                }}
                 aria-label="Delete vehicle"
               >
                 <Trash2 className="size-4" />
@@ -340,7 +378,12 @@ function VehicleDetailPage() {
           />
         </DialogContent>
       </Dialog>
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <AlertDialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!deleting) setDeleteOpen(open);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this vehicle?</AlertDialogTitle>
@@ -348,6 +391,21 @@ function VehicleDetailPage() {
               This permanently removes {vehicle.year} {vehicle.make} {vehicle.model} and its related
               workspace data. This action cannot be undone.
             </AlertDialogDescription>
+            {deleteNotice && (
+              <div
+                role="alert"
+                className={`mt-3 rounded-lg border p-3 text-sm leading-5 ${
+                  deleteNotice.kind === "blocked"
+                    ? "border-warning/35 bg-warning/10 text-foreground"
+                    : "border-destructive/30 bg-destructive/5 text-destructive"
+                }`}
+              >
+                <p className="font-semibold">
+                  {deleteNotice.kind === "blocked" ? "Deletion is blocked" : "Deletion failed"}
+                </p>
+                <p className="mt-1">{deleteNotice.message}</p>
+              </div>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Keep vehicle</AlertDialogCancel>

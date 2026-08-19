@@ -1,26 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  Camera,
-  Check,
-  CheckCircle2,
-  ImagePlus,
-  RefreshCw,
-  RotateCcw,
-  Star,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, Camera, Check, CheckCircle2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { BulkCamera } from "@/components/BulkCamera";
-import { SHOT_TYPES } from "@/components/VehiclePhotos";
-import { PageHeader, ProductSelect, StatusBadge } from "@/components/product-ui";
+import { PageHeader, StatusBadge } from "@/components/product-ui";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  VehiclePhotoProcessingStage,
+  VehiclePhotoReviewStage,
+  type ReviewPhotoItem,
+} from "@/components/VehiclePhotoReviewStages";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { supabase } from "@/integrations/supabase/client";
 import { createUploadQueue, type UploadEntry } from "@/lib/upload-queue";
@@ -50,7 +40,7 @@ type Session = {
   retake_count: number;
 };
 
-type Item = {
+type Item = ReviewPhotoItem & {
   id: string;
   session_id: string;
   image_url: string;
@@ -251,7 +241,7 @@ function BulkCaptureWorkspace() {
     setBusy(null);
   };
 
-  const remove = async (item: Item) => {
+  const remove = async (item: ReviewPhotoItem) => {
     setBusy(`remove:${item.id}`);
     try {
       await archivePrivateMedia(item.media_asset_id);
@@ -266,7 +256,7 @@ function BulkCaptureWorkspace() {
     }
   };
 
-  const updateClassification = async (item: Item, shotType: string | null) => {
+  const updateClassification = async (item: ReviewPhotoItem, shotType: string | null) => {
     const { error: updateError } = await supabase
       .from("bulk_photo_items")
       .update({ shot_type: shotType })
@@ -275,7 +265,7 @@ function BulkCaptureWorkspace() {
     else await load();
   };
 
-  const setMain = async (item: Item) => {
+  const setMain = async (item: ReviewPhotoItem) => {
     const { error: updateError } = await supabase.rpc("set_bulk_primary_item", {
       _session_id: id,
       _item_id: item.id,
@@ -284,7 +274,7 @@ function BulkCaptureWorkspace() {
     else await load();
   };
 
-  const move = async (item: Item, direction: -1 | 1) => {
+  const move = async (item: ReviewPhotoItem, direction: -1 | 1) => {
     const index = items.findIndex((candidate) => candidate.id === item.id);
     if (!items[index + direction]) return;
     const next = [...items];
@@ -402,18 +392,22 @@ function BulkCaptureWorkspace() {
       )}
 
       {session.workflow_stage === "review" && (
-        <ReviewStage
+        <VehiclePhotoReviewStage
           items={items}
           selected={selected}
           selectedId={selectedId}
           pending={pending}
           failed={failed}
-          failedUploads={failedUploads}
           busy={busy}
           onSelect={setSelectedId}
           onAddMore={() => setCameraOpen(true)}
           onRetry={() => uploadQueue.retryFailed()}
-          onRetryUpload={(entryId) => uploadQueue.retry(entryId)}
+          failedUploadContent={
+            <FailedUploadList
+              entries={failedUploads}
+              onRetry={(entryId) => uploadQueue.retry(entryId)}
+            />
+          }
           onRetake={(item) => {
             setReplaceItemId(item.id);
             setCameraOpen(true);
@@ -428,7 +422,7 @@ function BulkCaptureWorkspace() {
       )}
 
       {session.workflow_stage === "processing" && (
-        <ProcessingStage
+        <VehiclePhotoProcessingStage
           items={items}
           selected={selectedForProcessing}
           busy={busy}
@@ -527,256 +521,6 @@ function CaptureStage({
       </div>
       <FailedUploadList entries={failedUploads} onRetry={onRetryUpload} />
       <ThumbnailStrip items={items} />
-    </section>
-  );
-}
-
-function ReviewStage({
-  items,
-  selected,
-  selectedId,
-  pending,
-  failed,
-  failedUploads,
-  busy,
-  onSelect,
-  onAddMore,
-  onRetry,
-  onRetryUpload,
-  onRetake,
-  onRemove,
-  onClassify,
-  onSetMain,
-  onMove,
-  onNext,
-  hasVehicle,
-}: {
-  items: Item[];
-  selected: Item | null;
-  selectedId: string | null;
-  pending: number;
-  failed: number;
-  failedUploads: UploadEntry<BulkUpload>[];
-  busy: string | null;
-  onSelect: (id: string) => void;
-  onAddMore: () => void;
-  onRetry: () => void;
-  onRetryUpload: (entryId: string) => void;
-  onRetake: (item: Item) => void;
-  onRemove: (item: Item) => void;
-  onClassify: (item: Item, value: string | null) => void;
-  onSetMain: (item: Item) => void;
-  onMove: (item: Item, direction: -1 | 1) => void;
-  onNext: () => void;
-  hasVehicle: boolean;
-}) {
-  return (
-    <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-      <div>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">Review photos</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Remove accidents or retake a selected photo without restarting the vehicle.
-            </p>
-          </div>
-          <Button variant="outline" onClick={onAddMore}>
-            <ImagePlus className="size-4" /> Add more
-          </Button>
-        </div>
-        {failed > 1 && (
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
-            <span>{failed} uploads failed. Successful photos are still safe.</span>
-            <Button size="sm" variant="outline" onClick={onRetry}>
-              Retry all
-            </Button>
-          </div>
-        )}
-        <FailedUploadList entries={failedUploads} onRetry={onRetryUpload} />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {items.map((item, index) => (
-            <button
-              type="button"
-              key={item.id}
-              onClick={() => onSelect(item.id)}
-              className={`overflow-hidden rounded-lg border bg-card text-left ${
-                selectedId === item.id ? "border-primary ring-2 ring-primary/25" : "border-border"
-              }`}
-            >
-              <div className="relative aspect-square bg-secondary">
-                <img
-                  src={item.image_url}
-                  alt={`Captured photo ${index + 1}`}
-                  className="h-full w-full object-cover"
-                />
-                {item.is_main && (
-                  <span className="absolute left-2 top-2 rounded bg-primary px-2 py-1 text-[10px] font-bold text-primary-foreground">
-                    MAIN
-                  </span>
-                )}
-                <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-[10px] font-bold text-white">
-                  {index + 1}
-                </span>
-              </div>
-              <div className="truncate p-2 text-xs font-medium">
-                {item.shot_type || "Unclassified"}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-      <aside className="ds-surface h-fit p-4 xl:sticky xl:top-20">
-        {selected ? (
-          <div className="space-y-3">
-            <p className="text-sm font-semibold">Selected photo</p>
-            <ProductSelect
-              value={selected.shot_type ?? ""}
-              onValueChange={(value) => onClassify(selected, value || null)}
-              ariaLabel="Optional photo classification"
-              emptyLabel="Unclassified"
-              options={SHOT_TYPES.map((shot) => ({ value: shot.name, label: shot.name }))}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline"
-                onClick={() => onMove(selected, -1)}
-                disabled={items[0]?.id === selected.id}
-              >
-                <ArrowUp className="size-4" /> Earlier
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => onMove(selected, 1)}
-                disabled={items.at(-1)?.id === selected.id}
-              >
-                <ArrowDown className="size-4" /> Later
-              </Button>
-            </div>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => onSetMain(selected)}
-              disabled={selected.is_main}
-            >
-              <Star className="size-4" /> Mark main
-            </Button>
-            <Button variant="outline" className="w-full" onClick={() => onRetake(selected)}>
-              <RotateCcw className="size-4" /> Retake / replace
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full text-destructive hover:text-destructive"
-              onClick={() => onRemove(selected)}
-              disabled={busy !== null}
-            >
-              <Trash2 className="size-4" /> Remove photo
-            </Button>
-          </div>
-        ) : (
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            Select a photo to review.
-          </p>
-        )}
-        <Button
-          className="mt-5 min-h-12 w-full"
-          onClick={onNext}
-          disabled={busy !== null || pending > 0 || failed > 0 || items.length === 0 || !hasVehicle}
-        >
-          {busy === "next" ? "Preparing…" : "Next"} <ArrowRight className="size-4" />
-        </Button>
-        {!hasVehicle && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            This legacy package must first be associated by an office administrator.
-          </p>
-        )}
-      </aside>
-    </section>
-  );
-}
-
-function ProcessingStage({
-  items,
-  selected,
-  busy,
-  onChange,
-  onDone,
-}: {
-  items: Item[];
-  selected: Set<string>;
-  busy: string | null;
-  onChange: (value: Set<string>) => void;
-  onDone: () => void;
-}) {
-  const choose = (ids: string[]) => onChange(new Set(ids));
-  return (
-    <section className="ds-surface p-4 sm:p-6">
-      <div className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-            Optional background work
-          </p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
-            Select photos to process
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Jobs run privately in the background. You can move to the next vehicle immediately.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              choose(
-                items.filter((item) => item.media_category === "exterior").map((item) => item.id),
-              )
-            }
-          >
-            Select exterior
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => choose(items.map((item) => item.id))}>
-            Select all
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => choose([])}>
-            Clear
-          </Button>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3 py-5 sm:grid-cols-3 lg:grid-cols-5">
-        {items.map((item) => {
-          const checked = selected.has(item.id);
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                const next = new Set(selected);
-                if (checked) next.delete(item.id);
-                else next.add(item.id);
-                onChange(next);
-              }}
-              className={`overflow-hidden rounded-lg border text-left ${checked ? "border-primary ring-2 ring-primary/25" : "border-border"}`}
-            >
-              <div className="relative aspect-square bg-secondary">
-                <img src={item.image_url} alt="" className="h-full w-full object-cover" />
-                <Checkbox
-                  checked={checked}
-                  className="pointer-events-none absolute left-2 top-2 bg-background"
-                />
-              </div>
-              <div className="p-2 text-xs font-medium">{item.shot_type || "Photo"}</div>
-            </button>
-          );
-        })}
-      </div>
-      <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
-          {selected.size} selected · processing does not block capture completion
-        </p>
-        <Button className="min-h-12" onClick={onDone} disabled={busy !== null}>
-          {busy === "processing" ? "Finishing…" : "Done"} <Check className="size-4" />
-        </Button>
-      </div>
     </section>
   );
 }

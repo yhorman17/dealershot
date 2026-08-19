@@ -200,6 +200,51 @@ SELECT test.assert_true(current_setting('row_security') = 'on', 'row_security is
 RESET ROLE;
 
 SELECT test.assert_true(
+  has_function_privilege(
+    'authenticated',
+    'public.queue_vehicle_background_removal(uuid,uuid[])',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'anon',
+    'public.queue_vehicle_background_removal(uuid,uuid[])',
+    'EXECUTE'
+  ),
+  'existing vehicle photo review queue is authenticated-only'
+);
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT test.assert_true(
+  (public.queue_vehicle_background_removal(
+    '10000000-0000-0000-0000-000000000001',
+    ARRAY[]::uuid[]
+  )->>'queued_count')::integer = 0,
+  'authorized media administrator may complete review without selecting processing work'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.queue_vehicle_background_removal(
+    '10000000-0000-0000-0000-000000000003',
+    ARRAY[]::uuid[]
+  )$$,
+  '42501',
+  'cross-store vehicle review is denied'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT test.expect_sqlstate(
+  $$SELECT public.queue_vehicle_background_removal(
+    '10000000-0000-0000-0000-000000000001',
+    ARRAY[]::uuid[]
+  )$$,
+  '42501',
+  'capture-only staff cannot queue office media review work'
+);
+RESET ROLE;
+
+SELECT test.assert_true(
   NOT has_function_privilege(
     'authenticated',
     'public.begin_user_provisioning_operation(uuid,uuid,text,text,public.app_role,uuid[])',

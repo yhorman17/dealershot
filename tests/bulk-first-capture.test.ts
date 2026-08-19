@@ -79,18 +79,20 @@ test("consecutive camera and bounded upload state are mobile-first", () => {
 
 test("review supports safe removal, replacement, ordering and main image", () => {
   const route = read("src/routes/_authenticated/bulk-photos.$id.tsx");
+  const sharedReview = read("src/components/VehiclePhotoReviewStages.tsx");
   assert.match(route, /replaceItemId/);
   assert.match(route, /await uploadPrivateOriginal/);
   assert.match(route, /if \(replaced\) await archivePrivateMedia/);
   assert.match(route, /reorder_bulk_photo_items/);
   assert.match(route, /set_bulk_primary_item/);
-  assert.match(route, /Retake \/ replace/);
+  assert.match(sharedReview, /Retake \/ replace/);
 });
 
 test("processing selection queues durable work and never blocks the next vehicle", () => {
   const route = read("src/routes/_authenticated/bulk-photos.$id.tsx");
+  const sharedReview = read("src/components/VehiclePhotoReviewStages.tsx");
   const worker = read("worker/media.ts");
-  assert.match(route, /Select exterior/);
+  assert.match(sharedReview, /Select exterior/);
   assert.match(route, /queue_bulk_background_removal/);
   assert.match(route, /complete_bulk_capture_workflow/);
   assert.match(route, /Yes, next vehicle/);

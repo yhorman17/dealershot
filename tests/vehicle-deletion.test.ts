@@ -87,8 +87,10 @@ test("vehicle deletion is a capability-checked RPC rather than a raw client dele
   assert.match(vehicleRoute, /deleteVehicle\(\{ data: \{ vehicle_id: id \} \}\)/);
   assert.match(vehicleRoute, /if \(deleting\) return/);
   assert.match(vehicleRoute, /disabled=\{deleting\}/);
-  assert.match(vehicleServerFunction, /You do not have permission to delete this vehicle/);
-  assert.match(vehicleServerFunction, /No partial database deletion occurred/);
+  assert.match(vehicleRoute, /Deleting securely…/);
+  assert.match(vehicleRoute, /setDeleteNotice/);
+  assert.match(vehicleRoute, /catch \(reason\)/);
+  assert.match(vehicleServerFunction, /translateVehicleDeletionFailure/);
 });
 
 test("deletion migration preserves history and avoids blanket cascade changes", () => {

@@ -30,6 +30,7 @@ import { Route as AuthenticatedBulkPhotosIdRouteImport } from './routes/_authent
 import { Route as AuthenticatedVehiclesIdRouteImport } from './routes/_authenticated/vehicles.$id'
 import { Route as AuthenticatedVehiclesNewRouteImport } from './routes/_authenticated/vehicles.new'
 import { Route as AuthenticatedVehiclesIdEditRouteImport } from './routes/_authenticated/vehicles.$id.edit'
+import { Route as AuthenticatedVehiclesIdReviewRouteImport } from './routes/_authenticated/vehicles.$id.review'
 import { Route as AuthenticatedVehiclesIdDocumentsDocumentIdRouteImport } from './routes/_authenticated/vehicles.$id.documents.$documentId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -140,6 +141,12 @@ const AuthenticatedVehiclesIdEditRoute =
     path: '/edit',
     getParentRoute: () => AuthenticatedVehiclesIdRoute,
   } as any)
+const AuthenticatedVehiclesIdReviewRoute =
+  AuthenticatedVehiclesIdReviewRouteImport.update({
+    id: '/review',
+    path: '/review',
+    getParentRoute: () => AuthenticatedVehiclesIdRoute,
+  } as any)
 const AuthenticatedVehiclesIdDocumentsDocumentIdRoute =
   AuthenticatedVehiclesIdDocumentsDocumentIdRouteImport.update({
     id: '/documents/$documentId',
@@ -168,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
+  '/vehicles/$id/review': typeof AuthenticatedVehiclesIdReviewRoute
   '/vehicles/$id/documents/$documentId': typeof AuthenticatedVehiclesIdDocumentsDocumentIdRoute
 }
 export interface FileRoutesByTo {
@@ -191,6 +199,7 @@ export interface FileRoutesByTo {
   '/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
+  '/vehicles/$id/review': typeof AuthenticatedVehiclesIdReviewRoute
   '/vehicles/$id/documents/$documentId': typeof AuthenticatedVehiclesIdDocumentsDocumentIdRoute
 }
 export interface FileRoutesById {
@@ -216,6 +225,7 @@ export interface FileRoutesById {
   '/_authenticated/vehicles/$id': typeof AuthenticatedVehiclesIdRouteWithChildren
   '/_authenticated/vehicles/new': typeof AuthenticatedVehiclesNewRoute
   '/_authenticated/vehicles/$id/edit': typeof AuthenticatedVehiclesIdEditRoute
+  '/_authenticated/vehicles/$id/review': typeof AuthenticatedVehiclesIdReviewRoute
   '/_authenticated/vehicles/$id/documents/$documentId': typeof AuthenticatedVehiclesIdDocumentsDocumentIdRoute
 }
 export interface FileRouteTypes {
@@ -241,6 +251,7 @@ export interface FileRouteTypes {
     | '/vehicles/$id'
     | '/vehicles/new'
     | '/vehicles/$id/edit'
+    | '/vehicles/$id/review'
     | '/vehicles/$id/documents/$documentId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -264,6 +275,7 @@ export interface FileRouteTypes {
     | '/vehicles/$id'
     | '/vehicles/new'
     | '/vehicles/$id/edit'
+    | '/vehicles/$id/review'
     | '/vehicles/$id/documents/$documentId'
   id:
     | '__root__'
@@ -288,6 +300,7 @@ export interface FileRouteTypes {
     | '/_authenticated/vehicles/$id'
     | '/_authenticated/vehicles/new'
     | '/_authenticated/vehicles/$id/edit'
+    | '/_authenticated/vehicles/$id/review'
     | '/_authenticated/vehicles/$id/documents/$documentId'
   fileRoutesById: FileRoutesById
 }
@@ -449,6 +462,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedVehiclesIdEditRouteImport
       parentRoute: typeof AuthenticatedVehiclesIdRoute
     }
+    '/_authenticated/vehicles/$id/review': {
+      id: '/_authenticated/vehicles/$id/review'
+      path: '/review'
+      fullPath: '/vehicles/$id/review'
+      preLoaderRoute: typeof AuthenticatedVehiclesIdReviewRouteImport
+      parentRoute: typeof AuthenticatedVehiclesIdRoute
+    }
     '/_authenticated/vehicles/$id/documents/$documentId': {
       id: '/_authenticated/vehicles/$id/documents/$documentId'
       path: '/documents/$documentId'
@@ -475,12 +495,14 @@ const AuthenticatedBulkPhotosRouteWithChildren =
 
 interface AuthenticatedVehiclesIdRouteChildren {
   AuthenticatedVehiclesIdEditRoute: typeof AuthenticatedVehiclesIdEditRoute
+  AuthenticatedVehiclesIdReviewRoute: typeof AuthenticatedVehiclesIdReviewRoute
   AuthenticatedVehiclesIdDocumentsDocumentIdRoute: typeof AuthenticatedVehiclesIdDocumentsDocumentIdRoute
 }
 
 const AuthenticatedVehiclesIdRouteChildren: AuthenticatedVehiclesIdRouteChildren =
   {
     AuthenticatedVehiclesIdEditRoute: AuthenticatedVehiclesIdEditRoute,
+    AuthenticatedVehiclesIdReviewRoute: AuthenticatedVehiclesIdReviewRoute,
     AuthenticatedVehiclesIdDocumentsDocumentIdRoute:
       AuthenticatedVehiclesIdDocumentsDocumentIdRoute,
   }
