@@ -1,0 +1,1119 @@
+{
+  "generatedAt": "2026-08-19T05:12:47.314Z",
+  "summary": {
+    "cases": 16,
+    "eligibleCases": 10,
+    "realDealerShotCases": 0,
+    "controlledFixtureCases": 16,
+    "primaryCompleteVehicleSelectionAccuracy": 0.8,
+    "exactEligibilityAccuracy": 0.75,
+    "automaticEligibilityGateAccuracy": 0.8125,
+    "quality": {
+      "good": 1,
+      "needsReview": 6,
+      "bad": 3
+    },
+    "current": {
+      "meanMaskIoU": 0.0429,
+      "meanContamination": 0.4063,
+      "meanMissingGeometry": 0.9066,
+      "meanOutputBytes": 661732
+    },
+    "v1": {
+      "meanMaskIoU": 0.1284,
+      "meanContamination": 0.6048,
+      "meanMissingGeometry": 0.837,
+      "meanOutputBytes": 113617
+    },
+    "v2": {
+      "meanMaskIoU": 0.3559,
+      "meanContamination": 0.458,
+      "meanMissingGeometry": 0.5121,
+      "meanOutputBytes": 490488
+    },
+    "v2Refined": {
+      "meanMaskIoU": 0.2651,
+      "meanContamination": 0.5214,
+      "meanMissingGeometry": 0.6432,
+      "meanOutputBytes": 487563
+    },
+    "v2MeanMilliseconds": 839,
+    "combinedBenchmarkPeakRssIncreaseBytes": 996098048,
+    "rssAfterV2ReleaseBytes": 1030283264
+  },
+  "results": [
+    {
+      "case": "dark_vehicle_night",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 228942,
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "exactEligibilityCorrect": true,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.9152,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 6,
+        "ambiguous": false,
+        "selectedClass": "bus",
+        "confidence": 0.817,
+        "iou": 0.1908,
+        "correct": false
+      },
+      "current": {
+        "maskIoU": 0,
+        "contamination": 0,
+        "missingGeometry": 1,
+        "milliseconds": 1486,
+        "outputBytes": 545886
+      },
+      "v1": {
+        "maskIoU": 0.0855,
+        "contamination": 0.6022,
+        "missingGeometry": 0.9018,
+        "milliseconds": 1246,
+        "outputBytes": 102279,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": 0.1863,
+        "contamination": 0.7447,
+        "missingGeometry": 0.5918,
+        "milliseconds": 2037,
+        "outputBytes": 559190
+      },
+      "v2Refined": {
+        "maskIoU": 0.2391,
+        "contamination": 0.6339,
+        "missingGeometry": 0.5918,
+        "outputBytes": 553618,
+        "quality": "needs_review",
+        "qualityScore": 0.7677,
+        "reasons": [
+          "fragmented_vehicle_geometry",
+          "unrelated_disconnected_components",
+          "missing_vehicle_center_mass"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0.8171,
+          "disconnectedComponentRatio": 0.3025,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0.7553,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0.48
+        }
+      },
+      "reviewScores": {
+        "vehicleCompleteness": 2,
+        "edgeQuality": 1,
+        "glassQuality": 5,
+        "backgroundIsolation": 2
+      }
+    },
+    {
+      "case": "light_vehicle_overhead",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 354829,
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "exactEligibilityCorrect": true,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.8525,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 3,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.8379,
+        "iou": 0.8591,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0,
+        "contamination": 1,
+        "missingGeometry": 1,
+        "milliseconds": 1186,
+        "outputBytes": 480606
+      },
+      "v1": {
+        "maskIoU": 0,
+        "contamination": 1,
+        "missingGeometry": 1,
+        "milliseconds": 1191,
+        "outputBytes": 463876,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": 0.4273,
+        "contamination": 0.3595,
+        "missingGeometry": 0.438,
+        "milliseconds": 766,
+        "outputBytes": 468597
+      },
+      "v2Refined": {
+        "maskIoU": 0.3294,
+        "contamination": 0.3888,
+        "missingGeometry": 0.5833,
+        "outputBytes": 466592,
+        "quality": "needs_review",
+        "qualityScore": 0.7657,
+        "reasons": [
+          "fragmented_vehicle_geometry",
+          "unrelated_disconnected_components"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0.8544,
+          "disconnectedComponentRatio": 0.223,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0.7907,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0.5615
+        }
+      },
+      "reviewScores": {
+        "vehicleCompleteness": 2,
+        "edgeQuality": 2,
+        "glassQuality": 5,
+        "backgroundIsolation": 3
+      }
+    },
+    {
+      "case": "side_profile_suv",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 338718,
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "exactEligibilityCorrect": true,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.9053,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 4,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.8922,
+        "iou": 0.9166,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0.1674,
+        "contamination": 0.8076,
+        "missingGeometry": 0.4375,
+        "milliseconds": 1119,
+        "outputBytes": 418538
+      },
+      "v1": {
+        "maskIoU": 0.2387,
+        "contamination": 0.5188,
+        "missingGeometry": 0.6785,
+        "milliseconds": 1189,
+        "outputBytes": 63458,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": 0.4481,
+        "contamination": 0.3649,
+        "missingGeometry": 0.3966,
+        "milliseconds": 703,
+        "outputBytes": 362646
+      },
+      "v2Refined": {
+        "maskIoU": 0.3161,
+        "contamination": 0.3723,
+        "missingGeometry": 0.6109,
+        "outputBytes": 357550,
+        "quality": "needs_review",
+        "qualityScore": 0.7587,
+        "reasons": [
+          "fragmented_vehicle_geometry",
+          "unrelated_disconnected_components",
+          "missing_vehicle_center_mass"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0.8468,
+          "disconnectedComponentRatio": 0.3476,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0.7425,
+          "edgeContactRatio": 0.25,
+          "centerOccupancy": 0.4209
+        }
+      },
+      "reviewScores": {
+        "vehicleCompleteness": 2,
+        "edgeQuality": 2,
+        "glassQuality": 5,
+        "backgroundIsolation": 3
+      }
+    },
+    {
+      "case": "red_vehicle_outdoors",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 543043,
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "exactEligibilityCorrect": true,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.8683,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 3,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9829,
+        "iou": 0.1122,
+        "correct": false
+      },
+      "current": {
+        "maskIoU": 0,
+        "contamination": 0,
+        "missingGeometry": 1,
+        "milliseconds": 1192,
+        "outputBytes": 934272
+      },
+      "v1": {
+        "maskIoU": 0,
+        "contamination": 1,
+        "missingGeometry": 1,
+        "milliseconds": 1223,
+        "outputBytes": 18939,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": 0.0054,
+        "contamination": 0.988,
+        "missingGeometry": 0.9902,
+        "milliseconds": 747,
+        "outputBytes": 940065
+      },
+      "v2Refined": {
+        "maskIoU": 0,
+        "contamination": 1,
+        "missingGeometry": 1,
+        "outputBytes": 934827,
+        "quality": "needs_review",
+        "qualityScore": 0.7089,
+        "reasons": [
+          "fragmented_vehicle_geometry",
+          "unrelated_disconnected_components",
+          "missing_vehicle_center_mass"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0.7332,
+          "disconnectedComponentRatio": 0.4177,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0.7207,
+          "edgeContactRatio": 0.25,
+          "centerOccupancy": 0.2535
+        }
+      },
+      "reviewScores": {
+        "vehicleCompleteness": 1,
+        "edgeQuality": 1,
+        "glassQuality": 5,
+        "backgroundIsolation": 1
+      }
+    },
+    {
+      "case": "light_vehicle_lot",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 263594,
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "exactEligibilityCorrect": true,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.9854,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 8,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9824,
+        "iou": 0.875,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0.0276,
+        "contamination": 0.2119,
+        "missingGeometry": 0.9722,
+        "milliseconds": 1164,
+        "outputBytes": 522034
+      },
+      "v1": {
+        "maskIoU": 0.0067,
+        "contamination": 0.9491,
+        "missingGeometry": 0.9923,
+        "milliseconds": 1236,
+        "outputBytes": 20607,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": 0.413,
+        "contamination": 0.3714,
+        "missingGeometry": 0.4537,
+        "milliseconds": 856,
+        "outputBytes": 526160
+      },
+      "v2Refined": {
+        "maskIoU": 0.1797,
+        "contamination": 0.4777,
+        "missingGeometry": 0.785,
+        "outputBytes": 521586,
+        "quality": "needs_review",
+        "qualityScore": 0.7262,
+        "reasons": [
+          "fragmented_vehicle_geometry",
+          "unrelated_disconnected_components",
+          "missing_vehicle_center_mass"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0.6892,
+          "disconnectedComponentRatio": 0.5263,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0.6926,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0.1247
+        }
+      },
+      "reviewScores": {
+        "vehicleCompleteness": 1,
+        "edgeQuality": 2,
+        "glassQuality": 5,
+        "backgroundIsolation": 3
+      }
+    },
+    {
+      "case": "rear_vehicle_with_bus",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 138979,
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "exactEligibilityCorrect": true,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.883,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 6,
+        "ambiguous": false,
+        "selectedClass": "bus",
+        "confidence": 0.9804,
+        "iou": 0.8272,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0.1017,
+        "contamination": 0.8042,
+        "missingGeometry": 0.8254,
+        "milliseconds": 1313,
+        "outputBytes": 657133
+      },
+      "v1": {
+        "maskIoU": 0,
+        "contamination": 0,
+        "missingGeometry": 1,
+        "milliseconds": 1286,
+        "outputBytes": 1158,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": 0.4748,
+        "contamination": 0.4523,
+        "missingGeometry": 0.2191,
+        "milliseconds": 868,
+        "outputBytes": 586335
+      },
+      "v2Refined": {
+        "maskIoU": 0.4742,
+        "contamination": 0.4525,
+        "missingGeometry": 0.22,
+        "outputBytes": 586339,
+        "quality": "good",
+        "qualityScore": 0.9647,
+        "reasons": [],
+        "metrics": {
+          "primaryComponentRatio": 0.9894,
+          "disconnectedComponentRatio": 0.0006,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0.9671,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 1
+        }
+      },
+      "reviewScores": {
+        "vehicleCompleteness": 4,
+        "edgeQuality": 3,
+        "glassQuality": 5,
+        "backgroundIsolation": 3
+      }
+    },
+    {
+      "case": "person_near_vehicle",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 442456,
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "AMBIGUOUS",
+      "exactEligibilityCorrect": false,
+      "autoGateCorrect": false,
+      "eligibilityScore": 0.8498,
+      "eligibilityReasons": [
+        "multiple_plausible_complete_vehicles"
+      ],
+      "primarySelection": {
+        "candidateCount": 8,
+        "ambiguous": true,
+        "selectedClass": "car",
+        "confidence": 0.6561,
+        "iou": 0.9527,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0.0415,
+        "contamination": 0.9183,
+        "missingGeometry": 0.9223,
+        "milliseconds": 1118,
+        "outputBytes": 601877
+      },
+      "v1": {
+        "maskIoU": 0.0164,
+        "contamination": 0.9211,
+        "missingGeometry": 0.9797,
+        "milliseconds": 1315,
+        "outputBytes": 32116,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 875,
+        "outputBytes": 0
+      },
+      "v2Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": [
+          "multiple_plausible_complete_vehicles"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0
+        }
+      },
+      "reviewScores": {
+        "vehicleCompleteness": 5,
+        "edgeQuality": 2,
+        "glassQuality": 5,
+        "backgroundIsolation": 5
+      }
+    },
+    {
+      "case": "antique_side_profile",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 493286,
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "exactEligibilityCorrect": true,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.7968,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 4,
+        "ambiguous": false,
+        "selectedClass": "truck",
+        "confidence": 0.6721,
+        "iou": 0.833,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0.0102,
+        "contamination": 0.2257,
+        "missingGeometry": 0.9898,
+        "milliseconds": 1227,
+        "outputBytes": 624703
+      },
+      "v1": {
+        "maskIoU": 0.4352,
+        "contamination": 0.386,
+        "missingGeometry": 0.401,
+        "milliseconds": 1351,
+        "outputBytes": 257186,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": 0.3456,
+        "contamination": 0.2301,
+        "missingGeometry": 0.6146,
+        "milliseconds": 839,
+        "outputBytes": 564262
+      },
+      "v2Refined": {
+        "maskIoU": 0.0361,
+        "contamination": 0.6931,
+        "missingGeometry": 0.9606,
+        "outputBytes": 557500,
+        "quality": "bad",
+        "qualityScore": 0.5454,
+        "reasons": [
+          "fragmented_vehicle_geometry",
+          "unrelated_disconnected_components",
+          "missing_vehicle_center_mass"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0.1115,
+          "disconnectedComponentRatio": 0.7439,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0.5888,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0
+        }
+      },
+      "reviewScores": {
+        "vehicleCompleteness": 1,
+        "edgeQuality": 1,
+        "glassQuality": 5,
+        "backgroundIsolation": 2
+      }
+    },
+    {
+      "case": "rear_three_quarter_with_dog",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 78823,
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "AMBIGUOUS",
+      "exactEligibilityCorrect": false,
+      "autoGateCorrect": false,
+      "eligibilityScore": 0.7921,
+      "eligibilityReasons": [
+        "multiple_plausible_complete_vehicles"
+      ],
+      "primarySelection": {
+        "candidateCount": 5,
+        "ambiguous": true,
+        "selectedClass": "car",
+        "confidence": 0.7055,
+        "iou": 0.9068,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0.0809,
+        "contamination": 0.0949,
+        "missingGeometry": 0.9184,
+        "milliseconds": 1416,
+        "outputBytes": 904230
+      },
+      "v1": {
+        "maskIoU": 0.0964,
+        "contamination": 0.39,
+        "missingGeometry": 0.8972,
+        "milliseconds": 1414,
+        "outputBytes": 68323,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 680,
+        "outputBytes": 0
+      },
+      "v2Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": [
+          "multiple_plausible_complete_vehicles"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0
+        }
+      },
+      "reviewScores": {
+        "vehicleCompleteness": 5,
+        "edgeQuality": 2,
+        "glassQuality": 5,
+        "backgroundIsolation": 5
+      }
+    },
+    {
+      "case": "bus_exterior",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 200839,
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "exactEligibilityCorrect": true,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.8512,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 2,
+        "ambiguous": false,
+        "selectedClass": "bus",
+        "confidence": 0.888,
+        "iou": 0.9566,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0,
+        "contamination": 0,
+        "missingGeometry": 1,
+        "milliseconds": 1230,
+        "outputBytes": 928044
+      },
+      "v1": {
+        "maskIoU": 0.4048,
+        "contamination": 0.2807,
+        "missingGeometry": 0.5192,
+        "milliseconds": 1263,
+        "outputBytes": 108231,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": 0.547,
+        "contamination": 0.1534,
+        "missingGeometry": 0.3929,
+        "milliseconds": 699,
+        "outputBytes": 897628
+      },
+      "v2Refined": {
+        "maskIoU": 0.5461,
+        "contamination": 0.1528,
+        "missingGeometry": 0.3942,
+        "outputBytes": 897618,
+        "quality": "needs_review",
+        "qualityScore": 0.923,
+        "reasons": [
+          "fragmented_vehicle_geometry"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0.9134,
+          "disconnectedComponentRatio": 0.0029,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0.779,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0.8379
+        }
+      },
+      "reviewScores": {
+        "vehicleCompleteness": 3,
+        "edgeQuality": 3,
+        "glassQuality": 5,
+        "backgroundIsolation": 4
+      }
+    },
+    {
+      "case": "similar_multiple_vehicles",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 97679,
+      "expectedEligibility": "AMBIGUOUS",
+      "actualEligibility": "FULL_VEHICLE",
+      "exactEligibilityCorrect": false,
+      "autoGateCorrect": false,
+      "eligibilityScore": 0.9524,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 3,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9923,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1185,
+        "outputBytes": 621865
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1212,
+        "outputBytes": 22538,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 728,
+        "outputBytes": 576901
+      },
+      "v2Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 567960,
+        "quality": "needs_review",
+        "qualityScore": 0.6923,
+        "reasons": [
+          "fragmented_vehicle_geometry",
+          "unrelated_disconnected_components",
+          "missing_vehicle_center_mass"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0.6283,
+          "disconnectedComponentRatio": 0.5673,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0.6784,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0
+        }
+      },
+      "reviewScores": null
+    },
+    {
+      "case": "vehicle_interior_negative",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 194832,
+      "expectedEligibility": "NON_VEHICLE",
+      "actualEligibility": "AMBIGUOUS",
+      "exactEligibilityCorrect": false,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.6755,
+      "eligibilityReasons": [
+        "low_instance_confidence"
+      ],
+      "primarySelection": {
+        "candidateCount": 1,
+        "ambiguous": false,
+        "selectedClass": "truck",
+        "confidence": 0.2859,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1198,
+        "outputBytes": 627223
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1233,
+        "outputBytes": 641553,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 839,
+        "outputBytes": 0
+      },
+      "v2Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": [
+          "low_instance_confidence"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0
+        }
+      },
+      "reviewScores": null
+    },
+    {
+      "case": "partial_vehicle_edge_negative",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 17178,
+      "expectedEligibility": "PARTIAL_VEHICLE",
+      "actualEligibility": "PARTIAL_VEHICLE",
+      "exactEligibilityCorrect": true,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.7573,
+      "eligibilityReasons": [
+        "implausible_full_vehicle_aspect"
+      ],
+      "primarySelection": {
+        "candidateCount": 1,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9585,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1169,
+        "outputBytes": 740525
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1218,
+        "outputBytes": 7093,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 735,
+        "outputBytes": 0
+      },
+      "v2Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": [
+          "implausible_full_vehicle_aspect"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0
+        }
+      },
+      "reviewScores": null
+    },
+    {
+      "case": "hood_glass_detail_negative",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 23272,
+      "expectedEligibility": "PARTIAL_VEHICLE",
+      "actualEligibility": "PARTIAL_VEHICLE",
+      "exactEligibilityCorrect": true,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.5241,
+      "eligibilityReasons": [
+        "vehicle_geometry_clipped_by_frame",
+        "instance_fills_frame_like_partial_or_interior"
+      ],
+      "primarySelection": {
+        "candidateCount": 2,
+        "ambiguous": false,
+        "selectedClass": "truck",
+        "confidence": 0.5367,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1152,
+        "outputBytes": 542044
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1224,
+        "outputBytes": 15037,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 626,
+        "outputBytes": 0
+      },
+      "v2Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": [
+          "vehicle_geometry_clipped_by_frame",
+          "instance_fills_frame_like_partial_or_interior"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0
+        }
+      },
+      "reviewScores": null
+    },
+    {
+      "case": "roof_detail_negative",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 508602,
+      "expectedEligibility": "PARTIAL_VEHICLE",
+      "actualEligibility": "PARTIAL_VEHICLE",
+      "exactEligibilityCorrect": true,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.7699,
+      "eligibilityReasons": [
+        "vehicle_geometry_clipped_by_frame"
+      ],
+      "primarySelection": {
+        "candidateCount": 3,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.7073,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1163,
+        "outputBytes": 623469
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1265,
+        "outputBytes": 8751,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 662,
+        "outputBytes": 0
+      },
+      "v2Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": [
+          "vehicle_geometry_clipped_by_frame"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0
+        }
+      },
+      "reviewScores": null
+    },
+    {
+      "case": "windshield_detail_negative",
+      "source": "CONTROLLED_COCO_FIXTURE",
+      "cocoImageId": 107087,
+      "expectedEligibility": "PARTIAL_VEHICLE",
+      "actualEligibility": "PARTIAL_VEHICLE",
+      "exactEligibilityCorrect": true,
+      "autoGateCorrect": true,
+      "eligibilityScore": 0.3574,
+      "eligibilityReasons": [
+        "vehicle_geometry_clipped_by_frame",
+        "instance_fills_frame_like_partial_or_interior",
+        "low_instance_confidence"
+      ],
+      "primarySelection": {
+        "candidateCount": 2,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.2566,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1176,
+        "outputBytes": 693123
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1189,
+        "outputBytes": 722977,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 760,
+        "outputBytes": 0
+      },
+      "v2Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": [
+          "vehicle_geometry_clipped_by_frame",
+          "instance_fills_frame_like_partial_or_interior",
+          "low_instance_confidence"
+        ],
+        "metrics": {
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "holeRatio": 0,
+          "upperBodyHoleRatio": 0,
+          "maskBoxFill": 0,
+          "edgeContactRatio": 0,
+          "centerOccupancy": 0
+        }
+      },
+      "reviewScores": null
+    }
+  ]
+}
