@@ -9,7 +9,6 @@ export const VEHICLE_AWARE_PIPELINE_VERSION = "detector-roi-isnet-v1";
 const DETECTOR_SIZE = 416;
 const VEHICLE_CLASS_INDEXES = new Map([
   [2, "car"],
-  [3, "motorcycle"],
   [5, "bus"],
   [7, "truck"],
 ]);
