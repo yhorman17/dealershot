@@ -47,6 +47,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { isStoreSwitchLocked } from "@/lib/active-store";
 import { useCaptureMethods } from "@/hooks/use-capture-methods";
+import { BackgroundProcessingStatus } from "@/components/BackgroundProcessingStatus";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard };
 export function AppNav({ children }: { children: ReactNode }) {
@@ -342,6 +343,7 @@ export function AppNav({ children }: { children: ReactNode }) {
             {children}
           </div>
         </div>
+        <BackgroundProcessingStatus />
       </div>
     </TooltipProvider>
   );

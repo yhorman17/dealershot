@@ -232,6 +232,73 @@ SELECT test.expect_sqlstate(
 );
 RESET ROLE;
 
+SELECT test.assert_true(
+  has_function_privilege(
+    'authenticated',
+    'public.get_background_removal_activity(uuid,integer)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'anon',
+    'public.get_background_removal_activity(uuid,integer)',
+    'EXECUTE'
+  )
+  AND NOT has_table_privilege('authenticated', 'private.background_jobs', 'SELECT'),
+  'background-removal activity is exposed only through the authorized projection'
+);
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT test.assert_true(
+  jsonb_typeof(public.get_background_removal_activity(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    20
+  )) = 'array',
+  'authorized media administrator can read active-store processing activity'
+);
+RESET ROLE;
+
+UPDATE public.profile_dealerships
+SET access_role = 'inventory_media'
+WHERE profile_id = '00000000-0000-0000-0000-000000000004'
+  AND dealership_id = 'bbbbbbbb-0000-0000-0000-000000000001';
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000004';
+SELECT test.assert_true(
+  jsonb_typeof(public.get_background_removal_activity(
+    'bbbbbbbb-0000-0000-0000-000000000001',
+    20
+  )) = 'array',
+  'authorized inventory-media staff can read their store processing activity'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.get_background_removal_activity(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    20
+  )$$,
+  '42501',
+  'background-removal activity denies a true cross-store staff request'
+);
+RESET ROLE;
+
+UPDATE public.profile_dealerships
+SET access_role = 'photographer'
+WHERE profile_id = '00000000-0000-0000-0000-000000000004'
+  AND dealership_id = 'bbbbbbbb-0000-0000-0000-000000000001';
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT test.expect_sqlstate(
+  $$SELECT public.get_background_removal_activity(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    20
+  )$$,
+  '42501',
+  'capture-only staff cannot read office processing activity'
+);
+RESET ROLE;
+
 SET ROLE authenticated;
 SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
 SELECT test.expect_sqlstate(

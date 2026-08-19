@@ -558,55 +558,95 @@
 }
 
 .bulk-camera-shell {
-  display: flex;
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100vw;
   height: 100dvh;
   min-height: 100dvh;
-  flex-direction: column;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  background: black;
+}
+
+.bulk-camera-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.bulk-camera-stage video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.bulk-camera-header {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  left: 0;
+  pointer-events: none;
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+}
+
+.bulk-camera-header > * {
+  pointer-events: auto;
+}
+
+.bulk-camera-header > :first-child {
+  border-radius: 0.5rem;
+  background: oklch(0.12 0 0 / 78%);
+  padding: 0.45rem 0.65rem;
+}
+
+.bulk-camera-controls {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 0.75rem max(1rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom))
+    max(1rem, env(safe-area-inset-left));
+  pointer-events: none;
+}
+
+.bulk-camera-controls > * {
+  pointer-events: auto;
+  filter: drop-shadow(0 1px 3px rgb(0 0 0 / 45%));
+}
+
+.bulk-camera-zoom {
+  bottom: max(6.75rem, calc(env(safe-area-inset-bottom) + 5.75rem));
+}
+
+.bulk-camera-upload-status {
+  top: max(4.5rem, calc(env(safe-area-inset-top) + 3.5rem));
+  left: max(0.75rem, env(safe-area-inset-left));
 }
 
 @media (orientation: landscape) and (max-height: 600px) {
-  .bulk-camera-shell {
-    display: block;
-  }
-
-  .bulk-camera-stage {
-    position: absolute;
-    inset: 0;
-  }
-
   .bulk-camera-header {
-    position: absolute;
-    z-index: 20;
-    top: 0;
     right: calc(5.75rem + env(safe-area-inset-right));
-    left: 0;
-    pointer-events: none;
     padding-right: 0.75rem;
-    padding-left: max(0.75rem, env(safe-area-inset-left));
-  }
-
-  .bulk-camera-header > * {
-    pointer-events: auto;
-    border-radius: 0.5rem;
-    background: oklch(0.12 0 0 / 78%);
-    padding: 0.45rem 0.65rem;
   }
 
   .bulk-camera-controls {
-    position: absolute;
-    z-index: 20;
     top: 0;
     right: 0;
     bottom: 0;
+    left: auto;
     display: flex;
     width: calc(5.75rem + env(safe-area-inset-right));
     flex-direction: column-reverse;
     align-items: center;
     justify-content: center;
     gap: clamp(0.7rem, 3vh, 1.25rem);
-    background: oklch(0.1 0 0 / 76%);
-    padding: max(0.5rem, env(safe-area-inset-top)) env(safe-area-inset-right)
+    padding: max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right))
       max(0.5rem, env(safe-area-inset-bottom)) 0;
   }
 
@@ -636,6 +676,12 @@
     top: auto;
     bottom: max(0.6rem, env(safe-area-inset-bottom));
     left: max(0.6rem, env(safe-area-inset-left));
+  }
+}
+
+@media (display-mode: standalone) {
+  .bulk-camera-shell {
+    height: 100dvh;
   }
 }
 

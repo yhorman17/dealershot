@@ -1442,6 +1442,10 @@ export type Database = {
         Args: { _dealership_id: string };
         Returns: Json;
       };
+      get_background_removal_activity: {
+        Args: { _dealership_id: string; _limit?: number };
+        Returns: Json;
+      };
       mark_bulk_capture_ended: {
         Args: { _session_id: string };
         Returns: Database["public"]["Tables"]["photo_capture_sessions"]["Row"];

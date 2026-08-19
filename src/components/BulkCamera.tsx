@@ -15,6 +15,24 @@ type VisibleUpload = {
   state: "queued" | "uploading" | "failed";
 };
 
+function previewCrop(video: HTMLVideoElement) {
+  const sourceWidth = video.videoWidth;
+  const sourceHeight = video.videoHeight;
+  const viewportWidth = video.clientWidth;
+  const viewportHeight = video.clientHeight;
+  if (!sourceWidth || !sourceHeight || !viewportWidth || !viewportHeight) {
+    return { x: 0, y: 0, width: sourceWidth, height: sourceHeight };
+  }
+  const sourceRatio = sourceWidth / sourceHeight;
+  const viewportRatio = viewportWidth / viewportHeight;
+  if (sourceRatio > viewportRatio) {
+    const width = sourceHeight * viewportRatio;
+    return { x: (sourceWidth - width) / 2, y: 0, width, height: sourceHeight };
+  }
+  const height = sourceWidth / viewportRatio;
+  return { x: 0, y: (sourceHeight - height) / 2, width: sourceWidth, height };
+}
+
 export function BulkCamera({
   capturedCount,
   uploadingCount,
@@ -46,6 +64,13 @@ export function BulkCamera({
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.bulkCameraOpen = "true";
+    return () => {
+      delete document.documentElement.dataset.bulkCameraOpen;
+    };
   }, []);
 
   useEffect(() => {
@@ -110,11 +135,22 @@ export function BulkCamera({
     setCapturing(true);
     try {
       const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      const crop = previewCrop(video);
+      canvas.width = Math.round(crop.width);
+      canvas.height = Math.round(crop.height);
       const context = canvas.getContext("2d");
       if (!context) throw new Error("Camera frame could not be captured.");
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      context.drawImage(
+        video,
+        crop.x,
+        crop.y,
+        crop.width,
+        crop.height,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
       const blob = await new Promise<Blob>((resolve, reject) =>
         canvas.toBlob(
           (value) =>
@@ -136,7 +172,7 @@ export function BulkCamera({
 
   return (
     <div
-      className="bulk-camera-shell fixed inset-0 z-[80] bg-black text-white"
+      className="bulk-camera-shell fixed inset-0 z-[80] isolate bg-black text-white"
       role="dialog"
       aria-modal
     >
@@ -167,7 +203,7 @@ export function BulkCamera({
           ref={videoRef}
           muted
           playsInline
-          className="h-full w-full object-contain"
+          className="h-full w-full object-cover"
           aria-label="Live camera preview"
         />
         {cameraState !== "ready" && (

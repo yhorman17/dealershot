@@ -19,6 +19,7 @@ import {
   resolveAuthorizedMediaUrls,
   uploadPrivateOriginal,
 } from "@/lib/private-media";
+import { announceBackgroundProcessingChange } from "@/lib/background-processing-events";
 
 export const Route = createFileRoute("/_authenticated/bulk-photos/$id")({
   head: () => ({ meta: [{ title: "Bulk Capture — DealerShot" }] }),
@@ -324,6 +325,7 @@ function BulkCaptureWorkspace() {
         _session_id: session.id,
       });
       if (finishError) throw finishError;
+      if (queued) announceBackgroundProcessingChange();
       toast.success("Vehicle capture complete", {
         description: queued
           ? `${queued} background-removal ${queued === 1 ? "job" : "jobs"} queued. You can continue immediately.`

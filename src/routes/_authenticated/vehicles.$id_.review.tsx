@@ -20,6 +20,7 @@ import {
   resolveAuthorizedMediaUrls,
   uploadPrivateOriginal,
 } from "@/lib/private-media";
+import { announceBackgroundProcessingChange } from "@/lib/background-processing-events";
 
 type ReviewSearch = { from?: "inventory" | "vehicle" };
 
@@ -232,6 +233,7 @@ function ExistingVehicleReviewPage() {
       if (queueError) throw queueError;
       const result = data as unknown as { queued_count?: number; skipped_count?: number } | null;
       const queued = result?.queued_count ?? 0;
+      if (queued) announceBackgroundProcessingChange();
       toast.success("Photo review complete", {
         description: queued
           ? `${queued} background-removal ${queued === 1 ? "job" : "jobs"} queued. Processing continues in the background.`

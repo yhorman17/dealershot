@@ -13,8 +13,25 @@ test("landscape camera makes the preview the full stage without restarting media
   assert.match(styles, /@media \(orientation: landscape\) and \(max-height: 600px\)/);
   assert.match(styles, /\.bulk-camera-stage\s*\{[\s\S]*position: absolute;[\s\S]*inset: 0;/);
   assert.match(styles, /\.bulk-camera-controls\s*\{[\s\S]*position: absolute;/);
-  assert.match(camera, /className="h-full w-full object-contain"/);
+  assert.match(styles, /\.bulk-camera-shell\s*\{[\s\S]*height: 100dvh;/);
+  assert.match(styles, /\.bulk-camera-stage video\s*\{[\s\S]*object-fit: cover;/);
+  assert.match(camera, /className="h-full w-full object-cover"/);
+  assert.match(camera, /document\.documentElement\.dataset\.bulkCameraOpen/);
+  assert.match(camera, /previewCrop\(video\)/);
+  assert.match(camera, /context\.drawImage\([\s\S]*crop\.x,[\s\S]*crop\.height/);
   assert.doesNotMatch(camera, /orientationchange|screen\.orientation/);
+});
+
+test("camera metadata supports safe standalone PWA display without changing browser constraints", () => {
+  const rootRoute = read("src/routes/__root.tsx");
+  const manifest = read("public/manifest.webmanifest");
+  const styles = read("src/styles.css");
+  assert.match(rootRoute, /rel: "manifest", href: "\/manifest\.webmanifest"/);
+  assert.match(rootRoute, /apple-mobile-web-app-capable/);
+  assert.match(manifest, /"display": "standalone"/);
+  assert.match(manifest, /"orientation": "any"/);
+  assert.match(styles, /@media \(display-mode: standalone\)/);
+  assert.match(styles, /env\(safe-area-inset-bottom\)/);
 });
 
 test("camera exposes only hardware-backed zoom and captures high quality JPEG", () => {

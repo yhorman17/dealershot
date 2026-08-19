@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="DealerShot">
+  <rect width="512" height="512" rx="96" fill="#17202b"/>
+  <path d="M112 210v-50c0-27 21-48 48-48h50M302 112h50c27 0 48 21 48 48v50M400 302v50c0 27-21 48-48 48h-50M210 400h-50c-27 0-48-21-48-48v-50" fill="none" stroke="#fefefe" stroke-width="32" stroke-linecap="round"/>
+  <circle cx="256" cy="256" r="78" fill="#2868ca"/>
+  <circle cx="256" cy="256" r="34" fill="#fefefe"/>
+</svg>
