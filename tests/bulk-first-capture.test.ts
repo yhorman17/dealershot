@@ -117,7 +117,7 @@ test("processing selection queues durable work and never blocks the next vehicle
   assert.match(worker, /import\("onnxruntime-node"\)/);
   assert.match(worker, /BACKGROUND_REMOVAL_MODEL_KEY = "\/models\/isnet_quint8"/);
   assert.match(worker, /background_model_integrity_failed/);
-  assert.match(worker, /createTransparentVehicleCutout\(original\)/);
+  assert.match(worker, /createTransparentVehicleCutoutResult\(original\)/);
 });
 
 test("capture method and cross-store authorization are server-enforced", () => {

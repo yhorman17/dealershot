@@ -2366,6 +2366,19 @@ SELECT test.assert_true(
   AND NOT has_function_privilege('anon', 'public.cancel_background_removal(uuid)', 'EXECUTE'),
   'background-removal controls are authenticated-only'
 );
+SELECT test.assert_true(
+  has_function_privilege(
+    'service_role',
+    'public.worker_fail_background_job_diagnostic(text,uuid,text,boolean,text,jsonb)',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'authenticated',
+    'public.worker_fail_background_job_diagnostic(text,uuid,text,boolean,text,jsonb)',
+    'EXECUTE'
+  ),
+  'safe failure diagnostics remain worker-only'
+);
 
 INSERT INTO public.vehicles (
   id, dealership_id, vin, stock_number, year, make, model
@@ -2475,19 +2488,27 @@ SELECT test.assert_true(
   ),
   'worker claim synchronizes the photo to Processing'
 );
-SELECT public.worker_fail_background_job(
+SELECT public.worker_fail_background_job_diagnostic(
   'processing-controls-worker', 'fc400000-0000-4000-8000-000000000001',
-  'background_inference_failed', false
+  'background_runtime_unavailable', false, 'resource_failure',
+  '{"safe_code":"runtime_unavailable"}'::jsonb
 ) AS processing_control_failure_status \gset
+RESET ROLE;
 SELECT test.assert_true(
   :'processing_control_failure_status' = 'dead_letter'
   AND (
     SELECT processing_status = 'failed' FROM public.photos
     WHERE id = 'fc200000-0000-4000-8000-000000000001'
+  )
+  AND (
+    SELECT failure_category = 'resource_failure'
+      AND deterministic_failure_count = 1
+      AND failure_diagnostics->>'safe_code' = 'runtime_unavailable'
+    FROM private.background_jobs
+    WHERE id = 'fc400000-0000-4000-8000-000000000001'
   ),
-  'worker failure synchronizes the photo back to Failed'
+  'worker failure synchronizes Failed and retains safe diagnostics'
 );
-RESET ROLE;
 
 SET ROLE authenticated;
 SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';

@@ -2,10 +2,16 @@ import { createHash, randomUUID } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import sharp from "sharp";
+import sharp, { type OutputInfo } from "sharp";
 
 import type { Database, Json } from "../src/integrations/supabase/types";
 import type { BackgroundJob, JobHandler } from "./runtime";
+import {
+  analyzeBackgroundMask,
+  BackgroundProcessingError,
+  type MaskQuality,
+  type SafeMaskDiagnostics,
+} from "./background-removal-diagnostics.ts";
 import {
   createVehicleAwareCutout,
   VEHICLE_AWARE_PIPELINE_VERSION,
@@ -149,30 +155,56 @@ async function loadBackgroundRemovalModel() {
 
 function getBackgroundRemovalRuntime() {
   backgroundRemovalRuntime ??= (async () => {
-    const [ort, model] = await Promise.all([
-      import("onnxruntime-node"),
-      loadBackgroundRemovalModel(),
-    ]);
-    const session = await ort.InferenceSession.create(model, {
-      executionProviders: ["cpu"],
-      graphOptimizationLevel: "all",
-      executionMode: "parallel",
-      enableCpuMemArena: true,
-    });
-    return { ort, session };
-  })();
+    let ort: OnnxRuntime;
+    let model: Buffer;
+    try {
+      [ort, model] = await Promise.all([import("onnxruntime-node"), loadBackgroundRemovalModel()]);
+    } catch (error) {
+      const code =
+        error instanceof Error && error.message.startsWith("background_model_")
+          ? error.message
+          : "background_runtime_unavailable";
+      throw new BackgroundProcessingError(code, "resource_failure", false);
+    }
+    try {
+      const session = await ort.InferenceSession.create(model, {
+        executionProviders: ["cpu"],
+        graphOptimizationLevel: "all",
+        executionMode: "parallel",
+        enableCpuMemArena: true,
+      });
+      return { ort, session };
+    } catch {
+      throw new BackgroundProcessingError(
+        "background_model_initialization_failed",
+        "resource_failure",
+        false,
+      );
+    }
+  })().catch((error) => {
+    // Never pin a rejected initialization promise for the life of the worker.
+    // A replacement deployment or repaired asset should be able to initialize.
+    backgroundRemovalRuntime = null;
+    throw error;
+  });
   return backgroundRemovalRuntime;
 }
 
-export async function createTransparentVehicleCutout(original: Buffer) {
-  const { data: normalized, info: normalizedInfo } = await sharp(original, {
-    failOn: "warning",
-  })
-    .rotate()
-    .removeAlpha()
-    .resize(SEGMENTATION_SIZE, SEGMENTATION_SIZE, { fit: "fill" })
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+export async function createTransparentVehicleCutoutResult(original: Buffer) {
+  let normalized: Buffer;
+  let normalizedInfo: OutputInfo;
+  try {
+    const result = await sharp(original, { failOn: "warning" })
+      .rotate()
+      .removeAlpha()
+      .resize(SEGMENTATION_SIZE, SEGMENTATION_SIZE, { fit: "fill" })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    normalized = result.data;
+    normalizedInfo = result.info;
+  } catch {
+    throw new BackgroundProcessingError("background_source_decode_failed", "source_invalid", false);
+  }
   if (normalizedInfo.channels !== 3) throw new Error("background_source_decode_failed");
 
   const stride = SEGMENTATION_SIZE * SEGMENTATION_SIZE;
@@ -185,12 +217,26 @@ export async function createTransparentVehicleCutout(original: Buffer) {
   }
 
   const { ort, session } = await getBackgroundRemovalRuntime();
-  const outputs = await session.run({
-    input: new ort.Tensor("float32", input, [1, 3, SEGMENTATION_SIZE, SEGMENTATION_SIZE]),
-  });
+  const outputs = await (async () => {
+    try {
+      return await session.run({
+        input: new ort.Tensor("float32", input, [1, 3, SEGMENTATION_SIZE, SEGMENTATION_SIZE]),
+      });
+    } catch {
+      throw new BackgroundProcessingError(
+        "background_inference_runtime_failed",
+        "resource_failure",
+        false,
+      );
+    }
+  })();
   const prediction = outputs.output ?? Object.values(outputs)[0];
   if (!prediction || prediction.data.length !== stride) {
-    throw new Error("background_inference_output_invalid");
+    throw new BackgroundProcessingError(
+      "background_inference_output_invalid",
+      "resource_failure",
+      false,
+    );
   }
   const mask = Buffer.allocUnsafe(stride);
   let minimum = 255;
@@ -201,13 +247,33 @@ export async function createTransparentVehicleCutout(original: Buffer) {
     minimum = Math.min(minimum, value);
     maximum = Math.max(maximum, value);
   }
-  if (minimum === maximum) throw new Error("background_inference_mask_invalid");
+  const { quality, diagnostics } = analyzeBackgroundMask(
+    mask,
+    SEGMENTATION_SIZE,
+    SEGMENTATION_SIZE,
+  );
+  if (minimum === maximum || (quality === "bad" && !diagnostics.draft_usable)) {
+    throw new BackgroundProcessingError(
+      "background_inference_mask_invalid",
+      "model_rejection",
+      false,
+      diagnostics,
+    );
+  }
 
-  const { data: sourcePixels, info } = await sharp(original, { failOn: "warning" })
-    .rotate()
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  let sourcePixels: Buffer;
+  let info: OutputInfo;
+  try {
+    const decoded = await sharp(original, { failOn: "warning" })
+      .rotate()
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    sourcePixels = decoded.data;
+    info = decoded.info;
+  } catch {
+    throw new BackgroundProcessingError("background_source_decode_failed", "source_invalid", false);
+  }
   const alpha = await sharp(mask, {
     raw: { width: SEGMENTATION_SIZE, height: SEGMENTATION_SIZE, channels: 1 },
   })
@@ -217,11 +283,24 @@ export async function createTransparentVehicleCutout(original: Buffer) {
   for (let pixel = 0; pixel < info.width * info.height; pixel += 1) {
     sourcePixels[pixel * 4 + 3] = alpha[pixel];
   }
-  return sharp(sourcePixels, {
-    raw: { width: info.width, height: info.height, channels: 4 },
-  })
-    .png({ compressionLevel: 9 })
-    .toBuffer();
+  try {
+    const bytes = await sharp(sourcePixels, {
+      raw: { width: info.width, height: info.height, channels: 4 },
+    })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+    return { bytes, quality, diagnostics };
+  } catch {
+    throw new BackgroundProcessingError(
+      "background_output_encode_failed",
+      "resource_failure",
+      false,
+    );
+  }
+}
+
+export async function createTransparentVehicleCutout(original: Buffer) {
+  return (await createTransparentVehicleCutoutResult(original)).bytes;
 }
 
 async function imageMetadata(bytes: Buffer, allowLegacySvg = false) {
@@ -418,47 +497,49 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
 
   let bytes: Buffer;
   let vehicleAware: VehicleAwareCutoutResult | null = null;
+  let standardQuality: MaskQuality = "good";
+  let standardDiagnostics: SafeMaskDiagnostics | null = null;
   const vehicleAwareEnabled = process.env.VEHICLE_AWARE_BACKGROUND_REMOVAL?.trim() === "1";
-  try {
-    if (vehicleAwareEnabled) {
-      try {
-        vehicleAware = await createVehicleAwareCutout(original, createTransparentVehicleCutout);
-        bytes = vehicleAware.bytes;
-      } catch {
-        bytes = await createTransparentVehicleCutout(original);
-        vehicleAware = {
-          bytes,
-          method: "standard_fallback",
-          detector: {
-            model: "unavailable",
-            selected: null,
-            candidateCount: 0,
+  if (vehicleAwareEnabled) {
+    try {
+      vehicleAware = await createVehicleAwareCutout(original, createTransparentVehicleCutout);
+      bytes = vehicleAware.bytes;
+    } catch {
+      const fallback = await createTransparentVehicleCutoutResult(original);
+      bytes = fallback.bytes;
+      vehicleAware = {
+        bytes,
+        method: "standard_fallback",
+        detector: {
+          model: "unavailable",
+          selected: null,
+          candidateCount: 0,
+          ambiguous: false,
+        },
+        roi: null,
+        quality: {
+          rating: "bad",
+          score: 0,
+          reasons: ["vehicle_aware_pipeline_failed"],
+          metrics: {
+            detectorConfidence: 0,
+            detectorMaskCoverage: 0,
+            maskBoxCoverage: 0,
+            primaryComponentRatio: 0,
+            centerOccupancy: 0,
+            edgeContactRatio: 0,
+            enclosedHoleRatio: 0,
             ambiguous: false,
           },
-          roi: null,
-          quality: {
-            rating: "bad",
-            score: 0,
-            reasons: ["vehicle_aware_pipeline_failed"],
-            metrics: {
-              detectorConfidence: 0,
-              detectorMaskCoverage: 0,
-              maskBoxCoverage: 0,
-              primaryComponentRatio: 0,
-              centerOccupancy: 0,
-              edgeContactRatio: 0,
-              enclosedHoleRatio: 0,
-              ambiguous: false,
-            },
-          },
-          framing: null,
-        };
-      }
-    } else {
-      bytes = await createTransparentVehicleCutout(original);
+        },
+        framing: null,
+      };
     }
-  } catch {
-    throw new Error("background_inference_failed");
+  } else {
+    const standard = await createTransparentVehicleCutoutResult(original);
+    bytes = standard.bytes;
+    standardQuality = standard.quality;
+    standardDiagnostics = standard.diagnostics;
   }
   const metadata = await sharp(bytes, { failOn: "warning" }).metadata();
   if (
@@ -481,11 +562,11 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
   if (activeSourceError || !activeSource) throw new Error("background_processing_cancelled");
 
   const variantId = randomUUID();
-  const path = `stores/${source.dealership_id}/vehicles/${source.vehicle_id}/media/${source.media_asset_id}/variants/cutout/${job.job_id}.png`;
+  const path = `stores/${source.dealership_id}/vehicles/${source.vehicle_id}/media/${source.media_asset_id}/variants/cutout/${job.job_id}-${variantId}.png`;
   await uploadVerified(client, PRIVATE_BUCKET, path, bytes, "image/png");
   const commitRpc = vehicleAware
     ? "worker_commit_vehicle_aware_cutout"
-    : "worker_commit_background_cutout";
+    : "worker_commit_background_cutout_result";
   const commitArguments = {
     _job_id: job.job_id,
     _variant_id: variantId,
@@ -508,7 +589,10 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
             framing: vehicleAware.framing,
           },
         }
-      : {}),
+      : {
+          _quality_class: standardQuality,
+          _diagnostics: standardDiagnostics,
+        }),
   };
   const { data: committed, error: commitError } = await client.rpc(
     commitRpc as never,
@@ -531,8 +615,9 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
     height: metadata.height,
     bytes: bytes.length,
     strategy: vehicleAware ? vehicleAware.method : "standard",
-    quality: vehicleAware?.quality.rating ?? "legacy_unscored",
+    quality: vehicleAware?.quality.rating ?? standardQuality,
     quality_score: vehicleAware?.quality.score ?? null,
+    mask_diagnostics: standardDiagnostics,
   };
 }
 

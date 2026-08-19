@@ -25,7 +25,7 @@ test("processing widget is authenticated, capability-gated, and active-store sco
 
 test("processing widget renders honest durable queue states and compact camera mode", () => {
   const widget = read("src/components/BackgroundProcessingStatus.tsx");
-  assert.match(widget, /"queued" \| "processing" \| "completed" \| "failed" \| "canceled"/);
+  assert.match(widget, /\| "needs_review"/);
   assert.match(widget, /\$\{activeCount\} active/);
   assert.match(widget, /Retry queued/);
   assert.match(widget, /Removing background/);

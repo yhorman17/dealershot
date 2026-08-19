@@ -8,8 +8,10 @@ import {
   ImageMinus,
   LoaderCircle,
   RotateCcw,
+  Scissors,
   X,
 } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -22,7 +24,13 @@ import {
 } from "@/lib/background-processing-events";
 import { cn } from "@/lib/utils";
 
-type ActivityStatus = "queued" | "processing" | "completed" | "failed" | "canceled";
+type ActivityStatus =
+  | "queued"
+  | "processing"
+  | "completed"
+  | "needs_review"
+  | "failed"
+  | "canceled";
 
 type BackgroundActivity = {
   job_id: string;
@@ -36,6 +44,10 @@ type BackgroundActivity = {
   cancelable: boolean;
   cancel_requested: boolean;
   safe_failure_label: string | null;
+  failure_category: string | null;
+  deterministic_failure_count: number;
+  has_draft: boolean;
+  fix_cutout_available: boolean;
   attempt_count: number;
   max_attempts: number;
   created_at: string;
@@ -55,6 +67,7 @@ function isActivity(value: unknown): value is BackgroundActivity {
     (candidate.status === "queued" ||
       candidate.status === "processing" ||
       candidate.status === "completed" ||
+      candidate.status === "needs_review" ||
       candidate.status === "failed" ||
       candidate.status === "canceled")
   );
@@ -68,6 +81,7 @@ function actionResultStatus(value: unknown, fallback: ActivityStatus): ActivityS
   if (status === "queued" || status === "retry_scheduled") return "queued";
   if (status === "processing" || status === "running") return "processing";
   if (status === "completed" || status === "succeeded") return "completed";
+  if (status === "needs_review") return "needs_review";
   if (status === "failed" || status === "dead_letter") return "failed";
   if (status === "canceled" || status === "cancelled" || status === "cancel_requested") {
     return "canceled";
@@ -76,6 +90,7 @@ function actionResultStatus(value: unknown, fallback: ActivityStatus): ActivityS
 }
 
 export function BackgroundProcessingStatus() {
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const { selectedDealershipId, capabilities, loadingCapabilities } = useAccessibleDealerships();
   const canView =
@@ -157,13 +172,14 @@ export function BackgroundProcessingStatus() {
       queued: visibleJobs.filter((job) => job.status === "queued").length,
       processing: visibleJobs.filter((job) => job.status === "processing").length,
       completed: visibleJobs.filter((job) => job.status === "completed").length,
+      needsReview: visibleJobs.filter((job) => job.status === "needs_review").length,
       failed: visibleJobs.filter((job) => job.status === "failed").length,
       canceled: visibleJobs.filter((job) => job.status === "canceled").length,
     }),
     [visibleJobs],
   );
   const activeCount = counts.queued + counts.processing;
-  const finishedCount = counts.completed + counts.failed + counts.canceled;
+  const finishedCount = counts.completed + counts.needsReview + counts.failed + counts.canceled;
 
   const performAction = async (job: BackgroundActivity, action: ProcessingAction) => {
     if (submitting) return;
@@ -223,6 +239,16 @@ export function BackgroundProcessingStatus() {
     }
   };
 
+  const openFixCutout = async (job: BackgroundActivity) => {
+    if (!job.fix_cutout_available || !job.vehicle_id || !job.photo_id) return;
+    setExpanded(false);
+    await navigate({
+      to: "/vehicles/$id",
+      params: { id: job.vehicle_id },
+      search: { customize: job.photo_id },
+    });
+  };
+
   if (!canView || visibleJobs.length === 0) return null;
 
   if (cameraOpen) {
@@ -237,7 +263,7 @@ export function BackgroundProcessingStatus() {
         >
           {activeCount > 0 ? (
             <LoaderCircle className="size-4 animate-spin text-blue-300" aria-hidden />
-          ) : counts.failed > 0 ? (
+          ) : counts.failed > 0 || counts.needsReview > 0 ? (
             <AlertTriangle className="size-4 text-amber-300" aria-hidden />
           ) : (
             <CheckCircle2 className="size-4 text-emerald-300" aria-hidden />
@@ -268,7 +294,7 @@ export function BackgroundProcessingStatus() {
           <span className="relative grid size-8 shrink-0 place-items-center rounded-lg bg-blue-500/20 text-blue-200">
             {activeCount > 0 ? (
               <LoaderCircle className="size-4 animate-spin" aria-hidden />
-            ) : counts.failed > 0 ? (
+            ) : counts.failed > 0 || counts.needsReview > 0 ? (
               <AlertTriangle className="size-4 text-amber-300" aria-hidden />
             ) : (
               <CheckCircle2 className="size-4 text-emerald-300" aria-hidden />
@@ -279,9 +305,11 @@ export function BackgroundProcessingStatus() {
             <span className="block truncate text-xs text-white/65">
               {activeCount > 0
                 ? `${activeCount} active${counts.failed > 0 ? ` · ${counts.failed} failed` : ""}`
-                : counts.failed > 0
-                  ? `${counts.failed} failed · ${counts.completed} complete`
-                  : `${counts.completed} completed`}
+                : counts.needsReview > 0
+                  ? `${counts.needsReview} need review · ${counts.completed} complete`
+                  : counts.failed > 0
+                    ? `${counts.failed} failed · ${counts.completed} complete`
+                    : `${counts.completed} completed`}
             </span>
           </span>
           {expanded ? (
@@ -293,10 +321,11 @@ export function BackgroundProcessingStatus() {
 
         {expanded && (
           <div className="motion-content border-t border-white/10">
-            <div className="grid grid-cols-4 gap-px bg-white/10 text-center">
+            <div className="grid grid-cols-5 gap-px bg-white/10 text-center">
               <Metric label="Queued" value={counts.queued} />
               <Metric label="Working" value={counts.processing} />
               <Metric label="Done" value={counts.completed} />
+              <Metric label="Review" value={counts.needsReview} danger={counts.needsReview > 0} />
               <Metric label="Failed" value={counts.failed} danger={counts.failed > 0} />
             </div>
             <div className="processing-widget-scrollbar max-h-64 overflow-y-auto overscroll-contain p-2">
@@ -315,8 +344,21 @@ export function BackgroundProcessingStatus() {
                         </span>
                       </span>
                     </div>
-                    {(job.retryable || job.cancelable) && (
+                    {(job.retryable || job.cancelable || job.fix_cutout_available) && (
                       <div className="mt-2 flex flex-wrap justify-end gap-1.5">
+                        {job.fix_cutout_available && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-10 touch-manipulation px-3 text-xs text-amber-200 hover:bg-amber-400/15 hover:text-amber-100"
+                            disabled={submitting !== null}
+                            onClick={() => void openFixCutout(job)}
+                          >
+                            <Scissors className="size-3.5" aria-hidden />
+                            Fix Cutout
+                          </Button>
+                        )}
                         {job.retryable && (
                           <Button
                             type="button"
@@ -353,11 +395,12 @@ export function BackgroundProcessingStatus() {
                         )}
                       </div>
                     )}
-                    {job.status === "failed" && job.safe_failure_label && (
-                      <p className="mt-1.5 text-[11px] leading-4 text-amber-100/75">
-                        {job.safe_failure_label}
-                      </p>
-                    )}
+                    {(job.status === "failed" || job.status === "needs_review") &&
+                      job.safe_failure_label && (
+                        <p className="mt-1.5 text-[11px] leading-4 text-amber-100/75">
+                          {job.safe_failure_label}
+                        </p>
+                      )}
                   </li>
                 ))}
               </ul>
@@ -429,6 +472,9 @@ function JobIcon({ status }: { status: ActivityStatus }) {
   if (status === "failed") {
     return <AlertTriangle className="size-4 shrink-0 text-amber-300" aria-hidden />;
   }
+  if (status === "needs_review") {
+    return <AlertTriangle className="size-4 shrink-0 text-amber-300" aria-hidden />;
+  }
   if (status === "canceled") {
     return <Ban className="size-4 shrink-0 text-white/45" aria-hidden />;
   }
@@ -441,6 +487,7 @@ function statusLabel(job: BackgroundActivity) {
   }
   if (job.status === "processing") return "Removing background";
   if (job.status === "completed") return "Completed";
+  if (job.status === "needs_review") return "Needs review — original retained";
   if (job.status === "canceled") return "Canceled — original retained";
   return "Failed";
 }

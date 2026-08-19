@@ -1,3 +1,8 @@
+import {
+  classifyBackgroundFailure,
+  type BackgroundFailureCategory,
+} from "./background-removal-diagnostics.ts";
+
 export type BackgroundJob = {
   job_id: string;
   job_type: string;
@@ -15,23 +20,19 @@ export type QueueAdapter = {
   claim(workerId: string, leaseSeconds: number): Promise<BackgroundJob | null>;
   heartbeat(workerId: string, jobId: string, leaseSeconds: number): Promise<boolean>;
   complete(workerId: string, jobId: string, result: Record<string, unknown>): Promise<boolean>;
-  fail(workerId: string, jobId: string, errorCode: string, retryable: boolean): Promise<string>;
+  fail(
+    workerId: string,
+    jobId: string,
+    errorCode: string,
+    retryable: boolean,
+    context?: {
+      category: BackgroundFailureCategory;
+      diagnostics: Record<string, unknown>;
+    },
+  ): Promise<string>;
 };
 
 export type WorkerLogger = (entry: Record<string, unknown>) => void;
-
-function safeErrorCode(error: unknown) {
-  const message = error instanceof Error ? error.message.trim() : "";
-  const source = /^[a-z][a-z0-9_.-]{2,119}$/i.test(message)
-    ? message
-    : error instanceof Error
-      ? error.name
-      : "unknown_error";
-  return source
-    .toLowerCase()
-    .replace(/[^a-z0-9_.-]+/g, "_")
-    .slice(0, 120);
-}
 
 export async function processBackgroundJob(
   adapter: QueueAdapter,
@@ -92,8 +93,11 @@ export async function processBackgroundJob(
     });
     return "succeeded";
   } catch (error) {
-    const code = safeErrorCode(error);
-    const status = await adapter.fail(workerId, job.job_id, code, true);
+    const failure = classifyBackgroundFailure(error);
+    const status = await adapter.fail(workerId, job.job_id, failure.code, failure.retryable, {
+      category: failure.category,
+      diagnostics: failure.diagnostics,
+    });
     log({
       level: "error",
       event: "job.failed",
@@ -101,7 +105,8 @@ export async function processBackgroundJob(
       job_type: job.job_type,
       dealership_id: job.dealership_id,
       trace_id: job.trace_id,
-      error_code: code,
+      error_code: failure.code,
+      failure_category: failure.category,
       status,
     });
     return status;

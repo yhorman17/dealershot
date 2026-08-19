@@ -68,13 +68,18 @@ const queue: QueueAdapter = {
     if (error) throw new Error(error.message);
     return data === true;
   },
-  async fail(id, jobId, errorCode, retryable) {
-    const { data, error } = await supabase.rpc("worker_fail_background_job", {
-      _worker_id: id,
-      _job_id: jobId,
-      _safe_error_code: errorCode,
-      _retryable: retryable,
-    });
+  async fail(id, jobId, errorCode, retryable, context) {
+    const { data, error } = await supabase.rpc(
+      "worker_fail_background_job_diagnostic" as never,
+      {
+        _worker_id: id,
+        _job_id: jobId,
+        _safe_error_code: errorCode,
+        _retryable: retryable,
+        _failure_category: context?.category ?? null,
+        _safe_diagnostics: context?.diagnostics ?? {},
+      } as never,
+    );
     if (error) throw new Error(error.message);
     return data;
   },

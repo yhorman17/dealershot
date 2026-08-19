@@ -132,6 +132,9 @@ type Photo = {
   cutout_image_url?: string | null;
   corrected_cutout_url?: string | null;
   photo_state?: "raw" | "cutout" | "customized";
+  processing_status?: "not_required" | "queued" | "processing" | "completed" | "failed";
+  processing_error?: string | null;
+  review_status?: "unreviewed" | "awaiting_review" | "approved" | "rejected";
 };
 
 type CaptureUpload = { file: File; shotType: string | null; replacePhotoId?: string };
@@ -330,7 +333,7 @@ export function VehiclePhotos({
         supabase
           .from("photos")
           .select(
-            "id, vehicle_id, image_url, media_asset_id, shot_type, created_at, sort_order, is_main, is_cutout, cutout_status, original_image_url, cutout_image_url, corrected_cutout_url, photo_state",
+            "id, vehicle_id, image_url, media_asset_id, shot_type, created_at, sort_order, is_main, is_cutout, cutout_status, original_image_url, cutout_image_url, corrected_cutout_url, photo_state, processing_status, processing_error, review_status",
           )
           .eq("vehicle_id", vehicleId),
         supabase
@@ -1165,11 +1168,19 @@ export function VehiclePhotos({
                 const photo = it.photo;
                 const isCutout = !!photo?.is_cutout;
                 const photoState =
-                  photo?.photo_state === "customized"
-                    ? "Customized"
-                    : photo?.photo_state === "cutout" || isCutout
-                      ? "Cutout Ready"
-                      : "Raw";
+                  photo?.cutout_status === "needs_review"
+                    ? "Needs Review"
+                    : photo?.processing_status === "failed"
+                      ? "Failed"
+                      : photo?.processing_status === "queued"
+                        ? "Queued"
+                        : photo?.processing_status === "processing"
+                          ? "Processing"
+                          : photo?.photo_state === "customized"
+                            ? "Customized"
+                            : photo?.photo_state === "cutout" || isCutout
+                              ? "Cutout Ready"
+                              : "Raw";
                 return (
                   <div
                     key={it.key}
