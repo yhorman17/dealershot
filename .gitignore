@@ -12,9 +12,11 @@ dist
 dist-ssr
 .output
 .worker
+.worker-experiments/
 public/background-removal/
 public/vehicle-detection/
 public/vehicle-segmentation-v2/
+public/vehicle-segmentation-v3/
 .vinxi
 .tanstack/**
 .nitro

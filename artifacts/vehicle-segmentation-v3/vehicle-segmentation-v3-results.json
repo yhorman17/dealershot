@@ -1,0 +1,2950 @@
+{
+  "generatedAt": "2026-08-19T06:05:23.693Z",
+  "summary": {
+    "cases": 36,
+    "realDealerShotCases": 0,
+    "controlledCocoCases": 16,
+    "controlledLicensedBrandCases": 20,
+    "fullVehicleCases": 30,
+    "fullVehicleClassificationAccuracy": 0.9167,
+    "automaticFullVehicleGateAccuracy": 0.9444,
+    "primaryVehicleSelectionAccuracyOnGroundTruth": 0.8,
+    "quality": {
+      "good": 28,
+      "needsReview": 1,
+      "bad": 1
+    },
+    "qualityRates": {
+      "good": 0.9333,
+      "needsReview": 0.0333,
+      "bad": 0.0333
+    },
+    "current": {
+      "meanMaskIoU": 0.0429,
+      "meanContamination": 0.4063,
+      "meanMissingGeometry": 0.9066,
+      "meanMilliseconds": 1057
+    },
+    "v1": {
+      "meanMaskIoU": 0.1284,
+      "meanContamination": 0.6048,
+      "meanMissingGeometry": 0.837,
+      "meanMilliseconds": 1178
+    },
+    "v2": {
+      "meanMaskIoU": 0.2651,
+      "meanContamination": 0.5214,
+      "meanMissingGeometry": 0.6432,
+      "meanMilliseconds": 825
+    },
+    "v3": {
+      "meanMaskIoU": 0.7888,
+      "meanContamination": 0.1488,
+      "meanMissingGeometry": 0.178,
+      "meanMilliseconds": 1393
+    },
+    "v3Refined": {
+      "meanMaskIoU": 0.7913,
+      "meanContamination": 0.1486,
+      "meanMissingGeometry": 0.1754,
+      "meanMilliseconds": 0
+    },
+    "v3ModelBytes": 126329024,
+    "isolatedIncrementalRssBytes": {
+      "mean": 200195641,
+      "maximumSnapshot": 232542208
+    },
+    "promotionGateBlockedByMissingRealDealerShotMedia": true
+  },
+  "results": [
+    {
+      "case": "dark_vehicle_night",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "PARTIAL_VEHICLE",
+      "tags": ["dark"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": false,
+      "automaticGateCorrect": false,
+      "eligibilityScore": 0.8419,
+      "eligibilityReasons": ["vehicle_geometry_clipped_by_frame"],
+      "primarySelection": {
+        "candidateCount": 7,
+        "ambiguous": false,
+        "selectedClass": "bus",
+        "confidence": 0.8055,
+        "iou": 0.1328,
+        "correct": false
+      },
+      "current": {
+        "maskIoU": 0,
+        "contamination": 0,
+        "missingGeometry": 1,
+        "milliseconds": 1194,
+        "outputBytes": 545886
+      },
+      "v1": {
+        "maskIoU": 0.0855,
+        "contamination": 0.6022,
+        "missingGeometry": 0.9018,
+        "milliseconds": 1042,
+        "outputBytes": 102279,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": 0.2391,
+        "contamination": 0.6339,
+        "missingGeometry": 0.5918,
+        "milliseconds": 1702,
+        "outputBytes": 553618,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 652,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": ["vehicle_geometry_clipped_by_frame"],
+        "metrics": {
+          "predictorScore": 0,
+          "maskAreaRatio": 0,
+          "maskBoxFill": 0,
+          "detectorCoverage": 0,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 0,
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70549504,
+        "peakSnapshotBytes": 193200128,
+        "incrementalBytes": 122650624,
+        "afterReleaseBytes": 104484864
+      }
+    },
+    {
+      "case": "light_vehicle_overhead",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["light"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9002,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 3,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9554,
+        "iou": 0.9834,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0,
+        "contamination": 1,
+        "missingGeometry": 1,
+        "milliseconds": 989,
+        "outputBytes": 480606
+      },
+      "v1": {
+        "maskIoU": 0,
+        "contamination": 1,
+        "missingGeometry": 1,
+        "milliseconds": 1014,
+        "outputBytes": 463876,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": 0.3294,
+        "contamination": 0.3888,
+        "missingGeometry": 0.5833,
+        "milliseconds": 711,
+        "outputBytes": 466592,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": 0.9095,
+        "contamination": 0.0607,
+        "missingGeometry": 0.0337,
+        "milliseconds": 1374,
+        "outputBytes": 465493,
+        "quality": "good",
+        "qualityScore": 0.976,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 0.9777,
+          "maskAreaRatio": 0.1617,
+          "maskBoxFill": 0.693,
+          "detectorCoverage": 0.6764,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": 0.9095,
+        "contamination": 0.0607,
+        "missingGeometry": 0.0337,
+        "outputBytes": 465493,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70918144,
+        "peakSnapshotBytes": 268808192,
+        "incrementalBytes": 197890048,
+        "afterReleaseBytes": 117800960
+      }
+    },
+    {
+      "case": "side_profile_suv",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["side_profile"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.8831,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 4,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.8882,
+        "iou": 0.9076,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0.1674,
+        "contamination": 0.8076,
+        "missingGeometry": 0.4375,
+        "milliseconds": 1007,
+        "outputBytes": 418538
+      },
+      "v1": {
+        "maskIoU": 0.2387,
+        "contamination": 0.5188,
+        "missingGeometry": 0.6785,
+        "milliseconds": 1060,
+        "outputBytes": 63458,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": 0.3161,
+        "contamination": 0.3723,
+        "missingGeometry": 0.6109,
+        "milliseconds": 662,
+        "outputBytes": 357550,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": 0.8827,
+        "contamination": 0.0902,
+        "missingGeometry": 0.0326,
+        "milliseconds": 1407,
+        "outputBytes": 357937,
+        "quality": "good",
+        "qualityScore": 0.9712,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 0.97,
+          "maskAreaRatio": 0.2601,
+          "maskBoxFill": 0.7186,
+          "detectorCoverage": 0.7002,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0.0024
+        }
+      },
+      "v3Refined": {
+        "maskIoU": 0.8801,
+        "contamination": 0.0931,
+        "missingGeometry": 0.0324,
+        "outputBytes": 357794,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71168000,
+        "peakSnapshotBytes": 268038144,
+        "incrementalBytes": 196870144,
+        "afterReleaseBytes": 118575104
+      }
+    },
+    {
+      "case": "red_vehicle_outdoors",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["outdoor"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.7994,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 5,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9407,
+        "iou": 0.1108,
+        "correct": false
+      },
+      "current": {
+        "maskIoU": 0,
+        "contamination": 0,
+        "missingGeometry": 1,
+        "milliseconds": 1006,
+        "outputBytes": 934272
+      },
+      "v1": {
+        "maskIoU": 0,
+        "contamination": 1,
+        "missingGeometry": 1,
+        "milliseconds": 1069,
+        "outputBytes": 18939,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": 0,
+        "contamination": 1,
+        "missingGeometry": 1,
+        "milliseconds": 719,
+        "outputBytes": 934827,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": 0.0005,
+        "contamination": 0.999,
+        "missingGeometry": 0.999,
+        "milliseconds": 1520,
+        "outputBytes": 935519,
+        "quality": "good",
+        "qualityScore": 0.9599,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0091,
+          "maskAreaRatio": 0.1439,
+          "maskBoxFill": 0.6585,
+          "detectorCoverage": 0.639,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": 0.0005,
+        "contamination": 0.999,
+        "missingGeometry": 0.999,
+        "outputBytes": 935519,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70864896,
+        "peakSnapshotBytes": 267333632,
+        "incrementalBytes": 196468736,
+        "afterReleaseBytes": 115347456
+      }
+    },
+    {
+      "case": "light_vehicle_lot",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["lot"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9551,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 8,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9563,
+        "iou": 0.9526,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0.0276,
+        "contamination": 0.2119,
+        "missingGeometry": 0.9722,
+        "milliseconds": 999,
+        "outputBytes": 522034
+      },
+      "v1": {
+        "maskIoU": 0.0067,
+        "contamination": 0.9491,
+        "missingGeometry": 0.9923,
+        "milliseconds": 1059,
+        "outputBytes": 20607,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": 0.1797,
+        "contamination": 0.4777,
+        "missingGeometry": 0.785,
+        "milliseconds": 779,
+        "outputBytes": 521586,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": 0.8906,
+        "contamination": 0.0436,
+        "missingGeometry": 0.0717,
+        "milliseconds": 1424,
+        "outputBytes": 522479,
+        "quality": "good",
+        "qualityScore": 0.989,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 0.9888,
+          "maskAreaRatio": 0.2045,
+          "maskBoxFill": 0.661,
+          "detectorCoverage": 0.6341,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": 0.8906,
+        "contamination": 0.0436,
+        "missingGeometry": 0.0717,
+        "outputBytes": 522479,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71131136,
+        "peakSnapshotBytes": 266792960,
+        "incrementalBytes": 195661824,
+        "afterReleaseBytes": 115998720
+      }
+    },
+    {
+      "case": "rear_vehicle_with_bus",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["multi_car"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9239,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 3,
+        "ambiguous": false,
+        "selectedClass": "bus",
+        "confidence": 0.9324,
+        "iou": 0.9122,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0.1017,
+        "contamination": 0.8042,
+        "missingGeometry": 0.8254,
+        "milliseconds": 1016,
+        "outputBytes": 657133
+      },
+      "v1": {
+        "maskIoU": 0,
+        "contamination": 0,
+        "missingGeometry": 1,
+        "milliseconds": 1084,
+        "outputBytes": 1158,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": 0.4742,
+        "contamination": 0.4525,
+        "missingGeometry": 0.22,
+        "milliseconds": 790,
+        "outputBytes": 586339,
+        "quality": "good"
+      },
+      "v3": {
+        "maskIoU": 0.9294,
+        "contamination": 0.0251,
+        "missingGeometry": 0.0478,
+        "milliseconds": 1765,
+        "outputBytes": 582894,
+        "quality": "needs_review",
+        "qualityScore": 0.9019,
+        "reasons": ["missing_vehicle_center_mass"],
+        "metrics": {
+          "predictorScore": 0.9752,
+          "maskAreaRatio": 0.3268,
+          "maskBoxFill": 0.534,
+          "detectorCoverage": 0.5603,
+          "outsidePaddedBoxRatio": 0.0003,
+          "centerOccupancy": 0.4568,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0.0007,
+          "upperBodyHoleRatio": 0.0001
+        }
+      },
+      "v3Refined": {
+        "maskIoU": 0.9301,
+        "contamination": 0.0245,
+        "missingGeometry": 0.0476,
+        "outputBytes": 582847,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70930432,
+        "peakSnapshotBytes": 265904128,
+        "incrementalBytes": 194973696,
+        "afterReleaseBytes": 120741888
+      }
+    },
+    {
+      "case": "person_near_vehicle",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["person"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.8879,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 8,
+        "ambiguous": false,
+        "selectedClass": "truck",
+        "confidence": 0.7765,
+        "iou": 0.9759,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0.0415,
+        "contamination": 0.9183,
+        "missingGeometry": 0.9223,
+        "milliseconds": 1194,
+        "outputBytes": 601877
+      },
+      "v1": {
+        "maskIoU": 0.0164,
+        "contamination": 0.9211,
+        "missingGeometry": 0.9797,
+        "milliseconds": 1054,
+        "outputBytes": 32116,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 764,
+        "outputBytes": 0,
+        "quality": "bad"
+      },
+      "v3": {
+        "maskIoU": 0.958,
+        "contamination": 0.0028,
+        "missingGeometry": 0.0394,
+        "milliseconds": 1408,
+        "outputBytes": 569044,
+        "quality": "good",
+        "qualityScore": 0.9776,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0038,
+          "maskAreaRatio": 0.2189,
+          "maskBoxFill": 0.7055,
+          "detectorCoverage": 0.6747,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": 0.958,
+        "contamination": 0.0028,
+        "missingGeometry": 0.0394,
+        "outputBytes": 569044,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71274496,
+        "peakSnapshotBytes": 268492800,
+        "incrementalBytes": 197218304,
+        "afterReleaseBytes": 118153216
+      }
+    },
+    {
+      "case": "antique_side_profile",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["side_profile"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.8046,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 1,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.504,
+        "iou": 0.906,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0.0102,
+        "contamination": 0.2257,
+        "missingGeometry": 0.9898,
+        "milliseconds": 1005,
+        "outputBytes": 624703
+      },
+      "v1": {
+        "maskIoU": 0.4352,
+        "contamination": 0.386,
+        "missingGeometry": 0.401,
+        "milliseconds": 1065,
+        "outputBytes": 257186,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": 0.0361,
+        "contamination": 0.6931,
+        "missingGeometry": 0.9606,
+        "milliseconds": 730,
+        "outputBytes": 557500,
+        "quality": "bad"
+      },
+      "v3": {
+        "maskIoU": 0.8402,
+        "contamination": 0.0442,
+        "missingGeometry": 0.1258,
+        "milliseconds": 1401,
+        "outputBytes": 560599,
+        "quality": "good",
+        "qualityScore": 0.9577,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 0.9834,
+          "maskAreaRatio": 0.2616,
+          "maskBoxFill": 0.6458,
+          "detectorCoverage": 0.6506,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 0.9979,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0.0001,
+          "upperBodyHoleRatio": 0.0164
+        }
+      },
+      "v3Refined": {
+        "maskIoU": 0.8623,
+        "contamination": 0.0432,
+        "missingGeometry": 0.1028,
+        "outputBytes": 560637,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71053312,
+        "peakSnapshotBytes": 268226560,
+        "incrementalBytes": 197173248,
+        "afterReleaseBytes": 116826112
+      }
+    },
+    {
+      "case": "rear_three_quarter_with_dog",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["rear"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9131,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 3,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9378,
+        "iou": 0.9703,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0.0809,
+        "contamination": 0.0949,
+        "missingGeometry": 0.9184,
+        "milliseconds": 1009,
+        "outputBytes": 904230
+      },
+      "v1": {
+        "maskIoU": 0.0964,
+        "contamination": 0.39,
+        "missingGeometry": 0.8972,
+        "milliseconds": 1077,
+        "outputBytes": 68323,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 643,
+        "outputBytes": 0,
+        "quality": "bad"
+      },
+      "v3": {
+        "maskIoU": 0.8386,
+        "contamination": 0.0723,
+        "missingGeometry": 0.1027,
+        "milliseconds": 1424,
+        "outputBytes": 906028,
+        "quality": "good",
+        "qualityScore": 0.9457,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 0.9691,
+          "maskAreaRatio": 0.2905,
+          "maskBoxFill": 0.6046,
+          "detectorCoverage": 0.6033,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 0.746,
+          "primaryComponentRatio": 0.9884,
+          "disconnectedComponentRatio": 0.0028,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": 0.8407,
+        "contamination": 0.0697,
+        "missingGeometry": 0.1028,
+        "outputBytes": 905961,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71098368,
+        "peakSnapshotBytes": 267153408,
+        "incrementalBytes": 196055040,
+        "afterReleaseBytes": 114155520
+      }
+    },
+    {
+      "case": "bus_exterior",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["large_vehicle"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.7495,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 1,
+        "ambiguous": false,
+        "selectedClass": "bus",
+        "confidence": 0.7949,
+        "iou": 0.8839,
+        "correct": true
+      },
+      "current": {
+        "maskIoU": 0,
+        "contamination": 0,
+        "missingGeometry": 1,
+        "milliseconds": 1010,
+        "outputBytes": 928044
+      },
+      "v1": {
+        "maskIoU": 0.4048,
+        "contamination": 0.2807,
+        "missingGeometry": 0.5192,
+        "milliseconds": 1027,
+        "outputBytes": 108231,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": 0.5461,
+        "contamination": 0.1528,
+        "missingGeometry": 0.3942,
+        "milliseconds": 647,
+        "outputBytes": 897618,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": 0.8496,
+        "contamination": 0.0012,
+        "missingGeometry": 0.1495,
+        "milliseconds": 1440,
+        "outputBytes": 895871,
+        "quality": "good",
+        "qualityScore": 0.9473,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 0.9854,
+          "maskAreaRatio": 0.1226,
+          "maskBoxFill": 0.7637,
+          "detectorCoverage": 0.7305,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": 0.8496,
+        "contamination": 0.0012,
+        "missingGeometry": 0.1495,
+        "outputBytes": 895871,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70877184,
+        "peakSnapshotBytes": 266862592,
+        "incrementalBytes": 195985408,
+        "afterReleaseBytes": 113672192
+      }
+    },
+    {
+      "case": "similar_multiple_vehicles",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "AMBIGUOUS",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["multi_car"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": false,
+      "automaticGateCorrect": false,
+      "eligibilityScore": 0.9308,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 3,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9599,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1010,
+        "outputBytes": 621865
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1042,
+        "outputBytes": 22538,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 694,
+        "outputBytes": 567960,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1412,
+        "outputBytes": 570127,
+        "quality": "good",
+        "qualityScore": 0.9855,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 0.9963,
+          "maskAreaRatio": 0.17,
+          "maskBoxFill": 0.6458,
+          "detectorCoverage": 0.6164,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 570127,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71081984,
+        "peakSnapshotBytes": 264548352,
+        "incrementalBytes": 193466368,
+        "afterReleaseBytes": 120745984
+      }
+    },
+    {
+      "case": "vehicle_interior_negative",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "NON_VEHICLE",
+      "actualEligibility": "PARTIAL_VEHICLE",
+      "tags": ["interior"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": false,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.6893,
+      "eligibilityReasons": [
+        "vehicle_fills_frame_like_partial_detail",
+        "vehicle_geometry_clipped_by_frame"
+      ],
+      "primarySelection": {
+        "candidateCount": 1,
+        "ambiguous": false,
+        "selectedClass": "bus",
+        "confidence": 0.5885,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1042,
+        "outputBytes": 627223
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1054,
+        "outputBytes": 641553,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 758,
+        "outputBytes": 0,
+        "quality": "bad"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 663,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": ["vehicle_fills_frame_like_partial_detail", "vehicle_geometry_clipped_by_frame"],
+        "metrics": {
+          "predictorScore": 0,
+          "maskAreaRatio": 0,
+          "maskBoxFill": 0,
+          "detectorCoverage": 0,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 0,
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71139328,
+        "peakSnapshotBytes": 194437120,
+        "incrementalBytes": 123297792,
+        "afterReleaseBytes": 105717760
+      }
+    },
+    {
+      "case": "partial_vehicle_edge_negative",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "PARTIAL_VEHICLE",
+      "actualEligibility": "PARTIAL_VEHICLE",
+      "tags": ["partial"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.7611,
+      "eligibilityReasons": ["implausible_full_vehicle_aspect"],
+      "primarySelection": {
+        "candidateCount": 1,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9106,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1015,
+        "outputBytes": 740525
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1034,
+        "outputBytes": 7093,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 670,
+        "outputBytes": 0,
+        "quality": "bad"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 650,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": ["implausible_full_vehicle_aspect"],
+        "metrics": {
+          "predictorScore": 0,
+          "maskAreaRatio": 0,
+          "maskBoxFill": 0,
+          "detectorCoverage": 0,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 0,
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70811648,
+        "peakSnapshotBytes": 193773568,
+        "incrementalBytes": 122961920,
+        "afterReleaseBytes": 104284160
+      }
+    },
+    {
+      "case": "hood_glass_detail_negative",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "PARTIAL_VEHICLE",
+      "actualEligibility": "PARTIAL_VEHICLE",
+      "tags": ["glass", "partial"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.8122,
+      "eligibilityReasons": [
+        "vehicle_fills_frame_like_partial_detail",
+        "vehicle_geometry_clipped_by_frame"
+      ],
+      "primarySelection": {
+        "candidateCount": 3,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9485,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 987,
+        "outputBytes": 542044
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1061,
+        "outputBytes": 15037,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 597,
+        "outputBytes": 0,
+        "quality": "bad"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 645,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": ["vehicle_fills_frame_like_partial_detail", "vehicle_geometry_clipped_by_frame"],
+        "metrics": {
+          "predictorScore": 0,
+          "maskAreaRatio": 0,
+          "maskBoxFill": 0,
+          "detectorCoverage": 0,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 0,
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70914048,
+        "peakSnapshotBytes": 194056192,
+        "incrementalBytes": 123142144,
+        "afterReleaseBytes": 104767488
+      }
+    },
+    {
+      "case": "roof_detail_negative",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "PARTIAL_VEHICLE",
+      "actualEligibility": "PARTIAL_VEHICLE",
+      "tags": ["partial"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.7338,
+      "eligibilityReasons": ["vehicle_geometry_clipped_by_frame"],
+      "primarySelection": {
+        "candidateCount": 3,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.8473,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 997,
+        "outputBytes": 623469
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1055,
+        "outputBytes": 8751,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 612,
+        "outputBytes": 0,
+        "quality": "bad"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 624,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": ["vehicle_geometry_clipped_by_frame"],
+        "metrics": {
+          "predictorScore": 0,
+          "maskAreaRatio": 0,
+          "maskBoxFill": 0,
+          "detectorCoverage": 0,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 0,
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70840320,
+        "peakSnapshotBytes": 194310144,
+        "incrementalBytes": 123469824,
+        "afterReleaseBytes": 104513536
+      }
+    },
+    {
+      "case": "windshield_detail_negative",
+      "sourceType": "CONTROLLED_COCO_FIXTURE",
+      "expectedEligibility": "PARTIAL_VEHICLE",
+      "actualEligibility": "PARTIAL_VEHICLE",
+      "tags": ["glass", "partial"],
+      "brand": null,
+      "bodyStyle": null,
+      "sourcePage": null,
+      "sourceLicense": null,
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.8067,
+      "eligibilityReasons": [
+        "vehicle_fills_frame_like_partial_detail",
+        "vehicle_geometry_clipped_by_frame"
+      ],
+      "primarySelection": {
+        "candidateCount": 1,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9324,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1006,
+        "outputBytes": 693123
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1024,
+        "outputBytes": 722977,
+        "quality": "bad"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 721,
+        "outputBytes": 0,
+        "quality": "bad"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 662,
+        "outputBytes": 0,
+        "quality": "bad",
+        "qualityScore": 0,
+        "reasons": ["vehicle_fills_frame_like_partial_detail", "vehicle_geometry_clipped_by_frame"],
+        "metrics": {
+          "predictorScore": 0,
+          "maskAreaRatio": 0,
+          "maskBoxFill": 0,
+          "detectorCoverage": 0,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 0,
+          "primaryComponentRatio": 0,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 0,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71122944,
+        "peakSnapshotBytes": 194850816,
+        "incrementalBytes": 123727872,
+        "afterReleaseBytes": 105586688
+      }
+    },
+    {
+      "case": "toyota_camry",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["sedan", "outdoor", "day"],
+      "brand": "Toyota",
+      "bodyStyle": "sedan",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:(USA-Massachusetts)_Private_Toyota_Camry_NJ-Z22UKZ_rear_2024-06-06.jpg",
+      "sourceLicense": "CC BY 2.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.988,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 3,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9715,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1069,
+        "outputBytes": 1700013
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1251,
+        "outputBytes": 1133903,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 873,
+        "outputBytes": 1651533,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1585,
+        "outputBytes": 1635891,
+        "quality": "good",
+        "qualityScore": 0.9976,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0026,
+          "maskAreaRatio": 0.4545,
+          "maskBoxFill": 0.7145,
+          "detectorCoverage": 0.6982,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1635891,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71233536,
+        "peakSnapshotBytes": 292360192,
+        "incrementalBytes": 221126656,
+        "afterReleaseBytes": 147636224
+      }
+    },
+    {
+      "case": "honda_odyssey",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["minivan", "outdoor", "day"],
+      "brand": "Honda",
+      "bodyStyle": "minivan",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:1996_Honda_Odyssey_RA1.jpg",
+      "sourceLicense": "CC0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9718,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 2,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9273,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1071,
+        "outputBytes": 1535087
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1303,
+        "outputBytes": 1653159,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 896,
+        "outputBytes": 1342125,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1560,
+        "outputBytes": 1303646,
+        "quality": "good",
+        "qualityScore": 0.9944,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0034,
+          "maskAreaRatio": 0.4941,
+          "maskBoxFill": 0.6775,
+          "detectorCoverage": 0.6633,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0.0001,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1303640,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71159808,
+        "peakSnapshotBytes": 291442688,
+        "incrementalBytes": 220282880,
+        "afterReleaseBytes": 145960960
+      }
+    },
+    {
+      "case": "ford_f150",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["truck", "outdoor", "day"],
+      "brand": "Ford",
+      "bodyStyle": "truck",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Leimershof_US-Car-Treffen_Ford_F-150-20220911-RM-161830.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.977,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 2,
+        "ambiguous": false,
+        "selectedClass": "truck",
+        "confidence": 0.9692,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1071,
+        "outputBytes": 1805691
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1260,
+        "outputBytes": 1469043,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 829,
+        "outputBytes": 1582933,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1585,
+        "outputBytes": 1581211,
+        "quality": "good",
+        "qualityScore": 0.9954,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0093,
+          "maskAreaRatio": 0.3749,
+          "maskBoxFill": 0.6666,
+          "detectorCoverage": 0.657,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0.0001
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1581177,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71180288,
+        "peakSnapshotBytes": 302583808,
+        "incrementalBytes": 231403520,
+        "afterReleaseBytes": 153501696
+      }
+    },
+    {
+      "case": "chevrolet_tahoe",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["SUV", "outdoor", "day"],
+      "brand": "Chevrolet",
+      "bodyStyle": "SUV",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Chevrolet_tahoe_taxi.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9738,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 1,
+        "ambiguous": false,
+        "selectedClass": "truck",
+        "confidence": 0.9448,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1072,
+        "outputBytes": 1935824
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1163,
+        "outputBytes": 907318,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 870,
+        "outputBytes": 1914678,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1570,
+        "outputBytes": 1892395,
+        "quality": "good",
+        "qualityScore": 0.9948,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0001,
+          "maskAreaRatio": 0.249,
+          "maskBoxFill": 0.7794,
+          "detectorCoverage": 0.7557,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1892395,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71135232,
+        "peakSnapshotBytes": 298958848,
+        "incrementalBytes": 227823616,
+        "afterReleaseBytes": 153731072
+      }
+    },
+    {
+      "case": "volkswagen_tiguan",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["SUV", "showroom", "indoor"],
+      "brand": "Volkswagen",
+      "bodyStyle": "SUV",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Volkswagen_Tiguan_III_IMG_8388.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9816,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 6,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9524,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1073,
+        "outputBytes": 2016244
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1303,
+        "outputBytes": 1814636,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 901,
+        "outputBytes": 1916898,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1594,
+        "outputBytes": 1888935,
+        "quality": "good",
+        "qualityScore": 0.9963,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0035,
+          "maskAreaRatio": 0.5887,
+          "maskBoxFill": 0.7063,
+          "detectorCoverage": 0.6877,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1888935,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71225344,
+        "peakSnapshotBytes": 294215680,
+        "incrementalBytes": 222990336,
+        "afterReleaseBytes": 149823488
+      }
+    },
+    {
+      "case": "bmw_3_series",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["sedan", "showroom", "indoor"],
+      "brand": "BMW",
+      "bodyStyle": "sedan",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:BMW_3_SERIES_LWB_SEDAN_(G28)_China_(2).jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9482,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 2,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9102,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1075,
+        "outputBytes": 1878643
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1249,
+        "outputBytes": 1406781,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 916,
+        "outputBytes": 1700381,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1587,
+        "outputBytes": 1681188,
+        "quality": "good",
+        "qualityScore": 0.9896,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 0.9996,
+          "maskAreaRatio": 0.451,
+          "maskBoxFill": 0.8105,
+          "detectorCoverage": 0.7942,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1681188,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71102464,
+        "peakSnapshotBytes": 298831872,
+        "incrementalBytes": 227729408,
+        "afterReleaseBytes": 153501696
+      }
+    },
+    {
+      "case": "mercedes_c_class",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["coupe", "showroom", "indoor"],
+      "brand": "Mercedes-Benz",
+      "bodyStyle": "coupe",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Mercedes-Benz_C215_CL_63_AMG_1X7A6698.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9858,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 8,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9633,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1072,
+        "outputBytes": 1842729
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1328,
+        "outputBytes": 1768537,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 867,
+        "outputBytes": 0,
+        "quality": "bad"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1606,
+        "outputBytes": 1720751,
+        "quality": "good",
+        "qualityScore": 0.9972,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0069,
+          "maskAreaRatio": 0.5637,
+          "maskBoxFill": 0.705,
+          "detectorCoverage": 0.6871,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1720751,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70963200,
+        "peakSnapshotBytes": 297242624,
+        "incrementalBytes": 226279424,
+        "afterReleaseBytes": 151662592
+      }
+    },
+    {
+      "case": "audi_a4",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["sedan", "outdoor", "overcast"],
+      "brand": "Audi",
+      "bodyStyle": "sedan",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Audi_A4_B9_sedans_(FL)_1X7A6816.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9832,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 2,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9574,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1067,
+        "outputBytes": 2125134
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1275,
+        "outputBytes": 1792961,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 748,
+        "outputBytes": 2055000,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1560,
+        "outputBytes": 2033711,
+        "quality": "good",
+        "qualityScore": 0.9966,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0119,
+          "maskAreaRatio": 0.5456,
+          "maskBoxFill": 0.6934,
+          "detectorCoverage": 0.6811,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 2033711,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71114752,
+        "peakSnapshotBytes": 290492416,
+        "incrementalBytes": 219377664,
+        "afterReleaseBytes": 145866752
+      }
+    },
+    {
+      "case": "hyundai_sonata",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["sedan", "outdoor", "day"],
+      "brand": "Hyundai",
+      "bodyStyle": "sedan",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:%D0%91%D0%B8%D1%88%D0%BA%D0%B5%D0%BA,_Hyundai_Sonata_%D0%BD%D0%B0_%D0%9F%D1%83%D1%88%D0%BA%D0%B8%D0%BD%D0%B0.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9362,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 8,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9556,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1081,
+        "outputBytes": 2519971
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1171,
+        "outputBytes": 881632,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 895,
+        "outputBytes": 2187000,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1575,
+        "outputBytes": 2177821,
+        "quality": "good",
+        "qualityScore": 0.9872,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0028,
+          "maskAreaRatio": 0.1765,
+          "maskBoxFill": 0.663,
+          "detectorCoverage": 0.6422,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 2177821,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70918144,
+        "peakSnapshotBytes": 299933696,
+        "incrementalBytes": 229015552,
+        "afterReleaseBytes": 152395776
+      }
+    },
+    {
+      "case": "kia_carnival",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["minivan", "outdoor", "day"],
+      "brand": "Kia",
+      "bodyStyle": "minivan",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:KIA_CARNIVAL_(YP)_China.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.96,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 6,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.8922,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1088,
+        "outputBytes": 2329413
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1299,
+        "outputBytes": 1860261,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 887,
+        "outputBytes": 2237837,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1580,
+        "outputBytes": 2214428,
+        "quality": "good",
+        "qualityScore": 0.9917,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 0.9985,
+          "maskAreaRatio": 0.5421,
+          "maskBoxFill": 0.7729,
+          "detectorCoverage": 0.7688,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0.0006,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 2214244,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70815744,
+        "peakSnapshotBytes": 303128576,
+        "incrementalBytes": 232312832,
+        "afterReleaseBytes": 147591168
+      }
+    },
+    {
+      "case": "subaru_outback",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["wagon", "outdoor", "overcast"],
+      "brand": "Subaru",
+      "bodyStyle": "wagon",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Subaru_Outback_(BT)_DSC_8814.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9687,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 3,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9131,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1090,
+        "outputBytes": 2302999
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1325,
+        "outputBytes": 2028495,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 692,
+        "outputBytes": 0,
+        "quality": "bad"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1622,
+        "outputBytes": 2124363,
+        "quality": "good",
+        "qualityScore": 0.9937,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.009,
+          "maskAreaRatio": 0.5491,
+          "maskBoxFill": 0.6792,
+          "detectorCoverage": 0.6637,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 2124363,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71249920,
+        "peakSnapshotBytes": 295985152,
+        "incrementalBytes": 224735232,
+        "afterReleaseBytes": 149491712
+      }
+    },
+    {
+      "case": "nissan_370z",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["coupe", "outdoor", "day"],
+      "brand": "Nissan",
+      "bodyStyle": "coupe",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Nissan_370Z_Roadster_1X7A7274.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9788,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 8,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9423,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1060,
+        "outputBytes": 1906383
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1273,
+        "outputBytes": 1811785,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 900,
+        "outputBytes": 1734587,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1573,
+        "outputBytes": 1714683,
+        "quality": "good",
+        "qualityScore": 0.9954,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 0.9978,
+          "maskAreaRatio": 0.5254,
+          "maskBoxFill": 0.666,
+          "detectorCoverage": 0.6407,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0.0008,
+          "upperBodyHoleRatio": 0.0001
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1714554,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71151616,
+        "peakSnapshotBytes": 292708352,
+        "incrementalBytes": 221556736,
+        "afterReleaseBytes": 145551360
+      }
+    },
+    {
+      "case": "jeep_grand_cherokee",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["SUV", "outdoor", "day"],
+      "brand": "Jeep",
+      "bodyStyle": "SUV",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Jeep_Grand_Cherokee_(WL)_4xe_IMG_8481_(cropped).jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9089,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 1,
+        "ambiguous": false,
+        "selectedClass": "truck",
+        "confidence": 0.7401,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1078,
+        "outputBytes": 1921379
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1296,
+        "outputBytes": 1874783,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 790,
+        "outputBytes": 1770418,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1571,
+        "outputBytes": 1732842,
+        "quality": "good",
+        "qualityScore": 0.9818,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0083,
+          "maskAreaRatio": 0.5778,
+          "maskBoxFill": 0.732,
+          "detectorCoverage": 0.7073,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1732842,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70868992,
+        "peakSnapshotBytes": 295112704,
+        "incrementalBytes": 224243712,
+        "afterReleaseBytes": 147611648
+      }
+    },
+    {
+      "case": "mazda_cx5",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["SUV", "outdoor", "day"],
+      "brand": "Mazda",
+      "bodyStyle": "SUV",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Mazda_CX-5_Newground_1X7A6786.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9565,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 1,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.8919,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1105,
+        "outputBytes": 2707365
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1326,
+        "outputBytes": 2107618,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1030,
+        "outputBytes": 2607604,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1628,
+        "outputBytes": 2575031,
+        "quality": "good",
+        "qualityScore": 0.9913,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0094,
+          "maskAreaRatio": 0.4669,
+          "maskBoxFill": 0.6986,
+          "detectorCoverage": 0.678,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 2575031,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70918144,
+        "peakSnapshotBytes": 303460352,
+        "incrementalBytes": 232542208,
+        "afterReleaseBytes": 154550272
+      }
+    },
+    {
+      "case": "porsche_911",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["coupe", "showroom", "indoor"],
+      "brand": "Porsche",
+      "bodyStyle": "coupe",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:2013_Porsche_911_Carrera_4S_(991)_(9626546987).jpg",
+      "sourceLicense": "CC BY-SA 2.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.98,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 1,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9604,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1086,
+        "outputBytes": 1559332
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1234,
+        "outputBytes": 1140034,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 825,
+        "outputBytes": 1415765,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1567,
+        "outputBytes": 1406077,
+        "quality": "good",
+        "qualityScore": 0.996,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0087,
+          "maskAreaRatio": 0.3492,
+          "maskBoxFill": 0.7462,
+          "detectorCoverage": 0.7231,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1406077,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71090176,
+        "peakSnapshotBytes": 297443328,
+        "incrementalBytes": 226353152,
+        "afterReleaseBytes": 151105536
+      }
+    },
+    {
+      "case": "tesla_model_3",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["sedan", "outdoor", "day"],
+      "brand": "Tesla",
+      "bodyStyle": "sedan",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Tesla_Model_3,_EMS_2024,_Essen_(P1032260).jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9821,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 8,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9552,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1094,
+        "outputBytes": 2020868
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1280,
+        "outputBytes": 1391925,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1086,
+        "outputBytes": 1940051,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1603,
+        "outputBytes": 1931057,
+        "quality": "good",
+        "qualityScore": 0.9964,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0033,
+          "maskAreaRatio": 0.4135,
+          "maskBoxFill": 0.7339,
+          "detectorCoverage": 0.7213,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1931057,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71118848,
+        "peakSnapshotBytes": 298659840,
+        "incrementalBytes": 227540992,
+        "afterReleaseBytes": 151457792
+      }
+    },
+    {
+      "case": "lexus_es",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["sedan", "showroom", "indoor"],
+      "brand": "Lexus",
+      "bodyStyle": "sedan",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:2022_Lexus_ES_350_(GSZ10)_1X7A5794.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9821,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 4,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.9525,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1054,
+        "outputBytes": 1662434
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1300,
+        "outputBytes": 1493948,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 838,
+        "outputBytes": 1423679,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1546,
+        "outputBytes": 1413987,
+        "quality": "good",
+        "qualityScore": 0.9964,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0056,
+          "maskAreaRatio": 0.5245,
+          "maskBoxFill": 0.6931,
+          "detectorCoverage": 0.6708,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1413987,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 70991872,
+        "peakSnapshotBytes": 286625792,
+        "incrementalBytes": 215633920,
+        "afterReleaseBytes": 142249984
+      }
+    },
+    {
+      "case": "volvo_v60",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["wagon", "outdoor", "overcast"],
+      "brand": "Volvo",
+      "bodyStyle": "wagon",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Volvo_V60_Polestar_Engineered_(SPA)_DSC_0746.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9507,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 7,
+        "ambiguous": false,
+        "selectedClass": "car",
+        "confidence": 0.8592,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1095,
+        "outputBytes": 1898939
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1298,
+        "outputBytes": 1620019,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 859,
+        "outputBytes": 1743348,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1566,
+        "outputBytes": 1717877,
+        "quality": "good",
+        "qualityScore": 0.9901,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0088,
+          "maskAreaRatio": 0.5527,
+          "maskBoxFill": 0.699,
+          "detectorCoverage": 0.6753,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 1717877,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71294976,
+        "peakSnapshotBytes": 295677952,
+        "incrementalBytes": 224382976,
+        "afterReleaseBytes": 147779584
+      }
+    },
+    {
+      "case": "land_rover_defender",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["SUV", "outdoor", "day"],
+      "brand": "Land Rover",
+      "bodyStyle": "SUV",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Land_Rover_Defender_110_Station_Wagon_2016_-_rear.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9853,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 1,
+        "ambiguous": false,
+        "selectedClass": "truck",
+        "confidence": 0.9717,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1093,
+        "outputBytes": 2272243
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1341,
+        "outputBytes": 2018998,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 875,
+        "outputBytes": 2197170,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1617,
+        "outputBytes": 2136476,
+        "quality": "good",
+        "qualityScore": 0.9971,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 1.0028,
+          "maskAreaRatio": 0.5043,
+          "maskBoxFill": 0.7355,
+          "detectorCoverage": 0.7125,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 2136480,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71401472,
+        "peakSnapshotBytes": 299208704,
+        "incrementalBytes": 227807232,
+        "afterReleaseBytes": 156028928
+      }
+    },
+    {
+      "case": "gmc_sierra",
+      "sourceType": "CONTROLLED_WIKIMEDIA_FIXTURE",
+      "expectedEligibility": "FULL_VEHICLE",
+      "actualEligibility": "FULL_VEHICLE",
+      "tags": ["truck", "outdoor", "day"],
+      "brand": "GMC",
+      "bodyStyle": "truck",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:GMC_Sierra_(GMTK2XX)_DSC_8581.jpg",
+      "sourceLicense": "CC BY-SA 4.0",
+      "exactEligibilityCorrect": true,
+      "automaticGateCorrect": true,
+      "eligibilityScore": 0.9515,
+      "eligibilityReasons": [],
+      "primarySelection": {
+        "candidateCount": 8,
+        "ambiguous": false,
+        "selectedClass": "truck",
+        "confidence": 0.9632,
+        "iou": null,
+        "correct": null
+      },
+      "current": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1080,
+        "outputBytes": 2438665
+      },
+      "v1": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1302,
+        "outputBytes": 2047845,
+        "quality": "questionable"
+      },
+      "v2": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 924,
+        "outputBytes": 2161170,
+        "quality": "needs_review"
+      },
+      "v3": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "milliseconds": 1588,
+        "outputBytes": 2160694,
+        "quality": "good",
+        "qualityScore": 0.9902,
+        "reasons": [],
+        "metrics": {
+          "predictorScore": 0.9992,
+          "maskAreaRatio": 0.5337,
+          "maskBoxFill": 0.6821,
+          "detectorCoverage": 0.6578,
+          "outsidePaddedBoxRatio": 0,
+          "centerOccupancy": 1,
+          "primaryComponentRatio": 1,
+          "disconnectedComponentRatio": 0,
+          "upperBodyHoleRatio": 0
+        }
+      },
+      "v3Refined": {
+        "maskIoU": null,
+        "contamination": null,
+        "missingGeometry": null,
+        "outputBytes": 2160695,
+        "selected": false
+      },
+      "isolatedMemory": {
+        "baselineBytes": 71090176,
+        "peakSnapshotBytes": 293982208,
+        "incrementalBytes": 222892032,
+        "afterReleaseBytes": 146722816
+      }
+    }
+  ]
+}
