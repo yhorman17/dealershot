@@ -8,6 +8,9 @@ export type BackgroundFailureCategory =
 export type SafeMaskDiagnostics = {
   sample_width: number;
   sample_height: number;
+  alpha_min: number;
+  alpha_max: number;
+  alpha_mean: number;
   foreground_coverage: number;
   alpha_range: number;
   component_count: number;
@@ -135,6 +138,7 @@ export function analyzeBackgroundMask(alpha: Uint8Array, width: number, height: 
   let maxX = -1;
   let maxY = -1;
   let edgeForeground = 0;
+  let alphaTotal = 0;
   const edgePixels = Math.max(1, width * 2 + Math.max(0, height - 2) * 2);
 
   for (let index = 0; index < alpha.length; index += 1) {
@@ -142,6 +146,7 @@ export function analyzeBackgroundMask(alpha: Uint8Array, width: number, height: 
     histogram[Math.min(15, Math.floor(value / 16))] += 1;
     minimum = Math.min(minimum, value);
     maximum = Math.max(maximum, value);
+    alphaTotal += value;
     if (value < 16) continue;
     binary[index] = 1;
     foreground += 1;
@@ -187,6 +192,9 @@ export function analyzeBackgroundMask(alpha: Uint8Array, width: number, height: 
   const diagnostics: SafeMaskDiagnostics = {
     sample_width: width,
     sample_height: height,
+    alpha_min: minimum,
+    alpha_max: maximum,
+    alpha_mean: round(alphaTotal / alpha.length),
     foreground_coverage: round(coverage),
     alpha_range: alphaRange,
     component_count: components.length,

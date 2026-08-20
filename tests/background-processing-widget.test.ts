@@ -51,6 +51,19 @@ test("processing widget exposes authoritative retry/cancel actions and scoped sc
   assert.doesNotMatch(styles, /^\*::-(webkit-)?scrollbar/m);
 });
 
+test("processing widget exposes compact store-scoped bulk retry and cancel controls", () => {
+  const widget = read("src/components/BackgroundProcessingStatus.tsx");
+  assert.match(widget, /retry_failed_background_removals/);
+  assert.match(widget, /cancel_background_removals/);
+  assert.match(widget, /Retry All Failed/);
+  assert.match(widget, /Cancel All/);
+  assert.match(widget, /Cancel all background-removal work\?/);
+  assert.match(widget, /Original photos[\s\S]*completed cutouts remain[\s\S]*intact\./);
+  assert.match(widget, /activeStoreRef\.current === storeAtSubmit/);
+  assert.match(widget, /const authoritative = await refresh\(\)/);
+  assert.match(widget, /disabled=\{submitting !== null\}/);
+});
+
 test("queue completion announces an immediate authoritative refresh", () => {
   const bulk = read("src/routes/_authenticated/bulk-photos.$id.tsx");
   const review = read("src/routes/_authenticated/vehicles.$id_.review.tsx");

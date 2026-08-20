@@ -2667,6 +2667,201 @@ SELECT test.assert_true(
   'a dead-letter generation remains auditable and does not block a new Review request'
 );
 
+-- Bulk processing controls operate once per authorized store, reuse the
+-- single-job locking semantics, skip deterministic failures, and never touch
+-- another store or immutable original.
+SELECT test.assert_true(
+  has_function_privilege(
+    'authenticated', 'public.retry_failed_background_removals(uuid)', 'EXECUTE'
+  )
+  AND has_function_privilege(
+    'authenticated', 'public.cancel_background_removals(uuid)', 'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'anon', 'public.retry_failed_background_removals(uuid)', 'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'anon', 'public.cancel_background_removals(uuid)', 'EXECUTE'
+  ),
+  'bulk background-removal controls are authenticated-only'
+);
+
+INSERT INTO public.media_assets (
+  id, organization_id, dealership_id, vehicle_id, uploaded_by,
+  source_type, content_type, byte_size, checksum_sha256,
+  storage_bucket, storage_object_path
+) VALUES
+  (
+    'fc100000-0000-4000-8000-000000000003',
+    '11111111-aaaa-4000-8000-000000000001',
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'fc000000-0000-4000-8000-000000000001',
+    '00000000-0000-0000-0000-000000000002',
+    'capture', 'image/jpeg', 100, repeat('e', 64), 'dealer-media-private',
+    'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/fc000000-0000-4000-8000-000000000001/media/fc100000-0000-4000-8000-000000000003/original/source.jpg'
+  ),
+  (
+    'fc100000-0000-4000-8000-000000000004',
+    '11111111-aaaa-4000-8000-000000000001',
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'fc000000-0000-4000-8000-000000000001',
+    '00000000-0000-0000-0000-000000000002',
+    'capture', 'image/jpeg', 100, repeat('f', 64), 'dealer-media-private',
+    'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/fc000000-0000-4000-8000-000000000001/media/fc100000-0000-4000-8000-000000000004/original/source.jpg'
+  );
+INSERT INTO public.photos (
+  id, vehicle_id, media_asset_id, image_url, original_image_url
+) VALUES
+  (
+    'fc200000-0000-4000-8000-000000000003',
+    'fc000000-0000-4000-8000-000000000001',
+    'fc100000-0000-4000-8000-000000000003',
+    'private-media://fc300000-0000-4000-8000-000000000003',
+    'private-media://fc300000-0000-4000-8000-000000000003'
+  ),
+  (
+    'fc200000-0000-4000-8000-000000000004',
+    'fc000000-0000-4000-8000-000000000001',
+    'fc100000-0000-4000-8000-000000000004',
+    'private-media://fc300000-0000-4000-8000-000000000004',
+    'private-media://fc300000-0000-4000-8000-000000000004'
+  );
+UPDATE public.media_variants
+SET storage_bucket = 'dealer-media-private',
+    storage_path = 'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/fc000000-0000-4000-8000-000000000001/media/' || media_asset_id || '/original/source.jpg',
+    content_type = 'image/jpeg', byte_size = 100,
+    checksum = CASE
+      WHEN media_asset_id = 'fc100000-0000-4000-8000-000000000003' THEN repeat('e', 64)
+      ELSE repeat('f', 64)
+    END
+WHERE media_asset_id IN (
+  'fc100000-0000-4000-8000-000000000003',
+  'fc100000-0000-4000-8000-000000000004'
+)
+AND variant_type = 'original';
+
+INSERT INTO private.background_jobs (
+  id, job_type, payload, dealership_id, resource_type, resource_id,
+  status, priority, attempt_count, max_attempts, dedupe_key,
+  created_by, completed_at, failure_category, deterministic_failure_count
+) VALUES
+  (
+    'fc400000-0000-4000-8000-000000000003', 'media.background.remove',
+    '{"media_asset_id":"fc100000-0000-4000-8000-000000000003","photo_id":"fc200000-0000-4000-8000-000000000003"}',
+    'aaaaaaaa-0000-0000-0000-000000000001', 'media_asset',
+    'fc100000-0000-4000-8000-000000000003', 'dead_letter', 100, 1, 3,
+    'background-remove:fc100000-0000-4000-8000-000000000003:v1',
+    '00000000-0000-0000-0000-000000000002', now(), 'transient', 0
+  ),
+  (
+    'fc400000-0000-4000-8000-000000000004', 'media.background.remove',
+    '{"media_asset_id":"fc100000-0000-4000-8000-000000000004","photo_id":"fc200000-0000-4000-8000-000000000004"}',
+    'aaaaaaaa-0000-0000-0000-000000000001', 'media_asset',
+    'fc100000-0000-4000-8000-000000000004', 'dead_letter', 100, 2, 3,
+    'background-remove:fc100000-0000-4000-8000-000000000004:v1',
+    '00000000-0000-0000-0000-000000000002', now(), 'resource_failure', 2
+  );
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT test.expect_sqlstate(
+  $$SELECT public.retry_failed_background_removals('aaaaaaaa-0000-0000-0000-000000000001')$$,
+  '42501',
+  'capture-only staff cannot bulk retry office media processing'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000004';
+SELECT test.expect_sqlstate(
+  $$SELECT public.cancel_background_removals('aaaaaaaa-0000-0000-0000-000000000001')$$,
+  '42501',
+  'cross-store staff cannot bulk cancel media processing'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT
+  (result->>'retried_count')::integer AS bulk_retry_count,
+  (result->>'not_retryable_count')::integer AS bulk_retry_skipped_count,
+  (result->>'already_active_count')::integer AS bulk_retry_active_count
+FROM (
+  SELECT public.retry_failed_background_removals(
+    'aaaaaaaa-0000-0000-0000-000000000001'
+  ) AS result
+) AS bulk_retry \gset
+SELECT
+  (result->>'retried_count')::integer AS bulk_retry_duplicate_count,
+  (result->>'not_retryable_count')::integer AS bulk_retry_duplicate_skipped_count,
+  (result->>'already_active_count')::integer AS bulk_retry_duplicate_active_count
+FROM (
+  SELECT public.retry_failed_background_removals(
+    'aaaaaaaa-0000-0000-0000-000000000001'
+  ) AS result
+) AS bulk_retry_duplicate \gset
+RESET ROLE;
+SELECT test.assert_true(
+  :'bulk_retry_count'::integer = 1
+  AND :'bulk_retry_skipped_count'::integer = 1
+  AND :'bulk_retry_active_count'::integer = 1
+  AND :'bulk_retry_duplicate_count'::integer = 0
+  AND :'bulk_retry_duplicate_skipped_count'::integer = 1
+  AND :'bulk_retry_duplicate_active_count'::integer = 1
+  AND (
+    SELECT status = 'queued'
+    FROM private.background_jobs
+    WHERE id = 'fc400000-0000-4000-8000-000000000003'
+  )
+  AND (
+    SELECT status = 'dead_letter'
+    FROM private.background_jobs
+    WHERE id = 'fc400000-0000-4000-8000-000000000004'
+  ),
+  'Retry All queues eligible failures once and skips deterministic or already-active work'
+);
+
+UPDATE private.background_jobs
+SET status = 'running', lease_owner = 'bulk-cancel-test-worker',
+    lease_expires_at = now() + interval '1 minute'
+WHERE id = :'review_dead_letter_new_job_id'::uuid;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT
+  (result->>'selected_count')::integer AS bulk_cancel_selected_count,
+  (result->>'canceled_count')::integer AS bulk_cancel_count,
+  (result->>'cancel_requested_count')::integer AS bulk_cancel_requested_count
+FROM (
+  SELECT public.cancel_background_removals(
+    'aaaaaaaa-0000-0000-0000-000000000001'
+  ) AS result
+) AS bulk_cancel \gset
+SELECT (result->>'selected_count')::integer AS bulk_cancel_duplicate_count
+FROM (
+  SELECT public.cancel_background_removals(
+    'aaaaaaaa-0000-0000-0000-000000000001'
+  ) AS result
+) AS bulk_cancel_duplicate \gset
+RESET ROLE;
+SELECT test.assert_true(
+  :'bulk_cancel_selected_count'::integer = 4
+  AND :'bulk_cancel_count'::integer = 3
+  AND :'bulk_cancel_requested_count'::integer = 1
+  AND :'bulk_cancel_duplicate_count'::integer = 0
+  AND (
+    SELECT status = 'running' AND cancel_requested_at IS NOT NULL
+    FROM private.background_jobs
+    WHERE id = :'review_dead_letter_new_job_id'::uuid
+  )
+  AND (
+    SELECT count(*) = 1
+    FROM public.media_variants
+    WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000003'
+      AND variant_type = 'original'
+  ),
+  'Cancel All closes eligible work, requests running cancellation, and preserves originals'
+);
+
 -- Even a multi-store administrator cannot mix another store's media into the
 -- selected vehicle payload.
 INSERT INTO public.media_assets (
@@ -2705,9 +2900,28 @@ WHERE id = 'fc100000-0000-4000-8000-000000000002';
 
 DELETE FROM private.background_jobs
 WHERE resource_type = 'media_asset'
-  AND resource_id = 'fc100000-0000-4000-8000-000000000001';
+  AND resource_id IN (
+    'fc100000-0000-4000-8000-000000000001',
+    'fc100000-0000-4000-8000-000000000003',
+    'fc100000-0000-4000-8000-000000000004'
+  );
 DELETE FROM public.media_variants
 WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000001';
+DELETE FROM public.media_variants
+WHERE media_asset_id IN (
+  'fc100000-0000-4000-8000-000000000003',
+  'fc100000-0000-4000-8000-000000000004'
+);
+DELETE FROM public.photos
+WHERE id IN (
+  'fc200000-0000-4000-8000-000000000003',
+  'fc200000-0000-4000-8000-000000000004'
+);
+DELETE FROM public.media_assets
+WHERE id IN (
+  'fc100000-0000-4000-8000-000000000003',
+  'fc100000-0000-4000-8000-000000000004'
+);
 DELETE FROM public.photos WHERE id = 'fc200000-0000-4000-8000-000000000001';
 DELETE FROM public.media_assets WHERE id = 'fc100000-0000-4000-8000-000000000001';
 DELETE FROM public.vehicles WHERE id = 'fc000000-0000-4000-8000-000000000001';

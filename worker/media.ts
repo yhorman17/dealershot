@@ -82,6 +82,10 @@ type OnnxRuntime = typeof import("onnxruntime-node");
 let backgroundRemovalRuntime: Promise<{
   ort: OnnxRuntime;
   session: import("onnxruntime-node").InferenceSession;
+  inputName: string;
+  outputName: string;
+  inputShape: ReadonlyArray<number | string>;
+  outputShape: ReadonlyArray<number | string>;
 }> | null = null;
 
 const VEHICLE_DELETE_BUCKETS = new Set([
@@ -108,6 +112,30 @@ function payloadId(job: BackgroundJob, key: string) {
 
 function hash(bytes: Buffer) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+function safeExceptionName(error: unknown) {
+  return error instanceof Error && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(error.name)
+    ? error.name
+    : "UnknownError";
+}
+
+function runtimeImportFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  const code =
+    message.includes("Could not dynamically require") &&
+    message.includes("onnxruntime_binding.node")
+      ? "background_worker_bundle_native_import_failed"
+      : message.includes("onnxruntime_binding.node")
+        ? "background_native_binding_load_failed"
+        : "background_runtime_unavailable";
+  return new BackgroundProcessingError(code, "resource_failure", false, {
+    stage: "runtime_import",
+    exception_name: safeExceptionName(error),
+    platform: process.platform,
+    architecture: process.arch,
+    node_major: Number.parseInt(process.versions.node.split(".")[0] ?? "0", 10),
+  });
 }
 
 async function backgroundRemovalAssetDirectory() {
@@ -160,25 +188,63 @@ function getBackgroundRemovalRuntime() {
     try {
       [ort, model] = await Promise.all([import("onnxruntime-node"), loadBackgroundRemovalModel()]);
     } catch (error) {
-      const code =
-        error instanceof Error && error.message.startsWith("background_model_")
-          ? error.message
-          : "background_runtime_unavailable";
-      throw new BackgroundProcessingError(code, "resource_failure", false);
+      if (error instanceof Error && error.message.startsWith("background_model_")) {
+        throw new BackgroundProcessingError(error.message, "resource_failure", false, {
+          stage: "model_artifact_load",
+        });
+      }
+      throw runtimeImportFailure(error);
     }
     try {
       const session = await ort.InferenceSession.create(model, {
         executionProviders: ["cpu"],
         graphOptimizationLevel: "all",
-        executionMode: "parallel",
-        enableCpuMemArena: true,
+        // The hosted worker has a strict memory ceiling. ISNet is processed by
+        // one durable job at a time, so parallel execution and retained CPU
+        // arenas add memory without increasing queue throughput.
+        executionMode: "sequential",
+        enableCpuMemArena: false,
+        enableMemPattern: false,
+        intraOpNumThreads: 1,
+        interOpNumThreads: 1,
       });
-      return { ort, session };
-    } catch {
+      const inputName = session.inputNames[0];
+      const outputName = session.outputNames[0];
+      const inputMetadata = session.inputMetadata[0];
+      const outputMetadata = session.outputMetadata[0];
+      const inputShape = inputMetadata?.isTensor ? inputMetadata.shape : [];
+      const outputShape = outputMetadata?.isTensor ? outputMetadata.shape : [];
+      const expectedInputShape = [1, 3, SEGMENTATION_SIZE, SEGMENTATION_SIZE];
+      const expectedOutputShape = [1, 1, SEGMENTATION_SIZE, SEGMENTATION_SIZE];
+      if (
+        session.inputNames.length !== 1 ||
+        session.outputNames.length !== 1 ||
+        !inputName ||
+        !outputName ||
+        JSON.stringify(inputShape) !== JSON.stringify(expectedInputShape) ||
+        JSON.stringify(outputShape) !== JSON.stringify(expectedOutputShape)
+      ) {
+        throw new BackgroundProcessingError(
+          "background_model_contract_invalid",
+          "resource_failure",
+          false,
+          {
+            stage: "model_contract",
+            input_count: session.inputNames.length,
+            output_count: session.outputNames.length,
+            input_shape: [...inputShape],
+            output_shape: [...outputShape],
+          },
+        );
+      }
+      return { ort, session, inputName, outputName, inputShape, outputShape };
+    } catch (error) {
+      if (error instanceof BackgroundProcessingError) throw error;
       throw new BackgroundProcessingError(
         "background_model_initialization_failed",
         "resource_failure",
         false,
+        { stage: "model_initialization", exception_name: safeExceptionName(error) },
       );
     }
   })().catch((error) => {
@@ -216,26 +282,54 @@ export async function createTransparentVehicleCutoutResult(original: Buffer) {
     input[pixel + stride * 2] = (normalized[source + 2] - 128) / 256;
   }
 
-  const { ort, session } = await getBackgroundRemovalRuntime();
+  if (input.length !== 1 * 3 * SEGMENTATION_SIZE * SEGMENTATION_SIZE) {
+    throw new BackgroundProcessingError(
+      "background_input_tensor_invalid",
+      "resource_failure",
+      false,
+      { stage: "tensor_preparation", tensor_elements: input.length },
+    );
+  }
+
+  const { ort, session, inputName, outputName, inputShape, outputShape } =
+    await getBackgroundRemovalRuntime();
+  const runStartedAt = performance.now();
+  const rssBefore = process.memoryUsage().rss;
   const outputs = await (async () => {
     try {
       return await session.run({
-        input: new ort.Tensor("float32", input, [1, 3, SEGMENTATION_SIZE, SEGMENTATION_SIZE]),
+        [inputName]: new ort.Tensor("float32", input, [1, 3, SEGMENTATION_SIZE, SEGMENTATION_SIZE]),
       });
-    } catch {
+    } catch (error) {
       throw new BackgroundProcessingError(
         "background_inference_runtime_failed",
         "resource_failure",
         false,
+        {
+          stage: "session_run",
+          exception_name: safeExceptionName(error),
+          input_name: inputName,
+          input_shape: [...inputShape],
+          tensor_elements: input.length,
+        },
       );
     }
   })();
-  const prediction = outputs.output ?? Object.values(outputs)[0];
+  const runDurationMs = Math.round(performance.now() - runStartedAt);
+  const rssAfter = process.memoryUsage().rss;
+  const prediction = outputs[outputName];
   if (!prediction || prediction.data.length !== stride) {
     throw new BackgroundProcessingError(
       "background_inference_output_invalid",
       "resource_failure",
       false,
+      {
+        stage: "output_tensor",
+        output_name: outputName,
+        output_shape: [...outputShape],
+        output_elements: prediction?.data.length ?? 0,
+        expected_elements: stride,
+      },
     );
   }
   const mask = Buffer.allocUnsafe(stride);
@@ -289,7 +383,23 @@ export async function createTransparentVehicleCutoutResult(original: Buffer) {
     })
       .png({ compressionLevel: 9 })
       .toBuffer();
-    return { bytes, quality, diagnostics };
+    return {
+      bytes,
+      quality,
+      diagnostics,
+      inference: {
+        model: "isnet_quint8",
+        input_name: inputName,
+        input_shape: [...inputShape],
+        tensor_elements: input.length,
+        output_name: outputName,
+        output_shape: [...outputShape],
+        output_elements: prediction.data.length,
+        session_run_ms: runDurationMs,
+        rss_before_mib: Math.round((rssBefore / 1024 / 1024) * 10) / 10,
+        rss_after_mib: Math.round((rssAfter / 1024 / 1024) * 10) / 10,
+      },
+    };
   } catch {
     throw new BackgroundProcessingError(
       "background_output_encode_failed",
@@ -499,6 +609,7 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
   let vehicleAware: VehicleAwareCutoutResult | null = null;
   let standardQuality: MaskQuality = "good";
   let standardDiagnostics: SafeMaskDiagnostics | null = null;
+  let standardInference: Record<string, unknown> | null = null;
   const vehicleAwareEnabled = process.env.VEHICLE_AWARE_BACKGROUND_REMOVAL?.trim() === "1";
   if (vehicleAwareEnabled) {
     try {
@@ -540,6 +651,7 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
     bytes = standard.bytes;
     standardQuality = standard.quality;
     standardDiagnostics = standard.diagnostics;
+    standardInference = standard.inference;
   }
   const metadata = await sharp(bytes, { failOn: "warning" }).metadata();
   if (
@@ -618,6 +730,7 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
     quality: vehicleAware?.quality.rating ?? standardQuality,
     quality_score: vehicleAware?.quality.score ?? null,
     mask_diagnostics: standardDiagnostics,
+    inference: standardInference,
   };
 }
 

@@ -92,9 +92,27 @@ test("production worker reports the first real stage and does not cache rejected
   assert.match(worker, /background_inference_runtime_failed/);
   assert.match(worker, /background_output_encode_failed/);
   assert.match(worker, /backgroundRemovalRuntime = null/);
+  assert.match(worker, /background_worker_bundle_native_import_failed/);
+  assert.match(worker, /stage: "runtime_import"/);
+  assert.match(worker, /stage: "session_run"/);
+  assert.match(worker, /input_shape/);
+  assert.match(worker, /output_shape/);
   assert.doesNotMatch(worker, /catch \{\s*throw new Error\("background_inference_failed"\)/);
   assert.match(runtime, /classifyBackgroundFailure/);
   assert.match(runtime, /failure_category: failure\.category/);
+});
+
+test("production worker keeps ONNX native loading external and verifies a real tensor path", () => {
+  const workerConfig = read("vite.worker.config.ts");
+  const packageJson = read("package.json");
+  const runtimeCheck = read("scripts/verify-background-removal-worker-runtime.mjs");
+  assert.match(workerConfig, /external: \["onnxruntime-node"\]/);
+  assert.match(packageJson, /verify:worker-bg-runtime/);
+  assert.match(runtimeCheck, /Production worker must load ONNX Runtime/);
+  assert.match(runtimeCheck, /createTransparentVehicleCutoutResult/);
+  assert.match(runtimeCheck, /tensor_elements/);
+  assert.match(runtimeCheck, /output_elements/);
+  assert.match(runtimeCheck, /output\.hasAlpha/);
 });
 
 test("production container uses a glibc runtime compatible with ONNX Runtime Node", () => {

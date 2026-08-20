@@ -15,6 +15,16 @@ import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -74,6 +84,7 @@ function isActivity(value: unknown): value is BackgroundActivity {
 }
 
 type ProcessingAction = "retry" | "cancel";
+type BulkProcessingAction = "retry_all" | "cancel_all";
 
 function actionResultStatus(value: unknown, fallback: ActivityStatus): ActivityStatus {
   if (!value || typeof value !== "object") return fallback;
@@ -89,6 +100,12 @@ function actionResultStatus(value: unknown, fallback: ActivityStatus): ActivityS
   return fallback;
 }
 
+function resultCount(value: unknown, key: string) {
+  if (!value || typeof value !== "object") return 0;
+  const count = (value as Record<string, unknown>)[key];
+  return typeof count === "number" && Number.isSafeInteger(count) && count >= 0 ? count : 0;
+}
+
 export function BackgroundProcessingStatus() {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -102,6 +119,7 @@ export function BackgroundProcessingStatus() {
   const [hiddenFinished, setHiddenFinished] = useState<Set<string>>(new Set());
   const [refreshToken, setRefreshToken] = useState(0);
   const [submitting, setSubmitting] = useState<string | null>(null);
+  const [cancelAllOpen, setCancelAllOpen] = useState(false);
   const activeStoreRef = useRef(selectedDealershipId);
 
   useEffect(() => {
@@ -123,6 +141,7 @@ export function BackgroundProcessingStatus() {
     setHiddenFinished(new Set());
     setExpanded(false);
     setSubmitting(null);
+    setCancelAllOpen(false);
   }, [selectedDealershipId]);
 
   useEffect(() => {
@@ -180,6 +199,10 @@ export function BackgroundProcessingStatus() {
   );
   const activeCount = counts.queued + counts.processing;
   const finishedCount = counts.completed + counts.needsReview + counts.failed + counts.canceled;
+  const retryableFailedCount = visibleJobs.filter(
+    (job) => job.status === "failed" && job.retryable,
+  ).length;
+  const cancelableCount = visibleJobs.filter((job) => job.cancelable).length;
 
   const performAction = async (job: BackgroundActivity, action: ProcessingAction) => {
     if (submitting) return;
@@ -232,6 +255,91 @@ export function BackgroundProcessingStatus() {
         {
           description: "Your original photo was not changed. Try again.",
         },
+      );
+      announceBackgroundProcessingChange();
+    } finally {
+      if (activeStoreRef.current === storeAtSubmit) setSubmitting(null);
+    }
+  };
+
+  const performBulkAction = async (action: BulkProcessingAction) => {
+    if (submitting) return;
+    const storeAtSubmit = selectedDealershipId;
+    if (!storeAtSubmit) return;
+    setSubmitting(`bulk:${action}`);
+    try {
+      const rpc =
+        action === "retry_all" ? "retry_failed_background_removals" : "cancel_background_removals";
+      const { data, error } = await supabase.rpc(rpc, { _dealership_id: storeAtSubmit });
+      if (error) throw error;
+
+      if (activeStoreRef.current === storeAtSubmit) {
+        setJobs((current) =>
+          current.map((job) => {
+            if (action === "retry_all" && job.status === "failed" && job.retryable) {
+              return {
+                ...job,
+                status: "queued",
+                retryable: false,
+                cancelable: true,
+                updated_at: new Date().toISOString(),
+              };
+            }
+            if (action === "cancel_all" && job.cancelable) {
+              return {
+                ...job,
+                status: "canceled",
+                retryable: false,
+                cancelable: false,
+                cancel_requested: true,
+                updated_at: new Date().toISOString(),
+              };
+            }
+            return job;
+          }),
+        );
+      }
+
+      if (action === "retry_all") {
+        const retried = resultCount(data, "retried_count");
+        const notRetryable = resultCount(data, "not_retryable_count");
+        const alreadyActive = resultCount(data, "already_active_count");
+        const alreadyCompleted = resultCount(data, "already_completed_count");
+        const description = [
+          `${retried} queued`,
+          notRetryable > 0 ? `${notRetryable} not retryable` : null,
+          alreadyActive > 0 ? `${alreadyActive} already active` : null,
+          alreadyCompleted > 0 ? `${alreadyCompleted} already completed` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        if (retried > 0) {
+          toast.success(`${retried} background-removal ${retried === 1 ? "job" : "jobs"} queued`, {
+            description,
+          });
+        } else {
+          toast.info("No failed jobs were queued", { description });
+        }
+      } else {
+        const canceled = resultCount(data, "canceled_count");
+        const cancelRequested = resultCount(data, "cancel_requested_count");
+        setCancelAllOpen(false);
+        toast.success("Background-removal work canceled", {
+          description: `${canceled} canceled${
+            cancelRequested > 0 ? ` · ${cancelRequested} finishing safely` : ""
+          }. Original photos remain unchanged.`,
+        });
+      }
+
+      announceBackgroundProcessingChange();
+      const authoritative = await refresh();
+      if (activeStoreRef.current === storeAtSubmit) setJobs(authoritative);
+    } catch {
+      toast.error(
+        action === "retry_all"
+          ? "Failed jobs could not be retried"
+          : "Background-removal work could not be canceled",
+        { description: "No original photos were changed. Try again." },
       );
       announceBackgroundProcessingChange();
     } finally {
@@ -328,6 +436,40 @@ export function BackgroundProcessingStatus() {
               <Metric label="Review" value={counts.needsReview} danger={counts.needsReview > 0} />
               <Metric label="Failed" value={counts.failed} danger={counts.failed > 0} />
             </div>
+            {(retryableFailedCount > 0 || cancelableCount > 0) && (
+              <div className="flex flex-wrap gap-2 border-t border-white/10 px-2.5 py-2">
+                {retryableFailedCount > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-10 flex-1 touch-manipulation border-blue-300/25 bg-blue-400/10 px-3 text-xs text-blue-100 hover:bg-blue-400/20 hover:text-white"
+                    disabled={submitting !== null}
+                    onClick={() => void performBulkAction("retry_all")}
+                  >
+                    {submitting === "bulk:retry_all" ? (
+                      <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+                    ) : (
+                      <RotateCcw className="size-3.5" aria-hidden />
+                    )}
+                    Retry All Failed
+                  </Button>
+                )}
+                {cancelableCount > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="min-h-10 flex-1 touch-manipulation px-3 text-xs text-white/70 hover:bg-white/10 hover:text-white"
+                    disabled={submitting !== null}
+                    onClick={() => setCancelAllOpen(true)}
+                  >
+                    <Ban className="size-3.5" aria-hidden />
+                    Cancel All
+                  </Button>
+                )}
+              </div>
+            )}
             <div className="processing-widget-scrollbar max-h-64 overflow-y-auto overscroll-contain p-2">
               <ul className="space-y-1" aria-live="polite">
                 {visibleJobs.map((job) => (
@@ -439,6 +581,33 @@ export function BackgroundProcessingStatus() {
           </div>
         )}
       </div>
+      <AlertDialog open={cancelAllOpen} onOpenChange={setCancelAllOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel all background-removal work?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Queued work will stop, running work will finish safely without promoting its result,
+              and failed requests will be closed. Original photos and completed cutouts remain
+              intact.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting !== null}>Keep processing</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={submitting !== null}
+              onClick={(event) => {
+                event.preventDefault();
+                void performBulkAction("cancel_all");
+              }}
+            >
+              {submitting === "bulk:cancel_all" && (
+                <LoaderCircle className="size-4 animate-spin" aria-hidden />
+              )}
+              Cancel all processing
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }

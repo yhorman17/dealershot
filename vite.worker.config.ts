@@ -10,5 +10,11 @@ export default defineConfig({
       output: { entryFileNames: "index.mjs" },
     },
   },
-  ssr: { noExternal: true },
+  ssr: {
+    noExternal: true,
+    // ONNX Runtime resolves its platform-specific native addon relative to its
+    // own package directory. Bundling it replaces that dynamic require with a
+    // Rollup stub, so keep the package external beside the worker artifact.
+    external: ["onnxruntime-node"],
+  },
 });
