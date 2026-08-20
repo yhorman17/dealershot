@@ -4,8 +4,15 @@ import { SHOT_TYPES } from "@/components/VehiclePhotos";
 import { ProductSelect, StatusBadge } from "@/components/product-ui";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { queueableReviewPhotoIds } from "@/lib/background-removal-queue";
 
-export type ReviewProcessingState = "original" | "processing" | "ready" | "needs_review" | "failed";
+export type ReviewProcessingState =
+  | "original"
+  | "queued"
+  | "processing"
+  | "ready"
+  | "needs_review"
+  | "failed";
 
 export type ReviewPhotoItem = {
   id: string;
@@ -205,9 +212,6 @@ export function VehiclePhotoProcessingStage({
   onChange: (value: Set<string>) => void;
   onDone: () => void;
 }) {
-  const queueable = items.filter(
-    (item) => item.processing_state !== "processing" && item.processing_state !== "ready",
-  );
   const choose = (ids: string[]) => onChange(new Set(ids));
   return (
     <section className="ds-surface p-4 sm:p-6">
@@ -228,20 +232,14 @@ export function VehiclePhotoProcessingStage({
           <Button
             variant="outline"
             size="sm"
-            onClick={() =>
-              choose(
-                queueable
-                  .filter((item) => item.media_category === "exterior")
-                  .map((item) => item.id),
-              )
-            }
+            onClick={() => choose(queueableReviewPhotoIds(items, true))}
           >
             Select exterior
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => choose(queueable.map((item) => item.id))}
+            onClick={() => choose(queueableReviewPhotoIds(items))}
           >
             Select all
           </Button>
@@ -254,7 +252,9 @@ export function VehiclePhotoProcessingStage({
         {items.map((item) => {
           const checked = selected.has(item.id);
           const disabled =
-            item.processing_state === "processing" || item.processing_state === "ready";
+            item.processing_state === "queued" ||
+            item.processing_state === "processing" ||
+            item.processing_state === "ready";
           return (
             <button
               key={item.id}
@@ -302,6 +302,7 @@ export function VehiclePhotoProcessingStage({
 function ProcessingStatus({ state }: { state: ReviewProcessingState }) {
   const value = {
     original: { label: "Original", tone: "neutral" as const },
+    queued: { label: "Queued", tone: "info" as const },
     processing: { label: "Processing", tone: "info" as const },
     ready: { label: "Ready", tone: "success" as const },
     needs_review: { label: "Needs review", tone: "warning" as const },

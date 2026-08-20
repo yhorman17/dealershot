@@ -2587,8 +2587,125 @@ SELECT test.assert_true(
 );
 RESET ROLE;
 
+-- An explicit Vehicle Review selection is a new processing request after a
+-- terminal failure/cancellation. The prior job and attempts remain historical,
+-- while a rapid duplicate selection reuses the one active generation.
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT
+  (result->>'queued_count')::integer AS review_requeue_queued_count,
+  result->'outcomes'->0->>'outcome' AS review_requeue_outcome,
+  result->'outcomes'->0->>'job_id' AS review_requeue_job_id
+FROM (
+  SELECT public.queue_vehicle_background_removal(
+    'fc000000-0000-4000-8000-000000000001',
+    ARRAY['fc100000-0000-4000-8000-000000000001'::uuid]
+  ) AS result
+) AS queued \gset
+SELECT
+  (result->>'already_active_count')::integer AS review_duplicate_active_count,
+  result->'outcomes'->0->>'outcome' AS review_duplicate_outcome
+FROM (
+  SELECT public.queue_vehicle_background_removal(
+    'fc000000-0000-4000-8000-000000000001',
+    ARRAY['fc100000-0000-4000-8000-000000000001'::uuid]
+  ) AS result
+) AS duplicate \gset
+RESET ROLE;
+SELECT test.assert_true(
+  :'review_requeue_queued_count'::integer = 1
+  AND :'review_requeue_outcome' = 'queued'
+  AND :'review_duplicate_active_count'::integer = 1
+  AND :'review_duplicate_outcome' = 'already_active'
+  AND (
+    SELECT count(*) = 2
+      AND count(*) FILTER (WHERE status = 'cancelled') = 1
+      AND count(*) FILTER (WHERE status = 'queued') = 1
+    FROM private.background_jobs
+    WHERE job_type = 'media.background.remove'
+      AND resource_id = 'fc100000-0000-4000-8000-000000000001'
+  )
+  AND (
+    SELECT dedupe_key LIKE 'background-remove:fc100000-0000-4000-8000-000000000001:v1:request:%'
+      AND payload->>'reprocesses_job_id' = 'fc400000-0000-4000-8000-000000000001'
+    FROM private.background_jobs
+    WHERE id = :'review_requeue_job_id'::uuid
+  )
+  AND (
+    SELECT processing_status = 'queued'
+    FROM public.photos WHERE id = 'fc200000-0000-4000-8000-000000000001'
+  ),
+  'Review requeues a terminal request, preserves history, and reuses one active generation'
+);
+
+-- A newly terminal generation also cannot reserve the media forever.
+UPDATE private.background_jobs
+SET status = 'dead_letter', completed_at = now(), last_error_code = 'test_terminal_failure'
+WHERE id = :'review_requeue_job_id'::uuid;
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT
+  (result->>'queued_count')::integer AS review_dead_letter_queued_count,
+  result->'outcomes'->0->>'job_id' AS review_dead_letter_new_job_id
+FROM (
+  SELECT public.queue_vehicle_background_removal(
+    'fc000000-0000-4000-8000-000000000001',
+    ARRAY['fc100000-0000-4000-8000-000000000001'::uuid]
+  ) AS result
+) AS reprocessed \gset
+RESET ROLE;
+SELECT test.assert_true(
+  :'review_dead_letter_queued_count'::integer = 1
+  AND :'review_dead_letter_new_job_id' <> :'review_requeue_job_id'
+  AND (
+    SELECT count(*) = 3
+      AND count(*) FILTER (WHERE status IN ('queued', 'retry_scheduled', 'running')) = 1
+    FROM private.background_jobs
+    WHERE job_type = 'media.background.remove'
+      AND resource_id = 'fc100000-0000-4000-8000-000000000001'
+  ),
+  'a dead-letter generation remains auditable and does not block a new Review request'
+);
+
+-- Even a multi-store administrator cannot mix another store's media into the
+-- selected vehicle payload.
+INSERT INTO public.media_assets (
+  id, organization_id, dealership_id, vehicle_id, uploaded_by,
+  source_type, content_type, byte_size, checksum_sha256,
+  storage_bucket, storage_object_path
+) VALUES (
+  'fc100000-0000-4000-8000-000000000002',
+  '22222222-bbbb-4000-8000-000000000001',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000004',
+  'capture', 'image/jpeg', 100, repeat('d', 64), 'dealer-media-private',
+  'stores/bbbbbbbb-0000-0000-0000-000000000001/vehicles/10000000-0000-0000-0000-000000000002/media/fc100000-0000-4000-8000-000000000002/original/source.jpg'
+);
+UPDATE public.photos
+SET media_asset_id = 'fc100000-0000-4000-8000-000000000002'
+WHERE id = '30000000-0000-0000-0000-000000000002';
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT test.expect_sqlstate(
+  $$SELECT public.queue_vehicle_background_removal(
+      'fc000000-0000-4000-8000-000000000001',
+      ARRAY['fc100000-0000-4000-8000-000000000002'::uuid]
+    )$$,
+  '42501',
+  'Review rejects a cross-store manipulated media asset even for a multi-store administrator'
+);
+RESET ROLE;
+UPDATE public.photos SET media_asset_id = NULL
+WHERE id = '30000000-0000-0000-0000-000000000002';
+DELETE FROM public.media_variants
+WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000002';
+DELETE FROM public.media_assets
+WHERE id = 'fc100000-0000-4000-8000-000000000002';
+
 DELETE FROM private.background_jobs
-WHERE id = 'fc400000-0000-4000-8000-000000000001';
+WHERE resource_type = 'media_asset'
+  AND resource_id = 'fc100000-0000-4000-8000-000000000001';
 DELETE FROM public.media_variants
 WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000001';
 DELETE FROM public.photos WHERE id = 'fc200000-0000-4000-8000-000000000001';

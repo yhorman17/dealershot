@@ -21,6 +21,11 @@ import {
   uploadPrivateOriginal,
 } from "@/lib/private-media";
 import { announceBackgroundProcessingChange } from "@/lib/background-processing-events";
+import {
+  describeBackgroundRemovalQueueResult,
+  parseBackgroundRemovalQueueResult,
+  selectedMediaAssetIds,
+} from "@/lib/background-removal-queue";
 
 type ReviewSearch = { from?: "inventory" | "vehicle" };
 
@@ -223,22 +228,20 @@ function ExistingVehicleReviewPage() {
     if (busy) return;
     setBusy("processing");
     try {
-      const mediaIds = items
-        .filter((item) => selectedForProcessing.has(item.id))
-        .map((item) => item.media_asset_id);
+      const mediaIds = selectedMediaAssetIds(items, selectedForProcessing);
       const { data, error: queueError } = await supabase.rpc(
         "queue_vehicle_background_removal" as never,
         { _vehicle_id: id, _media_asset_ids: mediaIds } as never,
       );
       if (queueError) throw queueError;
-      const result = data as unknown as { queued_count?: number; skipped_count?: number } | null;
-      const queued = result?.queued_count ?? 0;
-      if (queued) announceBackgroundProcessingChange();
-      toast.success("Photo review complete", {
-        description: queued
-          ? `${queued} background-removal ${queued === 1 ? "job" : "jobs"} queued. Processing continues in the background.`
-          : "No new background-removal work was queued.",
-      });
+      const result = parseBackgroundRemovalQueueResult(data);
+      const feedback = describeBackgroundRemovalQueueResult(result);
+      if (result.queued_count) announceBackgroundProcessingChange();
+      toast[feedback.kind](feedback.title, { description: feedback.description });
+      if (!feedback.shouldLeaveReview) {
+        await load();
+        return;
+      }
       await navigate(
         from === "inventory"
           ? { to: "/inventory" }
@@ -374,9 +377,8 @@ function ExistingVehicleReviewPage() {
 }
 
 function processingState(photo: PhotoRow, hasCutout: boolean): ReviewProcessingState {
-  if (photo.processing_status === "queued" || photo.processing_status === "processing") {
-    return "processing";
-  }
+  if (photo.processing_status === "queued") return "queued";
+  if (photo.processing_status === "processing") return "processing";
   if (photo.processing_status === "failed") return "failed";
   if (hasCutout && photo.review_status === "awaiting_review") return "needs_review";
   if (hasCutout) return "ready";

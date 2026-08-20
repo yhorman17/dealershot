@@ -1462,6 +1462,10 @@ export type Database = {
         Args: { _item_ids: string[]; _session_id: string };
         Returns: number;
       };
+      queue_vehicle_background_removal: {
+        Args: { _media_asset_ids: string[]; _vehicle_id: string };
+        Returns: Json;
+      };
       save_capture_method_configuration: {
         Args: {
           _bulk_enabled: boolean;

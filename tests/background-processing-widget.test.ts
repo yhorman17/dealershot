@@ -57,7 +57,7 @@ test("queue completion announces an immediate authoritative refresh", () => {
   const events = read("src/lib/background-processing-events.ts");
   assert.match(events, /dealershot:background-processing-changed/);
   assert.match(bulk, /if \(queued\) announceBackgroundProcessingChange\(\)/);
-  assert.match(review, /if \(queued\) announceBackgroundProcessingChange\(\)/);
+  assert.match(review, /if \(result\.queued_count\) announceBackgroundProcessingChange\(\)/);
 });
 
 test("job projection keeps the private queue hidden and uses narrow grants", () => {

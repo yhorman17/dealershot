@@ -83,17 +83,17 @@ test("review replacement appends a private original before archiving the old gal
 
 test("existing photo processing is idempotent, authorized, and asynchronous", () => {
   const migration = read(
-    "supabase/migrations/20260819210739_background_processing_state_controls.sql",
+    "supabase/migrations/20260820020423_review_background_removal_requeue.sql",
   );
   const route = read("src/routes/_authenticated/vehicles.$id_.review.tsx");
   assert.match(migration, /current_user_has_store_capability\(target\.dealership_id, 'media'\)/);
-  assert.match(migration, /private\.ensure_background_removal_job/);
+  assert.match(migration, /private\.request_background_removal_job/);
   assert.match(migration, /variant_type IN \('cutout', 'corrected_cutout'\)/);
   assert.match(migration, /asset\.vehicle_id = target\.id/);
   assert.match(migration, /REVOKE ALL[\s\S]*FROM PUBLIC, anon, authenticated, service_role/);
   assert.match(migration, /GRANT EXECUTE[\s\S]*TO authenticated/);
   assert.match(route, /queue_vehicle_background_removal/);
-  assert.match(route, /Processing continues in the background/);
+  assert.match(route, /describeBackgroundRemovalQueueResult/);
 });
 
 test("Review returns to the route that launched it", () => {
