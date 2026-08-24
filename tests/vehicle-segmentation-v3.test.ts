@@ -18,6 +18,8 @@ import { refineAutomotiveMask, type BoundingBox } from "../worker/vehicle-segmen
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const envExample = readFileSync(path.join(root, ".env.example"), "utf8");
 const packageJson = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
+const deploymentSpec = readFileSync(path.join(root, ".do/app.yaml"), "utf8");
 const workerMedia = readFileSync(path.join(root, "worker/media.ts"), "utf8");
 const v3Source = readFileSync(path.join(root, "worker/vehicle-segmentation-v3.ts"), "utf8");
 const isolatedSource = readFileSync(
@@ -30,6 +32,10 @@ const assetSource = readFileSync(
 );
 const authorizationMigration = readFileSync(
   path.join(root, "supabase/migrations/20260818190335_bulk_first_capture_workflow.sql"),
+  "utf8",
+);
+const reviewRolloutMigration = readFileSync(
+  path.join(root, "supabase/migrations/20260824130734_vehicle_segmentation_v3_review_rollout.sql"),
   "utf8",
 );
 
@@ -240,13 +246,29 @@ test("the V3 pipeline appends a transparent derivative, keeps the original immut
   assert.equal(segmentCalls, 1);
 });
 
-test("V3 is a separate disabled experiment and cannot affect production or normal capture builds", () => {
+test("V3 is enabled only in the hosted worker and rolls out as review-required drafts", () => {
   assert.match(envExample, /^VEHICLE_AWARE_BACKGROUND_REMOVAL=0$/m);
   assert.match(envExample, /^VEHICLE_SEGMENTATION_V2=0$/m);
   assert.match(envExample, /^VEHICLE_SEGMENTATION_V3=0$/m);
-  assert.doesNotMatch(packageJson.scripts.build, /vehicle-segmentation-v3/);
+  assert.match(packageJson.scripts.build, /build:worker-v3/);
+  assert.match(packageJson.scripts.build, /verify:worker-v3-runtime/);
   assert.doesNotMatch(packageJson.scripts["build:worker"], /vehicle-segmentation-v3/);
-  assert.doesNotMatch(workerMedia, /VEHICLE_SEGMENTATION_V3/);
+  assert.match(workerMedia, /VEHICLE_SEGMENTATION_V3/);
+  assert.match(workerMedia, /worker_commit_vehicle_segmentation_v3_review/);
+  assert.match(workerMedia, /rollout_policy: "review_required"/);
+  assert.match(deploymentSpec, /key: VEHICLE_SEGMENTATION_V3[\s\S]*?value: "1"/);
+  assert.match(dockerfile, /\.worker-v3/);
+  assert.match(dockerfile, /worker-assets\/vehicle-segmentation-v3/);
+  assert.match(dockerfile, /verify-vehicle-segmentation-v3-worker-runtime\.mjs/);
+  assert.match(reviewRolloutMigration, /worker_commit_vehicle_segmentation_v3_review/);
+  assert.match(reviewRolloutMigration, /'needs_review'/);
+  assert.match(reviewRolloutMigration, /'auto_promoted', false/);
+  assert.match(reviewRolloutMigration, /'rollout_policy', 'review_required'/);
+  assert.match(
+    reviewRolloutMigration,
+    /REVOKE ALL ON FUNCTION[\s\S]*FROM PUBLIC, anon, authenticated/,
+  );
+  assert.match(reviewRolloutMigration, /GRANT EXECUTE ON FUNCTION[\s\S]*TO service_role/);
 });
 
 test("RT-DETRv2 and MobileSAM code and weights are pinned to Apache-2.0 provenance", () => {

@@ -75,6 +75,10 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: "60000"
+      - key: VEHICLE_SEGMENTATION_V3
+        scope: RUN_TIME
+        type: GENERAL
+        value: "1"
       - key: DEPLOYED_COMMIT_SHA
         scope: RUN_TIME
         type: GENERAL

@@ -27,13 +27,20 @@ FROM node:22.18.0-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
+ENV DEALERSHOT_V3_CHILD_PATH=.worker-v3/child.mjs
+ENV DEALERSHOT_V3_MODEL_DIR=/app/worker-assets/vehicle-segmentation-v3
 
 WORKDIR /app
 
 COPY --from=build --chown=node:node /app/.output ./.output
 COPY --from=build --chown=node:node /app/.worker ./.worker
+COPY --from=build --chown=node:node /app/.worker-v3 ./.worker-v3
 COPY --from=build --chown=node:node /app/.worker-verify ./.worker-verify
+COPY --from=build --chown=node:node /app/worker-assets/vehicle-segmentation-v3 ./worker-assets/vehicle-segmentation-v3
 COPY --from=build --chown=node:node /app/scripts/background-removal-runtime-fixture.jpg ./scripts/background-removal-runtime-fixture.jpg
+COPY --from=build --chown=node:node /app/scripts/vehicle-segmentation-v3-assets.mjs ./scripts/vehicle-segmentation-v3-assets.mjs
+COPY --from=build --chown=node:node /app/scripts/vehicle-segmentation-v3-runtime-fixture.jpg ./scripts/vehicle-segmentation-v3-runtime-fixture.jpg
+COPY --from=build --chown=node:node /app/scripts/verify-vehicle-segmentation-v3-worker-runtime.mjs ./scripts/verify-vehicle-segmentation-v3-worker-runtime.mjs
 # The worker bundle dynamically loads Sharp's platform-specific native addon.
 # Vite can bundle Sharp's JavaScript, but the matching glibc addon and libvips
 # packages must remain available at runtime.
@@ -49,6 +56,7 @@ USER node
 # Run the inference contract under the same Node/glibc runtime used by the
 # deployed worker. The Bun build stage is not a valid proxy for native memory.
 RUN node .worker-verify/verify.mjs
+RUN node scripts/verify-vehicle-segmentation-v3-worker-runtime.mjs
 
 EXPOSE 8080
 

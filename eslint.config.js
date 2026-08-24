@@ -7,7 +7,15 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist", ".output", ".worker", ".worker-verify", ".worker-experiments", ".vinxi"],
+    ignores: [
+      "dist",
+      ".output",
+      ".worker",
+      ".worker-v3",
+      ".worker-verify",
+      ".worker-experiments",
+      ".vinxi",
+    ],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

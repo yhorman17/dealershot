@@ -18,6 +18,7 @@ import {
   VEHICLE_AWARE_PIPELINE_VERSION,
   type VehicleAwareCutoutResult,
 } from "./vehicle-aware-cutout.ts";
+import { runVehicleSegmentationV3Isolated } from "./vehicle-segmentation-v3-isolated.ts";
 
 const PRIVATE_BUCKET = "dealer-media-private";
 const LEGACY_PRIVATE_BUCKET = "dealer-media-legacy-private";
@@ -670,8 +671,55 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
   let standardQuality: MaskQuality = "good";
   let standardDiagnostics: SafeMaskDiagnostics | null = null;
   let standardInference: Record<string, unknown> | null = null;
+  let vehicleSegmentationV3: Awaited<ReturnType<typeof runVehicleSegmentationV3Isolated>> | null =
+    null;
+  let vehicleSegmentationV3Diagnostics: Record<string, unknown> | null = null;
+  const vehicleSegmentationV3Enabled = process.env.VEHICLE_SEGMENTATION_V3?.trim() === "1";
   const vehicleAwareEnabled = process.env.VEHICLE_AWARE_BACKGROUND_REMOVAL?.trim() === "1";
-  if (vehicleAwareEnabled) {
+  if (vehicleSegmentationV3Enabled) {
+    try {
+      vehicleSegmentationV3 = await runVehicleSegmentationV3Isolated(original);
+    } catch (error) {
+      throw new BackgroundProcessingError(
+        "vehicle_segmentation_v3_runtime_failed",
+        "resource_failure",
+        false,
+        { stage: "vehicle_segmentation_v3", exception_name: safeExceptionName(error) },
+      );
+    }
+    if (!vehicleSegmentationV3.bytes) {
+      throw new BackgroundProcessingError(
+        "vehicle_segmentation_v3_vehicle_ineligible",
+        "model_rejection",
+        false,
+        {
+          stage: "full_vehicle_validation",
+          eligibility: vehicleSegmentationV3.eligibility.classification,
+          reasons: vehicleSegmentationV3.eligibility.reasons,
+        },
+      );
+    }
+    bytes = vehicleSegmentationV3.bytes;
+    // V3 is materially better on dealership vehicles, but this is a controlled
+    // review-first rollout. The derivative remains a draft until a user approves
+    // or corrects it through Fix Cutout; the immutable original stays current.
+    standardQuality = "needs_review";
+    vehicleSegmentationV3Diagnostics = {
+      eligibility: vehicleSegmentationV3.eligibility,
+      selected_vehicle: vehicleSegmentationV3.selected,
+      candidate_count: vehicleSegmentationV3.candidateCount,
+      ambiguous: vehicleSegmentationV3.ambiguous,
+      model_quality: vehicleSegmentationV3.quality,
+      memory: vehicleSegmentationV3.memory,
+      rollout_policy: "review_required",
+    };
+    standardInference = {
+      pipeline: vehicleSegmentationV3.metadata.pipeline,
+      detector: vehicleSegmentationV3.metadata.detector,
+      segmenter: vehicleSegmentationV3.metadata.segmenter,
+      method: vehicleSegmentationV3.metadata.method,
+    };
+  } else if (vehicleAwareEnabled) {
     try {
       vehicleAware = await createVehicleAwareCutout(original, createTransparentVehicleCutout);
       bytes = vehicleAware.bytes;
@@ -736,9 +784,11 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
   const variantId = randomUUID();
   const path = `stores/${source.dealership_id}/vehicles/${source.vehicle_id}/media/${source.media_asset_id}/variants/cutout/${job.job_id}-${variantId}.png`;
   await uploadVerified(client, PRIVATE_BUCKET, path, bytes, "image/png");
-  const commitRpc = vehicleAware
-    ? "worker_commit_vehicle_aware_cutout"
-    : "worker_commit_background_cutout_result";
+  const commitRpc = vehicleSegmentationV3
+    ? "worker_commit_vehicle_segmentation_v3_review"
+    : vehicleAware
+      ? "worker_commit_vehicle_aware_cutout"
+      : "worker_commit_background_cutout_result";
   const commitArguments = {
     _job_id: job.job_id,
     _variant_id: variantId,
@@ -748,23 +798,32 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
     _width: metadata.width,
     _height: metadata.height,
     _checksum_sha256: hash(bytes),
-    ...(vehicleAware
+    ...(vehicleSegmentationV3
       ? {
-          _quality_class: vehicleAware.quality.rating,
-          _quality_score: vehicleAware.quality.score,
+          _diagnostics: vehicleSegmentationV3Diagnostics,
           _metadata: {
-            pipeline_version: VEHICLE_AWARE_PIPELINE_VERSION,
-            method: vehicleAware.method,
-            detector: vehicleAware.detector,
-            roi: vehicleAware.roi,
-            quality: vehicleAware.quality,
-            framing: vehicleAware.framing,
+            ...standardInference,
+            ...vehicleSegmentationV3Diagnostics,
+            framing: vehicleSegmentationV3.metadata.framing,
           },
         }
-      : {
-          _quality_class: standardQuality,
-          _diagnostics: standardDiagnostics,
-        }),
+      : vehicleAware
+        ? {
+            _quality_class: vehicleAware.quality.rating,
+            _quality_score: vehicleAware.quality.score,
+            _metadata: {
+              pipeline_version: VEHICLE_AWARE_PIPELINE_VERSION,
+              method: vehicleAware.method,
+              detector: vehicleAware.detector,
+              roi: vehicleAware.roi,
+              quality: vehicleAware.quality,
+              framing: vehicleAware.framing,
+            },
+          }
+        : {
+            _quality_class: standardQuality,
+            _diagnostics: standardDiagnostics,
+          }),
   };
   const { data: committed, error: commitError } = await client.rpc(
     commitRpc as never,
@@ -786,10 +845,16 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
     width: metadata.width,
     height: metadata.height,
     bytes: bytes.length,
-    strategy: vehicleAware ? vehicleAware.method : "standard",
-    quality: vehicleAware?.quality.rating ?? standardQuality,
-    quality_score: vehicleAware?.quality.score ?? null,
-    mask_diagnostics: standardDiagnostics,
+    strategy: vehicleSegmentationV3
+      ? "vehicle_segmentation_v3_review"
+      : vehicleAware
+        ? vehicleAware.method
+        : "standard",
+    quality: vehicleSegmentationV3
+      ? "needs_review"
+      : (vehicleAware?.quality.rating ?? standardQuality),
+    quality_score: vehicleSegmentationV3?.quality.score ?? vehicleAware?.quality.score ?? null,
+    mask_diagnostics: vehicleSegmentationV3Diagnostics ?? standardDiagnostics,
     inference: standardInference,
   };
 }

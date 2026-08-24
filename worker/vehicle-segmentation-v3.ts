@@ -270,11 +270,15 @@ export function classifyFullVehicleGeometry(input: {
 
 async function assetDirectory() {
   const candidates = [
+    process.env.DEALERSHOT_V3_MODEL_DIR,
+    path.resolve(process.cwd(), "worker-assets/vehicle-segmentation-v3"),
     path.resolve(process.cwd(), ".output/public/vehicle-segmentation-v3"),
     path.resolve(process.cwd(), "public/vehicle-segmentation-v3"),
     path.resolve(process.env.TEMP ?? process.cwd(), "dealershot-v3-models"),
   ];
-  for (const candidate of candidates) {
+  for (const candidate of candidates.filter((candidate): candidate is string =>
+    Boolean(candidate),
+  )) {
     try {
       await Promise.all([
         access(path.join(candidate, "rtdetrv2-r18vd-coco.onnx")),
