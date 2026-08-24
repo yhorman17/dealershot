@@ -104,11 +104,14 @@ test("production worker reports the first real stage and does not cache rejected
 
 test("production worker keeps ONNX native loading external and verifies a real tensor path", () => {
   const workerConfig = read("vite.worker.config.ts");
+  const workerMedia = read("worker/media.ts");
   const runtimeVerifierConfig = read("vite.worker-verify.config.ts");
   const packageJson = read("package.json");
   const runtimeCheck = read("scripts/verify-background-removal-worker-runtime.mjs");
   const productionRuntimeCheck = read("scripts/verify-background-removal-runtime-entry.ts");
   assert.match(workerConfig, /external: \["onnxruntime-node"\]/);
+  assert.match(workerMedia, /InferenceSession\.create\(modelPath/);
+  assert.doesNotMatch(workerMedia, /Buffer\.concat\(chunks/);
   assert.match(runtimeVerifierConfig, /external: \["onnxruntime-node"\]/);
   assert.match(packageJson, /verify:worker-bg-runtime/);
   assert.match(packageJson, /build:worker-verify/);

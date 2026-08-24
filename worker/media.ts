@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { access, readFile } from "node:fs/promises";
+import { access, open, readFile, rename, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import sharp, { type OutputInfo } from "sharp";
@@ -163,30 +164,48 @@ async function loadBackgroundRemovalModel() {
   if (!resource || !Number.isSafeInteger(resource.size) || !Array.isArray(resource.chunks)) {
     throw new Error("background_model_manifest_invalid");
   }
-  const chunks: Buffer[] = [];
+  const modelPath = path.join(os.tmpdir(), `dealershot-isnet-${process.pid}-${randomUUID()}.onnx`);
+  const partialPath = `${modelPath}.partial`;
+  const output = await open(partialPath, "wx", 0o600);
   let total = 0;
-  for (const chunk of resource.chunks) {
-    if (!/^[a-f0-9]{64}$/.test(chunk.name) || chunk.hash !== chunk.name) {
-      throw new Error("background_model_manifest_invalid");
+  let outputClosed = false;
+  try {
+    for (const chunk of resource.chunks) {
+      if (!/^[a-f0-9]{64}$/.test(chunk.name) || chunk.hash !== chunk.name) {
+        throw new Error("background_model_manifest_invalid");
+      }
+      const bytes = await readFile(path.join(directory, chunk.name));
+      if (hash(bytes) !== chunk.hash || chunk.offsets[0] !== total) {
+        throw new Error("background_model_integrity_failed");
+      }
+      const { bytesWritten } = await output.write(bytes, 0, bytes.length, total);
+      if (bytesWritten !== bytes.length) throw new Error("background_model_write_failed");
+      total += bytes.length;
+      if (chunk.offsets[1] !== total) throw new Error("background_model_integrity_failed");
     }
-    const bytes = await readFile(path.join(directory, chunk.name));
-    if (hash(bytes) !== chunk.hash || chunk.offsets[0] !== total) {
-      throw new Error("background_model_integrity_failed");
-    }
-    total += bytes.length;
-    if (chunk.offsets[1] !== total) throw new Error("background_model_integrity_failed");
-    chunks.push(bytes);
+    if (total !== resource.size) throw new Error("background_model_integrity_failed");
+    await output.sync();
+    await output.close();
+    outputClosed = true;
+    await rename(partialPath, modelPath);
+    return modelPath;
+  } catch (error) {
+    if (!outputClosed) await output.close().catch(() => undefined);
+    await rm(partialPath, { force: true }).catch(() => undefined);
+    await rm(modelPath, { force: true }).catch(() => undefined);
+    throw error;
   }
-  if (total !== resource.size) throw new Error("background_model_integrity_failed");
-  return Buffer.concat(chunks, total);
 }
 
 function getBackgroundRemovalRuntime() {
   backgroundRemovalRuntime ??= (async () => {
     let ort: OnnxRuntime;
-    let model: Buffer;
+    let modelPath: string;
     try {
-      [ort, model] = await Promise.all([import("onnxruntime-node"), loadBackgroundRemovalModel()]);
+      [ort, modelPath] = await Promise.all([
+        import("onnxruntime-node"),
+        loadBackgroundRemovalModel(),
+      ]);
     } catch (error) {
       if (error instanceof Error && error.message.startsWith("background_model_")) {
         throw new BackgroundProcessingError(error.message, "resource_failure", false, {
@@ -196,21 +215,28 @@ function getBackgroundRemovalRuntime() {
       throw runtimeImportFailure(error);
     }
     try {
-      const session = await ort.InferenceSession.create(model, {
-        executionProviders: ["cpu"],
-        // Graph rewriting creates a large transient native-memory spike while
-        // ISNet is initialized. The worker processes one image at a time, so
-        // disable it and favor a predictable memory ceiling over warm-up speed.
-        graphOptimizationLevel: "disabled",
-        // The hosted worker has a strict memory ceiling. ISNet is processed by
-        // one durable job at a time, so parallel execution and retained CPU
-        // arenas add memory without increasing queue throughput.
-        executionMode: "sequential",
-        enableCpuMemArena: false,
-        enableMemPattern: false,
-        intraOpNumThreads: 1,
-        interOpNumThreads: 1,
-      });
+      let session: import("onnxruntime-node").InferenceSession;
+      try {
+        session = await ort.InferenceSession.create(modelPath, {
+          executionProviders: ["cpu"],
+          // Graph rewriting creates a large transient native-memory spike while
+          // ISNet is initialized. The worker processes one image at a time, so
+          // disable it and favor a predictable memory ceiling over warm-up speed.
+          graphOptimizationLevel: "disabled",
+          // The hosted worker has a strict memory ceiling. ISNet is processed by
+          // one durable job at a time, so parallel execution and retained CPU
+          // arenas add memory without increasing queue throughput.
+          executionMode: "sequential",
+          enableCpuMemArena: false,
+          enableMemPattern: false,
+          intraOpNumThreads: 1,
+          interOpNumThreads: 1,
+        });
+      } finally {
+        // ONNX Runtime has loaded the verified model. Removing the temporary
+        // assembly avoids retaining another 56 MiB file in the container/image.
+        await rm(modelPath, { force: true }).catch(() => undefined);
+      }
       const inputName = session.inputNames[0];
       const outputName = session.outputNames[0];
       const inputMetadata = session.inputMetadata[0];
