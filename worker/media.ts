@@ -324,52 +324,83 @@ export async function createTransparentVehicleCutoutResult(original: Buffer) {
     await getBackgroundRemovalRuntime();
   const runStartedAt = performance.now();
   const rssBefore = process.memoryUsage().rss;
-  const outputs = await (async () => {
-    try {
-      return await session.run({
-        [inputName]: new ort.Tensor("float32", input, [1, 3, SEGMENTATION_SIZE, SEGMENTATION_SIZE]),
-      });
-    } catch (error) {
+  let mask: Buffer;
+  let minimum = 255;
+  let maximum = 0;
+  let outputElements = 0;
+  let releaseFailure: BackgroundProcessingError | null = null;
+  try {
+    const outputs = await (async () => {
+      try {
+        return await session.run({
+          [inputName]: new ort.Tensor("float32", input, [
+            1,
+            3,
+            SEGMENTATION_SIZE,
+            SEGMENTATION_SIZE,
+          ]),
+        });
+      } catch (error) {
+        throw new BackgroundProcessingError(
+          "background_inference_runtime_failed",
+          "resource_failure",
+          false,
+          {
+            stage: "session_run",
+            exception_name: safeExceptionName(error),
+            input_name: inputName,
+            input_shape: [...inputShape],
+            tensor_elements: input.length,
+          },
+        );
+      }
+    })();
+    const prediction = outputs[outputName];
+    if (!prediction || prediction.data.length !== stride) {
       throw new BackgroundProcessingError(
-        "background_inference_runtime_failed",
+        "background_inference_output_invalid",
         "resource_failure",
         false,
         {
-          stage: "session_run",
-          exception_name: safeExceptionName(error),
-          input_name: inputName,
-          input_shape: [...inputShape],
-          tensor_elements: input.length,
+          stage: "output_tensor",
+          output_name: outputName,
+          output_shape: [...outputShape],
+          output_elements: prediction?.data.length ?? 0,
+          expected_elements: stride,
         },
       );
     }
-  })();
+    outputElements = prediction.data.length;
+    mask = Buffer.allocUnsafe(stride);
+    for (let index = 0; index < stride; index += 1) {
+      const value = Math.max(0, Math.min(255, Math.round(Number(prediction.data[index]) * 255)));
+      mask[index] = value;
+      minimum = Math.min(minimum, value);
+      maximum = Math.max(maximum, value);
+    }
+  } finally {
+    try {
+      await session.release();
+    } catch (error) {
+      releaseFailure = new BackgroundProcessingError(
+        "background_runtime_release_failed",
+        "resource_failure",
+        false,
+        {
+          stage: "session_release",
+          exception_name: safeExceptionName(error),
+        },
+      );
+    } finally {
+      // The worker handles one durable job at a time. Releasing the large
+      // native session before full-resolution RGBA composition prevents the
+      // inference and image-encoding peaks from stacking in a 1 GiB process.
+      backgroundRemovalRuntime = null;
+    }
+  }
+  if (releaseFailure) throw releaseFailure;
   const runDurationMs = Math.round(performance.now() - runStartedAt);
   const rssAfter = process.memoryUsage().rss;
-  const prediction = outputs[outputName];
-  if (!prediction || prediction.data.length !== stride) {
-    throw new BackgroundProcessingError(
-      "background_inference_output_invalid",
-      "resource_failure",
-      false,
-      {
-        stage: "output_tensor",
-        output_name: outputName,
-        output_shape: [...outputShape],
-        output_elements: prediction?.data.length ?? 0,
-        expected_elements: stride,
-      },
-    );
-  }
-  const mask = Buffer.allocUnsafe(stride);
-  let minimum = 255;
-  let maximum = 0;
-  for (let index = 0; index < stride; index += 1) {
-    const value = Math.max(0, Math.min(255, Math.round(Number(prediction.data[index]) * 255)));
-    mask[index] = value;
-    minimum = Math.min(minimum, value);
-    maximum = Math.max(maximum, value);
-  }
   const { quality, diagnostics } = analyzeBackgroundMask(
     mask,
     SEGMENTATION_SIZE,
@@ -423,7 +454,7 @@ export async function createTransparentVehicleCutoutResult(original: Buffer) {
         tensor_elements: input.length,
         output_name: outputName,
         output_shape: [...outputShape],
-        output_elements: prediction.data.length,
+        output_elements: outputElements,
         session_run_ms: runDurationMs,
         rss_before_mib: Math.round((rssBefore / 1024 / 1024) * 10) / 10,
         rss_after_mib: Math.round((rssAfter / 1024 / 1024) * 10) / 10,

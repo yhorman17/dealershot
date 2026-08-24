@@ -112,6 +112,11 @@ test("production worker keeps ONNX native loading external and verifies a real t
   assert.match(workerConfig, /external: \["onnxruntime-node"\]/);
   assert.match(workerMedia, /InferenceSession\.create\(modelPath/);
   assert.doesNotMatch(workerMedia, /Buffer\.concat\(chunks/);
+  assert.match(workerMedia, /await session\.release\(\)/);
+  assert.ok(
+    workerMedia.indexOf("await session.release()") < workerMedia.indexOf(".ensureAlpha()"),
+    "the native inference session must be released before full-resolution composition",
+  );
   assert.match(runtimeVerifierConfig, /external: \["onnxruntime-node"\]/);
   assert.match(packageJson, /verify:worker-bg-runtime/);
   assert.match(packageJson, /build:worker-verify/);
