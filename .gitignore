@@ -12,6 +12,7 @@ dist
 dist-ssr
 .output
 .worker
+.worker-verify/
 .worker-experiments/
 public/background-removal/
 public/vehicle-detection/

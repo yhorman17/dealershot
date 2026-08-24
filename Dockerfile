@@ -32,6 +32,8 @@ WORKDIR /app
 
 COPY --from=build --chown=node:node /app/.output ./.output
 COPY --from=build --chown=node:node /app/.worker ./.worker
+COPY --from=build --chown=node:node /app/.worker-verify ./.worker-verify
+COPY --from=build --chown=node:node /app/scripts/background-removal-runtime-fixture.jpg ./scripts/background-removal-runtime-fixture.jpg
 # The worker bundle dynamically loads Sharp's platform-specific native addon.
 # Vite can bundle Sharp's JavaScript, but the matching glibc addon and libvips
 # packages must remain available at runtime.
@@ -43,6 +45,10 @@ COPY --from=build --chown=node:node /app/node_modules/onnxruntime-node ./node_mo
 COPY --from=build --chown=node:node /app/node_modules/onnxruntime-common ./node_modules/onnxruntime-common
 
 USER node
+
+# Run the inference contract under the same Node/glibc runtime used by the
+# deployed worker. The Bun build stage is not a valid proxy for native memory.
+RUN node .worker-verify/verify.mjs
 
 EXPOSE 8080
 

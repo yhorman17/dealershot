@@ -104,15 +104,21 @@ test("production worker reports the first real stage and does not cache rejected
 
 test("production worker keeps ONNX native loading external and verifies a real tensor path", () => {
   const workerConfig = read("vite.worker.config.ts");
+  const runtimeVerifierConfig = read("vite.worker-verify.config.ts");
   const packageJson = read("package.json");
   const runtimeCheck = read("scripts/verify-background-removal-worker-runtime.mjs");
+  const productionRuntimeCheck = read("scripts/verify-background-removal-runtime-entry.ts");
   assert.match(workerConfig, /external: \["onnxruntime-node"\]/);
+  assert.match(runtimeVerifierConfig, /external: \["onnxruntime-node"\]/);
   assert.match(packageJson, /verify:worker-bg-runtime/);
+  assert.match(packageJson, /build:worker-verify/);
   assert.match(runtimeCheck, /Production worker must load ONNX Runtime/);
   assert.match(runtimeCheck, /createTransparentVehicleCutoutResult/);
   assert.match(runtimeCheck, /tensor_elements/);
   assert.match(runtimeCheck, /output_elements/);
   assert.match(runtimeCheck, /output\.hasAlpha/);
+  assert.match(productionRuntimeCheck, /background_removal\.production_node_runtime_verified/);
+  assert.match(productionRuntimeCheck, /peakRssMiB < 900/);
 });
 
 test("production container uses a glibc runtime compatible with ONNX Runtime Node", () => {
@@ -121,6 +127,7 @@ test("production container uses a glibc runtime compatible with ONNX Runtime Nod
   assert.match(dockerfile, /FROM node:22\.18\.0-bookworm-slim AS runtime/);
   assert.doesNotMatch(dockerfile, /node:22\.18\.0-alpine AS runtime/);
   assert.match(dockerfile, /onnxruntime-node/);
+  assert.match(dockerfile, /RUN node \.worker-verify\/verify\.mjs/);
 });
 
 test("poor usable masks append drafts without promoting immutable originals", () => {
