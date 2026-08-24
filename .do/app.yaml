@@ -55,7 +55,9 @@ workers:
     source_dir: /
     run_command: node .worker/index.mjs
     instance_count: 1
-    instance_size_slug: basic-xxs
+    # ISNet's production inference path peaks below 1 GiB but above 512 MiB.
+    # Keep this aligned with scripts/verify-background-removal-worker-runtime.mjs.
+    instance_size_slug: apps-s-1vcpu-1gb-fixed
     envs:
       - key: NODE_ENV
         scope: RUN_TIME

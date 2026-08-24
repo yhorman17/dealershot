@@ -198,7 +198,10 @@ function getBackgroundRemovalRuntime() {
     try {
       const session = await ort.InferenceSession.create(model, {
         executionProviders: ["cpu"],
-        graphOptimizationLevel: "all",
+        // Graph rewriting creates a large transient native-memory spike while
+        // ISNet is initialized. The worker processes one image at a time, so
+        // disable it and favor a predictable memory ceiling over warm-up speed.
+        graphOptimizationLevel: "disabled",
         // The hosted worker has a strict memory ceiling. ISNet is processed by
         // one durable job at a time, so parallel execution and retained CPU
         // arenas add memory without increasing queue throughput.

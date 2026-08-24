@@ -37,6 +37,7 @@ const fixture = await sharp(
 const startedAt = performance.now();
 const result = await createTransparentVehicleCutoutResult(fixture);
 const output = await sharp(result.bytes).metadata();
+const peakRssMiB = process.resourceUsage().maxRSS / 1024;
 
 assert.equal(result.inference.input_name, "input");
 assert.deepEqual(result.inference.input_shape, [1, 3, 1024, 1024]);
@@ -47,6 +48,10 @@ assert.equal(result.inference.output_elements, 1024 * 1024);
 assert.equal(output.format, "png");
 assert.equal(output.hasAlpha, true);
 assert.ok(result.diagnostics.alpha_max > result.diagnostics.alpha_min);
+assert.ok(
+  peakRssMiB < 900,
+  `Background-removal runtime peaked at ${peakRssMiB.toFixed(1)} MiB; the 1 GiB worker no longer has a safe operating margin.`,
+);
 
 console.log(
   JSON.stringify({
@@ -55,6 +60,7 @@ console.log(
     session_run_ms: result.inference.session_run_ms,
     rss_before_mib: result.inference.rss_before_mib,
     rss_after_mib: result.inference.rss_after_mib,
+    peak_rss_mib: Math.round(peakRssMiB * 10) / 10,
     input_shape: result.inference.input_shape,
     output_shape: result.inference.output_shape,
     output_bytes: result.bytes.length,
