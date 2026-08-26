@@ -49,7 +49,7 @@ test("Customize uses one persistent preview canvas across every controls tab", (
   assert.match(editor, /data-testid="customize-preview-canvas"/);
   assert.match(editor, /tab changes only swap controls/);
   assert.match(editor, /ctx\.drawImage\(originalImg/);
-  assert.match(editor, /if \(cutoutImg && bounds\)/);
+  assert.match(editor, /if \(cutoutImg && silhouetteAnalysis && groundEffectProfile\)/);
   assert.doesNotMatch(editor, /adjustPreviewRef/);
   assert.doesNotMatch(editor, /key=\{activeTab\}[\s\S]{0,300}<canvas/);
   for (const tab of ["background", "adjust", "shadow", "reflection", "overlay"]) {

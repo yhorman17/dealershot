@@ -7,6 +7,12 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Scissors, X } from "lucide-react";
 import { uploadPrivateVariant } from "@/lib/private-media";
 import { removeVehicleBackground } from "@/lib/background-removal";
+import {
+  analyzeVehicleAlpha,
+  buildGroundEffectProfile,
+  type GroundEffectProfile,
+  type VehicleSilhouetteAnalysis,
+} from "@/lib/vehicle-ground-effects";
 
 export type Position = "top" | "bottom" | "tl" | "tr" | "bl" | "br";
 
@@ -52,13 +58,13 @@ const ASPECT_VALUE: Record<AspectKey, number | null> = {
 // Defaults
 const DEFAULTS = {
   shadowEnabled: true,
-  shadowOpacity: 55,
-  shadowScale: 100,
+  shadowOpacity: 22,
+  shadowScale: 82,
   shadowX: 0,
   shadowY: 0,
   reflectionEnabled: true,
-  reflectionOpacity: 30,
-  reflectionScale: 100,
+  reflectionOpacity: 5,
+  reflectionScale: 78,
   reflectionX: 0,
   reflectionY: 0,
   carX: 0,
@@ -112,45 +118,84 @@ function carRect(
   return { x, y, w, h };
 }
 
-function findSilhouetteBounds(img: HTMLImageElement): {
-  top: number;
-  bottom: number;
-  left: number;
-  right: number;
-} {
+function analyzeSilhouette(
+  img: HTMLImageElement,
+  shotType?: string | null,
+): VehicleSilhouetteAnalysis {
+  const sampleScale = Math.min(1, 720 / Math.max(img.naturalWidth, img.naturalHeight));
+  const sampleWidth = Math.max(1, Math.round(img.naturalWidth * sampleScale));
+  const sampleHeight = Math.max(1, Math.round(img.naturalHeight * sampleScale));
   const c = document.createElement("canvas");
-  c.width = img.naturalWidth;
-  c.height = img.naturalHeight;
+  c.width = sampleWidth;
+  c.height = sampleHeight;
   const ctx = c.getContext("2d", { willReadFrequently: true })!;
-  ctx.drawImage(img, 0, 0);
-  const { data, width, height } = ctx.getImageData(0, 0, c.width, c.height);
-  let top = height,
-    bottom = 0,
-    left = width,
-    right = 0;
-  const threshold = 32;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (data[(y * width + x) * 4 + 3] > threshold) {
-        if (y < top) top = y;
-        if (y > bottom) bottom = y;
-        if (x < left) left = x;
-        if (x > right) right = x;
-      }
-    }
-  }
-  if (bottom < top) {
-    top = 0;
-    bottom = height;
-    left = 0;
-    right = width;
-  }
-  return { top, bottom, left, right };
+  ctx.drawImage(img, 0, 0, sampleWidth, sampleHeight);
+  const sampled = analyzeVehicleAlpha(
+    ctx.getImageData(0, 0, sampleWidth, sampleHeight).data,
+    sampleWidth,
+    sampleHeight,
+    shotType,
+  );
+  const toSource = 1 / sampleScale;
+  return {
+    ...sampled,
+    bounds: {
+      top: sampled.bounds.top * toSource,
+      bottom: sampled.bounds.bottom * toSource,
+      left: sampled.bounds.left * toSource,
+      right: sampled.bounds.right * toSource,
+    },
+    contactBounds: {
+      left: sampled.contactBounds.left * toSource,
+      right: sampled.contactBounds.right * toSource,
+      center: sampled.contactBounds.center * toSource,
+    },
+  };
 }
 
-function buildOvalShadowCanvas(
+function drawTintedProjection(
+  target: CanvasRenderingContext2D,
   cutout: HTMLImageElement,
-  bounds: { top: number; bottom: number; left: number; right: number },
+  source: { x: number; y: number; w: number; h: number },
+  destination: { centerX: number; y: number; w: number; h: number },
+  skew: number,
+  blur: number,
+  opacity: number,
+) {
+  const layer = document.createElement("canvas");
+  layer.width = target.canvas.width;
+  layer.height = target.canvas.height;
+  const layerContext = layer.getContext("2d")!;
+  layerContext.save();
+  layerContext.translate(destination.centerX, destination.y);
+  layerContext.transform(1, 0, skew, 1, 0, 0);
+  layerContext.drawImage(
+    cutout,
+    source.x,
+    source.y,
+    source.w,
+    source.h,
+    -destination.w / 2,
+    -destination.h * 0.35,
+    destination.w,
+    destination.h,
+  );
+  layerContext.restore();
+  layerContext.globalCompositeOperation = "source-in";
+  layerContext.fillStyle = "#000";
+  layerContext.fillRect(0, 0, layer.width, layer.height);
+
+  target.save();
+  target.globalAlpha = opacity;
+  target.filter = `blur(${blur.toFixed(2)}px)`;
+  target.drawImage(layer, 0, 0);
+  target.restore();
+}
+
+function buildContactShadowCanvas(
+  cutout: HTMLImageElement,
+  analysis: VehicleSilhouetteAnalysis,
+  profile: GroundEffectProfile,
   targetW: number,
   targetH: number,
   opacity: number,
@@ -166,30 +211,63 @@ function buildOvalShadowCanvas(
   const r = carRect(cutout, targetW, targetH, carOpts);
   const sx = r.w / cutout.naturalWidth;
   const sy = r.h / cutout.naturalHeight;
+  const bounds = analysis.bounds;
   const carWidth = (bounds.right - bounds.left) * sx;
+  const carHeight = (bounds.bottom - bounds.top) * sy;
   const carBottomY = r.y + bounds.bottom * sy;
-  const carCenterX = r.x + ((bounds.left + bounds.right) / 2) * sx;
+  const contactWidth = Math.max(
+    carWidth * 0.45,
+    (analysis.contactBounds.right - analysis.contactBounds.left) * sx,
+  );
+  const contactCenterX = r.x + analysis.contactBounds.center * sx;
   const s = scalePct / 100;
-  const rx = Math.max(4, carWidth * 0.55 * s);
-  const ry = Math.max(4, carWidth * 0.085 * s);
-  const cx = carCenterX + offsetX;
-  const cy = carBottomY + offsetY - ry * 0.1;
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(rx, ry);
-  const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-  grad.addColorStop(0, `rgba(0,0,0,${opacity})`);
-  grad.addColorStop(0.55, `rgba(0,0,0,${opacity * 0.35})`);
-  grad.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = grad;
-  ctx.fillRect(-1, -1, 2, 2);
-  ctx.restore();
+  const width =
+    Math.min(carWidth * 0.98, Math.max(contactWidth, carWidth * 0.62)) *
+    profile.shadow.widthFactor *
+    s;
+  const depth = Math.max(4, carHeight * profile.shadow.depthFactor * s);
+  const centerX = contactCenterX + offsetX;
+  const groundY = carBottomY + offsetY;
+  const blur = Math.max(2, carWidth * profile.shadow.blurFactor);
+  const lowerSourceY = bounds.top + (bounds.bottom - bounds.top) * 0.68;
+
+  // A broad projection follows the lower vehicle silhouette, while a tighter
+  // contact layer keeps the wheels/body visually attached to the floor.
+  drawTintedProjection(
+    ctx,
+    cutout,
+    {
+      x: bounds.left,
+      y: lowerSourceY,
+      w: Math.max(1, bounds.right - bounds.left),
+      h: Math.max(1, bounds.bottom - lowerSourceY),
+    },
+    { centerX, y: groundY, w: width, h: depth },
+    profile.shadow.skew,
+    blur,
+    opacity * 0.62,
+  );
+  drawTintedProjection(
+    ctx,
+    cutout,
+    {
+      x: analysis.contactBounds.left,
+      y: bounds.top + (bounds.bottom - bounds.top) * 0.8,
+      w: Math.max(1, analysis.contactBounds.right - analysis.contactBounds.left),
+      h: Math.max(1, (bounds.bottom - bounds.top) * 0.2),
+    },
+    { centerX, y: groundY, w: width * 0.84, h: Math.max(2, depth * 0.48) },
+    profile.shadow.skew * 0.45,
+    Math.max(1.5, blur * 0.48),
+    opacity * 0.46,
+  );
   return c;
 }
 
 function buildReflectionCanvas(
   cutout: HTMLImageElement,
-  bounds: { top: number; bottom: number; left: number; right: number },
+  analysis: VehicleSilhouetteAnalysis,
+  profile: GroundEffectProfile,
   targetW: number,
   targetH: number,
   intensity: number,
@@ -205,35 +283,63 @@ function buildReflectionCanvas(
   const r = carRect(cutout, targetW, targetH, carOpts);
   const sx = r.w / cutout.naturalWidth;
   const sy = r.h / cutout.naturalHeight;
-  // Anchor at the silhouette's ground-contact point (bottom of cutout silhouette,
-  // horizontally centered on the silhouette — not the image frame).
+  const bounds = analysis.bounds;
   const carBottomY = r.y + bounds.bottom * sy;
-  const silCenterX = r.x + ((bounds.left + bounds.right) / 2) * sx;
+  const silCenterX = r.x + analysis.contactBounds.center * sx;
+  const silW = Math.max(1, (bounds.right - bounds.left) * sx);
   const silH = Math.max(1, (bounds.bottom - bounds.top) * sy);
   const groundY = carBottomY + offsetY;
   const s = Math.max(0.1, scalePct / 100);
   const centerX = silCenterX + offsetX;
-  // Offset the cutout so its silhouette-bottom pixel lands at the local origin,
-  // then the vertical flip mirrors the car downward from groundY.
-  const dyAnchor = bounds.bottom * sy;
-  ctx.save();
-  ctx.translate(centerX, groundY);
-  ctx.scale(s, -s);
-  ctx.drawImage(cutout, -((bounds.left + bounds.right) / 2) * sx, -dyAnchor, r.w, r.h);
-  ctx.restore();
-  ctx.globalCompositeOperation = "destination-in";
-  const fadeEnd = groundY + Math.max(20, silH * 0.65 * s);
-  const grad = ctx.createLinearGradient(0, groundY, 0, fadeEnd);
+  const reflectionW = Math.min(silW, silW * profile.reflection.widthFactor * s);
+  const reflectionH = Math.max(6, silH * profile.reflection.heightFactor * s);
+  const reflectionLayer = document.createElement("canvas");
+  reflectionLayer.width = targetW;
+  reflectionLayer.height = targetH;
+  const reflectionContext = reflectionLayer.getContext("2d")!;
+  const sourceW = Math.max(1, bounds.right - bounds.left);
+  const sourceH = Math.max(1, bounds.bottom - bounds.top);
+
+  // Flip the real silhouette around its ground contact, then independently
+  // compress it vertically. Perspective is a small lower-edge drift, never a
+  // width expansion beyond the vehicle itself.
+  reflectionContext.save();
+  reflectionContext.translate(centerX, groundY);
+  reflectionContext.scale(1, -1);
+  reflectionContext.transform(1, 0, profile.reflection.skew, 1, 0, 0);
+  reflectionContext.drawImage(
+    cutout,
+    bounds.left,
+    bounds.top,
+    sourceW,
+    sourceH,
+    -reflectionW / 2,
+    -reflectionH,
+    reflectionW,
+    reflectionH,
+  );
+  reflectionContext.restore();
+
+  reflectionContext.globalCompositeOperation = "destination-in";
+  const fadeEnd = Math.min(targetH, groundY + reflectionH);
+  const grad = reflectionContext.createLinearGradient(0, groundY, 0, fadeEnd);
   grad.addColorStop(0, `rgba(0,0,0,${intensity})`);
+  grad.addColorStop(0.42, `rgba(0,0,0,${intensity * 0.34})`);
   grad.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, targetW, targetH);
+  reflectionContext.fillStyle = grad;
+  reflectionContext.fillRect(0, groundY, targetW, Math.max(1, reflectionH));
+
+  ctx.save();
+  ctx.filter = `blur(${Math.max(0.6, silW * profile.reflection.blurFactor).toFixed(2)}px)`;
+  ctx.drawImage(reflectionLayer, 0, 0);
+  ctx.restore();
   return c;
 }
 
 type ComposeOpts = {
   cutout: HTMLImageElement;
-  bounds: { top: number; bottom: number; left: number; right: number };
+  analysis: VehicleSilhouetteAnalysis;
+  groundEffectProfile: GroundEffectProfile;
   backdrop: HTMLImageElement;
   overlay: HTMLImageElement | null;
   overlayPos: Position;
@@ -264,7 +370,8 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
   if (o.reflectionEnabled && o.reflectionOpacity > 0) {
     const ref = buildReflectionCanvas(
       o.cutout,
-      o.bounds,
+      o.analysis,
+      o.groundEffectProfile,
       targetW,
       targetH,
       o.reflectionOpacity,
@@ -277,9 +384,10 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
   }
 
   if (o.shadowEnabled && o.shadowOpacity > 0) {
-    const sh = buildOvalShadowCanvas(
+    const sh = buildContactShadowCanvas(
       o.cutout,
-      o.bounds,
+      o.analysis,
+      o.groundEffectProfile,
       targetW,
       targetH,
       o.shadowOpacity,
@@ -496,13 +604,43 @@ export function BackgroundEditor({
   const previewWrapRef = useRef<HTMLDivElement>(null);
   const cutoutUrlRef = useRef<string | null>(null);
   const originalObjectUrlRef = useRef<string | null>(null);
+  const groundEffectsEditedRef = useRef(false);
+  const appliedGroundEffectsSourceRef = useRef<string | null>(null);
 
   // Undo history
   const historyRef = useRef<Snapshot[]>([]);
   const suppressHistoryRef = useRef(false);
   const [historyLen, setHistoryLen] = useState(0);
 
-  const bounds = useMemo(() => (cutoutImg ? findSilhouetteBounds(cutoutImg) : null), [cutoutImg]);
+  const silhouetteAnalysis = useMemo(
+    () => (cutoutImg ? analyzeSilhouette(cutoutImg, photo.shot_type) : null),
+    [cutoutImg, photo.shot_type],
+  );
+  const groundEffectProfile = useMemo(
+    () => (silhouetteAnalysis ? buildGroundEffectProfile(silhouetteAnalysis) : null),
+    [silhouetteAnalysis],
+  );
+
+  useEffect(() => {
+    if (!rawCutoutImg || !groundEffectProfile || groundEffectsEditedRef.current) return;
+    const sourceKey = rawCutoutImg.src;
+    if (appliedGroundEffectsSourceRef.current === sourceKey) return;
+
+    appliedGroundEffectsSourceRef.current = sourceKey;
+    suppressHistoryRef.current = true;
+    setShadowOpacity(groundEffectProfile.shadow.opacity);
+    setShadowScale(groundEffectProfile.shadow.scale);
+    setShadowX(DEFAULTS.shadowX);
+    setShadowY(DEFAULTS.shadowY);
+    setReflectionOpacity(groundEffectProfile.reflection.opacity);
+    setReflectionScale(groundEffectProfile.reflection.scale);
+    setReflectionX(DEFAULTS.reflectionX);
+    setReflectionY(DEFAULTS.reflectionY);
+    const release = window.setTimeout(() => {
+      suppressHistoryRef.current = false;
+    }, 0);
+    return () => window.clearTimeout(release);
+  }, [groundEffectProfile, rawCutoutImg]);
 
   const snapshot = useCallback(
     (): Snapshot => ({
@@ -593,6 +731,15 @@ export function BackgroundEditor({
     };
   }
 
+  // Ground effects begin with silhouette-aware defaults, but any direct user
+  // adjustment owns the value for the rest of this editor session.
+  function trackGroundEffect<T>(setter: (v: T) => void): (v: T) => void {
+    return (v: T) => {
+      groundEffectsEditedRef.current = true;
+      track(setter)(v);
+    };
+  }
+
   const undo = () => {
     const prev = historyRef.current.pop();
     if (!prev) return;
@@ -602,14 +749,15 @@ export function BackgroundEditor({
 
   const resetCompositing = () => {
     recordHistory();
+    groundEffectsEditedRef.current = false;
     setShadowEnabled(DEFAULTS.shadowEnabled);
-    setShadowOpacity(DEFAULTS.shadowOpacity);
-    setShadowScale(DEFAULTS.shadowScale);
+    setShadowOpacity(groundEffectProfile?.shadow.opacity ?? DEFAULTS.shadowOpacity);
+    setShadowScale(groundEffectProfile?.shadow.scale ?? DEFAULTS.shadowScale);
     setShadowX(DEFAULTS.shadowX);
     setShadowY(DEFAULTS.shadowY);
     setReflectionEnabled(DEFAULTS.reflectionEnabled);
-    setReflectionOpacity(DEFAULTS.reflectionOpacity);
-    setReflectionScale(DEFAULTS.reflectionScale);
+    setReflectionOpacity(groundEffectProfile?.reflection.opacity ?? DEFAULTS.reflectionOpacity);
+    setReflectionScale(groundEffectProfile?.reflection.scale ?? DEFAULTS.reflectionScale);
     setReflectionX(DEFAULTS.reflectionX);
     setReflectionY(DEFAULTS.reflectionY);
   };
@@ -625,17 +773,19 @@ export function BackgroundEditor({
 
   const resetShadow = () => {
     recordHistory();
+    groundEffectsEditedRef.current = false;
     setShadowEnabled(DEFAULTS.shadowEnabled);
-    setShadowOpacity(DEFAULTS.shadowOpacity);
-    setShadowScale(DEFAULTS.shadowScale);
+    setShadowOpacity(groundEffectProfile?.shadow.opacity ?? DEFAULTS.shadowOpacity);
+    setShadowScale(groundEffectProfile?.shadow.scale ?? DEFAULTS.shadowScale);
     setShadowX(DEFAULTS.shadowX);
     setShadowY(DEFAULTS.shadowY);
   };
   const resetReflection = () => {
     recordHistory();
+    groundEffectsEditedRef.current = false;
     setReflectionEnabled(DEFAULTS.reflectionEnabled);
-    setReflectionOpacity(DEFAULTS.reflectionOpacity);
-    setReflectionScale(DEFAULTS.reflectionScale);
+    setReflectionOpacity(groundEffectProfile?.reflection.opacity ?? DEFAULTS.reflectionOpacity);
+    setReflectionScale(groundEffectProfile?.reflection.scale ?? DEFAULTS.reflectionScale);
     setReflectionX(DEFAULTS.reflectionX);
     setReflectionY(DEFAULTS.reflectionY);
   };
@@ -891,11 +1041,12 @@ export function BackgroundEditor({
     if (!ctx) return;
     ctx.clearRect(0, 0, targetSize.w, targetSize.h);
 
-    if (cutoutImg && bounds) {
+    if (cutoutImg && silhouetteAnalysis && groundEffectProfile) {
       if (backdropImg) {
         compose(ctx, {
           cutout: cutoutImg,
-          bounds,
+          analysis: silhouetteAnalysis,
+          groundEffectProfile,
           backdrop: backdropImg,
           overlay: overlayImg,
           overlayPos,
@@ -936,7 +1087,8 @@ export function BackgroundEditor({
   }, [
     originalImg,
     cutoutImg,
-    bounds,
+    silhouetteAnalysis,
+    groundEffectProfile,
     backdropImg,
     overlayImg,
     overlayPos,
@@ -1434,13 +1586,15 @@ export function BackgroundEditor({
                             <input
                               type="checkbox"
                               checked={shadowEnabled}
-                              onChange={(e) => track(setShadowEnabled)(e.target.checked)}
+                              onChange={(e) =>
+                                trackGroundEffect(setShadowEnabled)(e.target.checked)
+                              }
                               className="h-4 w-4 accent-primary"
                             />
                           </label>
                           <p className="text-[11px] text-muted-foreground mb-3">
-                            Soft oval contact shadow auto-placed under the car. Turn off for
-                            interiors or detail shots.
+                            Angle-aware contact shadow fitted to the vehicle's lower silhouette.
+                            Fine-tune it here when needed.
                           </p>
                           {shadowEnabled && (
                             <div className="space-y-3">
@@ -1450,7 +1604,7 @@ export function BackgroundEditor({
                                 min={0}
                                 max={100}
                                 suffix="%"
-                                onChange={track(setShadowOpacity)}
+                                onChange={trackGroundEffect(setShadowOpacity)}
                               />
                               <SliderRow
                                 label="Size"
@@ -1458,7 +1612,7 @@ export function BackgroundEditor({
                                 min={40}
                                 max={180}
                                 suffix="%"
-                                onChange={track(setShadowScale)}
+                                onChange={trackGroundEffect(setShadowScale)}
                               />
                               <SliderRow
                                 label="Position X"
@@ -1466,7 +1620,7 @@ export function BackgroundEditor({
                                 min={-200}
                                 max={200}
                                 suffix="px"
-                                onChange={track(setShadowX)}
+                                onChange={trackGroundEffect(setShadowX)}
                               />
                               <SliderRow
                                 label="Position Y"
@@ -1474,7 +1628,7 @@ export function BackgroundEditor({
                                 min={-100}
                                 max={100}
                                 suffix="px"
-                                onChange={track(setShadowY)}
+                                onChange={trackGroundEffect(setShadowY)}
                               />
                             </div>
                           )}
@@ -1492,13 +1646,15 @@ export function BackgroundEditor({
                             <input
                               type="checkbox"
                               checked={reflectionEnabled}
-                              onChange={(e) => track(setReflectionEnabled)(e.target.checked)}
+                              onChange={(e) =>
+                                trackGroundEffect(setReflectionEnabled)(e.target.checked)
+                              }
                               className="h-4 w-4 accent-primary"
                             />
                           </label>
                           <p className="text-[11px] text-muted-foreground mb-3">
-                            Mirror reflection under the car. Nudge to align if you move or resize
-                            it.
+                            Subtle floor reflection fitted to the vehicle angle and ground contact.
+                            Fine-tune it here when needed.
                           </p>
                           {reflectionEnabled && (
                             <div className="space-y-3">
@@ -1508,7 +1664,7 @@ export function BackgroundEditor({
                                 min={0}
                                 max={100}
                                 suffix="%"
-                                onChange={track(setReflectionOpacity)}
+                                onChange={trackGroundEffect(setReflectionOpacity)}
                               />
                               <SliderRow
                                 label="Size"
@@ -1516,7 +1672,7 @@ export function BackgroundEditor({
                                 min={50}
                                 max={150}
                                 suffix="%"
-                                onChange={track(setReflectionScale)}
+                                onChange={trackGroundEffect(setReflectionScale)}
                               />
                               <SliderRow
                                 label="Position X"
@@ -1524,7 +1680,7 @@ export function BackgroundEditor({
                                 min={-200}
                                 max={200}
                                 suffix="px"
-                                onChange={track(setReflectionX)}
+                                onChange={trackGroundEffect(setReflectionX)}
                               />
                               <SliderRow
                                 label="Position Y"
@@ -1532,7 +1688,7 @@ export function BackgroundEditor({
                                 min={-100}
                                 max={100}
                                 suffix="px"
-                                onChange={track(setReflectionY)}
+                                onChange={trackGroundEffect(setReflectionY)}
                               />
                             </div>
                           )}
