@@ -48,13 +48,34 @@ test("Customize uses one persistent preview canvas across every controls tab", (
   const editor = read("src/components/BackgroundEditor.tsx");
   assert.match(editor, /data-testid="customize-preview-canvas"/);
   assert.match(editor, /tab changes only swap controls/);
-  assert.match(editor, /ctx\.drawImage\(originalImg/);
+  assert.match(editor, /drawImageCover\(ctx, originalImg/);
   assert.match(editor, /if \(cutoutImg && silhouetteAnalysis && groundEffectProfile\)/);
   assert.doesNotMatch(editor, /adjustPreviewRef/);
   assert.doesNotMatch(editor, /key=\{activeTab\}[\s\S]{0,300}<canvas/);
   for (const tab of ["background", "adjust", "shadow", "reflection", "overlay"]) {
     assert.match(editor, new RegExp(`activeTab === "${tab}"`));
   }
+});
+
+test("Customize previews and saves the same 1600 by 1200 composition", () => {
+  const editor = read("src/components/BackgroundEditor.tsx");
+  const effects = read("src/lib/vehicle-ground-effects.ts");
+
+  assert.match(effects, /PREPARED_IMAGE_WIDTH = 1600/);
+  assert.match(effects, /PREPARED_IMAGE_HEIGHT = 1200/);
+  assert.match(editor, /targetSize = \{ w: PREPARED_IMAGE_WIDTH, h: PREPARED_IMAGE_HEIGHT \}/);
+  assert.match(editor, /canvas\.toBlob\([\s\S]*"image\/jpeg"/);
+  assert.match(editor, /buildVehicleCompositionFrame/);
+});
+
+test("Customize uses an accessible before and after slider instead of hold-to-compare", () => {
+  const editor = read("src/components/BackgroundEditor.tsx");
+
+  assert.match(editor, /useState\(50\)/);
+  assert.match(editor, /aria-label="Compare original and edited photo"/);
+  assert.match(editor, /clipPath: `inset\(0 \$\{100 - comparePosition\}% 0 0\)`/);
+  assert.match(editor, /<span>Original<\/span>[\s\S]*<span>Edited<\/span>/);
+  assert.doesNotMatch(editor, /Hold to compare|onMouseDown=\{\(\) => setComparing/);
 });
 
 test("private cutout references are resolved and editor capability gates UI access", () => {

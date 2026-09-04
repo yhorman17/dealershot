@@ -9,6 +9,7 @@ import {
   BackgroundProcessingError,
   classifyBackgroundFailure,
 } from "../worker/background-removal-diagnostics.ts";
+import { vehicleSegmentationV3RolloutEnabled } from "../worker/media.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
@@ -58,6 +59,31 @@ test("mask diagnostics distinguish good, fixable, and unusable ISNet output", ()
   assert.equal(uniform.quality, "bad");
   assert.equal(uniform.diagnostics.draft_usable, false);
   assert.ok(uniform.diagnostics.reasons.includes("no_foreground"));
+
+  const ghosted = rectangleMask(100, 80, [{ x: 15, y: 20, width: 70, height: 40 }]);
+  for (let index = 0; index < ghosted.length; index += 1) {
+    if (ghosted[index]) ghosted[index] = 112;
+  }
+  const ghostedResult = analyzeBackgroundMask(ghosted, 100, 80);
+  assert.equal(ghostedResult.quality, "needs_review");
+  assert.ok(ghostedResult.diagnostics.reasons.includes("diffuse_alpha_mask"));
+  assert.ok(ghostedResult.diagnostics.reasons.includes("weak_foreground_core"));
+});
+
+test("automatic processing stays on parity ISNet unless V3 has explicit dual opt-in", () => {
+  assert.equal(vehicleSegmentationV3RolloutEnabled({ VEHICLE_SEGMENTATION_V3: "1" }), false);
+  assert.equal(
+    vehicleSegmentationV3RolloutEnabled({
+      VEHICLE_SEGMENTATION_V3: "1",
+      VEHICLE_SEGMENTATION_V3_REVIEW_ROLLOUT: "1",
+    }),
+    true,
+  );
+  const worker = read("worker/media.ts");
+  const browser = read("src/lib/background-removal.ts");
+  assert.match(worker, /model: "isnet_quint8"/);
+  assert.match(browser, /model: "isnet_quint8"/);
+  assert.match(worker, /kernel: "linear"/);
 });
 
 test("failures retain safe categories and only transient work retries automatically", () => {

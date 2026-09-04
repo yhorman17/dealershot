@@ -18,6 +18,8 @@ export type SafeMaskDiagnostics = {
   edge_contact_ratio: number;
   hole_ratio: number;
   entropy: number;
+  uncertain_alpha_ratio: number;
+  opaque_core_ratio: number;
   bounding_box: { x: number; y: number; width: number; height: number } | null;
   reasons: string[];
   draft_usable: boolean;
@@ -139,6 +141,8 @@ export function analyzeBackgroundMask(alpha: Uint8Array, width: number, height: 
   let maxY = -1;
   let edgeForeground = 0;
   let alphaTotal = 0;
+  let uncertainAlpha = 0;
+  let opaqueCore = 0;
   const edgePixels = Math.max(1, width * 2 + Math.max(0, height - 2) * 2);
 
   for (let index = 0; index < alpha.length; index += 1) {
@@ -147,6 +151,8 @@ export function analyzeBackgroundMask(alpha: Uint8Array, width: number, height: 
     minimum = Math.min(minimum, value);
     maximum = Math.max(maximum, value);
     alphaTotal += value;
+    if (value >= 64 && value <= 191) uncertainAlpha += 1;
+    if (value >= 224) opaqueCore += 1;
     if (value < 16) continue;
     binary[index] = 1;
     foreground += 1;
@@ -182,6 +188,8 @@ export function analyzeBackgroundMask(alpha: Uint8Array, width: number, height: 
   if (edgeForeground / edgePixels > 0.6) reasons.push("excessive_edge_contact");
   if (holes > 0.35) reasons.push("excessive_holes");
   if (entropy < 0.015) reasons.push("low_mask_entropy");
+  if (uncertainAlpha / alpha.length > 0.24) reasons.push("diffuse_alpha_mask");
+  if (foreground > 0 && opaqueCore / foreground < 0.22) reasons.push("weak_foreground_core");
 
   const draftUsable =
     coverage >= 0.005 && coverage <= 0.985 && alphaRange >= 8 && largestComponentRatio >= 0.2;
@@ -202,6 +210,8 @@ export function analyzeBackgroundMask(alpha: Uint8Array, width: number, height: 
     edge_contact_ratio: round(edgeForeground / edgePixels),
     hole_ratio: round(holes),
     entropy: round(entropy),
+    uncertain_alpha_ratio: round(uncertainAlpha / alpha.length),
+    opaque_core_ratio: round(opaqueCore / Math.max(1, foreground)),
     bounding_box:
       maxX >= minX && maxY >= minY
         ? {

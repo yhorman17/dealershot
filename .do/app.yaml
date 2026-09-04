@@ -78,7 +78,11 @@ workers:
       - key: VEHICLE_SEGMENTATION_V3
         scope: RUN_TIME
         type: GENERAL
-        value: "1"
+        value: "0"
+      - key: VEHICLE_SEGMENTATION_V3_REVIEW_ROLLOUT
+        scope: RUN_TIME
+        type: GENERAL
+        value: "0"
       - key: DEPLOYED_COMMIT_SHA
         scope: RUN_TIME
         type: GENERAL

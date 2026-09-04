@@ -246,7 +246,7 @@ test("the V3 pipeline appends a transparent derivative, keeps the original immut
   assert.equal(segmentCalls, 1);
 });
 
-test("V3 is enabled only in the hosted worker and rolls out as review-required drafts", () => {
+test("V3 stays disabled in hosted production and requires an explicit review-rollout opt-in", () => {
   assert.match(envExample, /^VEHICLE_AWARE_BACKGROUND_REMOVAL=0$/m);
   assert.match(envExample, /^VEHICLE_SEGMENTATION_V2=0$/m);
   assert.match(envExample, /^VEHICLE_SEGMENTATION_V3=0$/m);
@@ -256,7 +256,10 @@ test("V3 is enabled only in the hosted worker and rolls out as review-required d
   assert.match(workerMedia, /VEHICLE_SEGMENTATION_V3/);
   assert.match(workerMedia, /worker_commit_vehicle_segmentation_v3_review/);
   assert.match(workerMedia, /rollout_policy: "review_required"/);
-  assert.match(deploymentSpec, /key: VEHICLE_SEGMENTATION_V3[\s\S]*?value: "1"/);
+  assert.match(deploymentSpec, /key: VEHICLE_SEGMENTATION_V3[\s\S]*?value: "0"/);
+  assert.match(deploymentSpec, /key: VEHICLE_SEGMENTATION_V3_REVIEW_ROLLOUT[\s\S]*?value: "0"/);
+  assert.match(workerMedia, /vehicleSegmentationV3RolloutEnabled/);
+  assert.match(workerMedia, /VEHICLE_SEGMENTATION_V3_REVIEW_ROLLOUT/);
   assert.match(dockerfile, /\.worker-v3/);
   assert.match(dockerfile, /worker-assets\/vehicle-segmentation-v3/);
   assert.match(dockerfile, /verify-vehicle-segmentation-v3-worker-runtime\.mjs/);

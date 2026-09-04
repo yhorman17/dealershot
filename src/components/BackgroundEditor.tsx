@@ -3,13 +3,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { ProductSelect } from "@/components/product-ui";
 import { MaskEditor } from "@/components/MaskEditor";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Scissors, X } from "lucide-react";
 import { uploadPrivateVariant } from "@/lib/private-media";
 import { removeVehicleBackground } from "@/lib/background-removal";
 import {
   analyzeVehicleAlpha,
+  buildVehicleCompositionFrame,
   buildGroundEffectProfile,
+  PREPARED_IMAGE_HEIGHT,
+  PREPARED_IMAGE_WIDTH,
   type GroundEffectProfile,
   type VehicleSilhouetteAnalysis,
 } from "@/lib/vehicle-ground-effects";
@@ -105,17 +109,32 @@ const DEFAULT_CAR_OPTS: CarOpts = { offsetXPct: 0, offsetYPct: 0, scalePct: 100 
 
 function carRect(
   cutout: HTMLImageElement,
+  analysis: VehicleSilhouetteAnalysis,
   targetW: number,
   targetH: number,
   opts: CarOpts = DEFAULT_CAR_OPTS,
 ) {
-  const baseScale = Math.min(targetW / cutout.naturalWidth, targetH / cutout.naturalHeight);
-  const scale = baseScale * (opts.scalePct / 100);
-  const w = cutout.naturalWidth * scale;
-  const h = cutout.naturalHeight * scale;
-  const x = (targetW - w) / 2 + (opts.offsetXPct / 100) * targetW;
-  const y = (targetH - h) / 2 + (opts.offsetYPct / 100) * targetH;
-  return { x, y, w, h };
+  const frame = buildVehicleCompositionFrame(
+    cutout.naturalWidth,
+    cutout.naturalHeight,
+    analysis,
+    targetW,
+    targetH,
+    opts,
+  );
+  return { x: frame.x, y: frame.y, w: frame.width, h: frame.height };
+}
+
+function drawImageCover(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  targetW: number,
+  targetH: number,
+) {
+  const scale = Math.max(targetW / image.naturalWidth, targetH / image.naturalHeight);
+  const width = image.naturalWidth * scale;
+  const height = image.naturalHeight * scale;
+  ctx.drawImage(image, (targetW - width) / 2, (targetH - height) / 2, width, height);
 }
 
 function analyzeSilhouette(
@@ -208,7 +227,7 @@ function buildContactShadowCanvas(
   c.width = targetW;
   c.height = targetH;
   const ctx = c.getContext("2d")!;
-  const r = carRect(cutout, targetW, targetH, carOpts);
+  const r = carRect(cutout, analysis, targetW, targetH, carOpts);
   const sx = r.w / cutout.naturalWidth;
   const sy = r.h / cutout.naturalHeight;
   const bounds = analysis.bounds;
@@ -231,8 +250,24 @@ function buildContactShadowCanvas(
   const blur = Math.max(2, carWidth * profile.shadow.blurFactor);
   const lowerSourceY = bounds.top + (bounds.bottom - bounds.top) * 0.68;
 
+  // Start with a low-opacity floor falloff so front and rear views retain real
+  // depth instead of collapsing into a narrow horizontal strip. The stronger
+  // layers below still derive their shape from the vehicle's lower silhouette.
+  ctx.save();
+  ctx.translate(centerX, groundY + depth * 0.12);
+  ctx.scale(1, Math.max(0.02, depth / Math.max(1, width)));
+  const floorFalloff = ctx.createRadialGradient(0, 0, 0, 0, 0, width * 0.55);
+  floorFalloff.addColorStop(0, `rgba(0,0,0,${opacity * 0.46})`);
+  floorFalloff.addColorStop(0.5, `rgba(0,0,0,${opacity * 0.22})`);
+  floorFalloff.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = floorFalloff;
+  ctx.beginPath();
+  ctx.arc(0, 0, width * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
   // A broad projection follows the lower vehicle silhouette, while a tighter
-  // contact layer keeps the wheels/body visually attached to the floor.
+  // contact layer keeps the tires and rocker panels visually attached.
   drawTintedProjection(
     ctx,
     cutout,
@@ -280,7 +315,7 @@ function buildReflectionCanvas(
   c.width = targetW;
   c.height = targetH;
   const ctx = c.getContext("2d")!;
-  const r = carRect(cutout, targetW, targetH, carOpts);
+  const r = carRect(cutout, analysis, targetW, targetH, carOpts);
   const sx = r.w / cutout.naturalWidth;
   const sy = r.h / cutout.naturalHeight;
   const bounds = analysis.bounds;
@@ -362,10 +397,7 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
   const { targetW, targetH } = o;
   ctx.clearRect(0, 0, targetW, targetH);
 
-  const bScale = Math.max(targetW / o.backdrop.naturalWidth, targetH / o.backdrop.naturalHeight);
-  const bw = o.backdrop.naturalWidth * bScale;
-  const bh = o.backdrop.naturalHeight * bScale;
-  ctx.drawImage(o.backdrop, (targetW - bw) / 2, (targetH - bh) / 2, bw, bh);
+  drawImageCover(ctx, o.backdrop, targetW, targetH);
 
   if (o.reflectionEnabled && o.reflectionOpacity > 0) {
     const ref = buildReflectionCanvas(
@@ -399,7 +431,7 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
     ctx.drawImage(sh, 0, 0);
   }
 
-  const r = carRect(o.cutout, targetW, targetH, o.carOpts);
+  const r = carRect(o.cutout, o.analysis, targetW, targetH, o.carOpts);
   ctx.drawImage(o.cutout, r.x, r.y, r.w, r.h);
 
   if (o.overlay) {
@@ -569,7 +601,7 @@ export function BackgroundEditor({
   const [removeErr, setRemoveErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [comparing, setComparing] = useState(false);
+  const [comparePosition, setComparePosition] = useState(50);
   const [activeTab, setActiveTab] = useState<TabKey>("background");
   const [maskOpen, setMaskOpen] = useState(false);
   const pendingCutoutBlobRef = useRef<Blob | null>(null);
@@ -1031,10 +1063,7 @@ export function BackgroundEditor({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !originalImg) return;
-    const targetSize =
-      cutoutImg && baseSize
-        ? baseSize
-        : { w: originalImg.naturalWidth, h: originalImg.naturalHeight };
+    const targetSize = { w: PREPARED_IMAGE_WIDTH, h: PREPARED_IMAGE_HEIGHT };
     canvas.width = targetSize.w;
     canvas.height = targetSize.h;
     const ctx = canvas.getContext("2d");
@@ -1065,7 +1094,7 @@ export function BackgroundEditor({
           carOpts: { offsetXPct: carX, offsetYPct: carY, scalePct: carScale },
         });
       } else {
-        const rect = carRect(cutoutImg, targetSize.w, targetSize.h, {
+        const rect = carRect(cutoutImg, silhouetteAnalysis, targetSize.w, targetSize.h, {
           offsetXPct: carX,
           offsetYPct: carY,
           scalePct: carScale,
@@ -1079,10 +1108,11 @@ export function BackgroundEditor({
       ctx.save();
       ctx.translate(targetSize.w / 2, targetSize.h / 2);
       ctx.rotate((adjustStraighten * Math.PI) / 180);
-      ctx.drawImage(originalImg, -targetSize.w / 2, -targetSize.h / 2);
+      ctx.translate(-targetSize.w / 2, -targetSize.h / 2);
+      drawImageCover(ctx, originalImg, targetSize.w, targetSize.h);
       ctx.restore();
     } else {
-      ctx.drawImage(originalImg, 0, 0, targetSize.w, targetSize.h);
+      drawImageCover(ctx, originalImg, targetSize.w, targetSize.h);
     }
   }, [
     originalImg,
@@ -1223,11 +1253,7 @@ export function BackgroundEditor({
     { key: "overlay", label: "Overlay" },
   ];
 
-  const previewAspect = baseSize
-    ? `${baseSize.w} / ${baseSize.h}`
-    : originalImg
-      ? `${originalImg.naturalWidth} / ${originalImg.naturalHeight}`
-      : "16 / 9";
+  const previewAspect = `${PREPARED_IMAGE_WIDTH} / ${PREPARED_IMAGE_HEIGHT}`;
 
   // Display rect of crop overlay (pending or committed) in container %
   const overlayCrop = pendingCrop ?? adjustCrop;
@@ -1330,7 +1356,6 @@ export function BackgroundEditor({
                       ref={canvasRef}
                       data-testid="customize-preview-canvas"
                       className="absolute inset-0 w-full h-full"
-                      style={{ visibility: comparing ? "hidden" : "visible" }}
                     />
 
                     {/* Straighten grid overlay */}
@@ -1370,31 +1395,39 @@ export function BackgroundEditor({
                       </div>
                     )}
 
-                    {comparing && originalImg && (
+                    {ready && originalImg && comparePosition > 0 && (
                       <img
                         src={originalImg.src}
-                        alt="Original"
-                        className="absolute inset-0 w-full h-full object-contain"
+                        alt="Original photo before customization"
+                        className="pointer-events-none absolute inset-0 z-10 h-full w-full object-cover"
+                        style={{ clipPath: `inset(0 ${100 - comparePosition}% 0 0)` }}
                       />
                     )}
 
                     {ready && (
-                      <button
-                        type="button"
-                        onMouseDown={() => setComparing(true)}
-                        onMouseUp={() => setComparing(false)}
-                        onMouseLeave={() => setComparing(false)}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          setComparing(true);
-                        }}
-                        onTouchEnd={() => setComparing(false)}
-                        onTouchCancel={() => setComparing(false)}
-                        className="absolute top-2 right-2 select-none rounded-md bg-background/80 backdrop-blur px-2.5 py-1.5 text-[11px] font-medium text-foreground border border-border hover:bg-background"
-                        title="Hold to view original"
-                      >
-                        {comparing ? "Showing original" : "Hold to compare"}
-                      </button>
+                      <>
+                        {comparePosition > 0 && comparePosition < 100 && (
+                          <div
+                            aria-hidden
+                            className="pointer-events-none absolute inset-y-0 z-20 w-px bg-white/90"
+                            style={{ left: `${comparePosition}%` }}
+                          />
+                        )}
+                        <div className="absolute inset-x-3 bottom-3 z-30 rounded-md bg-background/88 px-3 py-2 backdrop-blur-sm">
+                          <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-foreground">
+                            <span>Original</span>
+                            <span>Edited</span>
+                          </div>
+                          <Slider
+                            aria-label="Compare original and edited photo"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={[comparePosition]}
+                            onValueChange={([value]) => setComparePosition(value ?? 0)}
+                          />
+                        </div>
+                      </>
                     )}
 
                     {removing && (

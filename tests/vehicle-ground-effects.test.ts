@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   analyzeVehicleAlpha,
+  buildVehicleCompositionFrame,
   buildGroundEffectProfile,
+  PREPARED_IMAGE_HEIGHT,
+  PREPARED_IMAGE_WIDTH,
 } from "../src/lib/vehicle-ground-effects.ts";
 
 function alphaMask(width: number, height: number, contains: (x: number, y: number) => boolean) {
@@ -65,10 +68,40 @@ test("uncertain silhouettes choose reduced effects instead of an obvious generic
   const profile = buildGroundEffectProfile(analysis);
 
   assert.ok(analysis.alphaCoverage < 0.015);
-  assert.equal(profile.reflection.opacity, 5);
-  assert.equal(profile.shadow.opacity, 22);
-  assert.ok(profile.reflection.heightFactor <= 0.13);
+  assert.equal(profile.reflection.opacity, 3);
+  assert.equal(profile.shadow.opacity, 18);
+  assert.ok(profile.reflection.heightFactor <= 0.2);
   assert.ok(profile.reflection.widthFactor <= 0.76);
+});
+
+test("visible alpha bounds auto-center on the 1600 by 1200 dealership composition", () => {
+  const rgba = alphaMask(2400, 1600, (x, y) => x >= 430 && x <= 2050 && y >= 460 && y <= 1320);
+  const analysis = analyzeVehicleAlpha(rgba, 2400, 1600, "Front 3/4");
+  const frame = buildVehicleCompositionFrame(2400, 1600, analysis);
+  const center = (frame.visibleBounds.left + frame.visibleBounds.right) / 2;
+
+  assert.equal(PREPARED_IMAGE_WIDTH, 1600);
+  assert.equal(PREPARED_IMAGE_HEIGHT, 1200);
+  assert.ok(Math.abs(center - PREPARED_IMAGE_WIDTH / 2) < 1);
+  assert.ok(Math.abs(frame.visibleBounds.bottom - PREPARED_IMAGE_HEIGHT * 0.74) < 1);
+  assert.ok(frame.visibleBounds.top > PREPARED_IMAGE_HEIGHT * 0.08);
+  assert.ok(frame.visibleBounds.left > PREPARED_IMAGE_WIDTH * 0.08);
+  assert.ok(frame.visibleBounds.right < PREPARED_IMAGE_WIDTH * 0.92);
+});
+
+test("manual composition adjustments apply after automatic framing", () => {
+  const rgba = alphaMask(800, 600, (x, y) => x >= 100 && x <= 700 && y >= 180 && y <= 500);
+  const analysis = analyzeVehicleAlpha(rgba, 800, 600, "Driver side");
+  const automatic = buildVehicleCompositionFrame(800, 600, analysis);
+  const adjusted = buildVehicleCompositionFrame(800, 600, analysis, 1600, 1200, {
+    offsetXPct: 5,
+    offsetYPct: -3,
+    scalePct: 90,
+  });
+
+  assert.ok(adjusted.visibleBounds.left > automatic.visibleBounds.left);
+  assert.ok(adjusted.visibleBounds.bottom < automatic.visibleBounds.bottom);
+  assert.ok(adjusted.width < automatic.width);
 });
 
 test("alpha analysis anchors effects to the actual lower contact region", () => {
@@ -96,6 +129,10 @@ test("rendering remains silhouette-based and manual controls remain wired", asyn
   assert.match(editor, /buildReflectionCanvas/);
   assert.match(editor, /profile\.reflection\.heightFactor/);
   assert.match(editor, /analysis\.contactBounds/);
+  assert.match(editor, /createRadialGradient/);
+  assert.match(editor, /buildVehicleCompositionFrame/);
+  assert.match(editor, /PREPARED_IMAGE_WIDTH/);
+  assert.match(editor, /PREPARED_IMAGE_HEIGHT/);
   assert.match(editor, /trackGroundEffect\(setShadowOpacity\)/);
   assert.match(editor, /trackGroundEffect\(setReflectionOpacity\)/);
   assert.doesNotMatch(editor, /buildOvalShadowCanvas/);

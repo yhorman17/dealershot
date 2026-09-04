@@ -27,6 +27,17 @@ const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 const SEGMENTATION_SIZE = 1024;
 const BACKGROUND_REMOVAL_MODEL_KEY = "/models/isnet_quint8";
 
+export function vehicleSegmentationV3RolloutEnabled(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  // V3 remains available for controlled review experiments, but one stale
+  // deployment flag must never replace the production remover by itself.
+  return (
+    environment.VEHICLE_SEGMENTATION_V3?.trim() === "1" &&
+    environment.VEHICLE_SEGMENTATION_V3_REVIEW_ROLLOUT?.trim() === "1"
+  );
+}
+
 type MigrationRecord = {
   migration_id: string;
   media_asset_id: string;
@@ -293,7 +304,10 @@ export async function createTransparentVehicleCutoutResult(original: Buffer) {
     const result = await sharp(original, { failOn: "warning" })
       .rotate()
       .removeAlpha()
-      .resize(SEGMENTATION_SIZE, SEGMENTATION_SIZE, { fit: "fill" })
+      // IMG.LY's in-editor ISNet path uses bilinear input resampling. Keep the
+      // durable worker on the same preprocessing contract so automatic and
+      // manually-created cutouts do not diverge before inference.
+      .resize(SEGMENTATION_SIZE, SEGMENTATION_SIZE, { fit: "fill", kernel: "linear" })
       .raw()
       .toBuffer({ resolveWithObject: true });
     normalized = result.data;
@@ -674,7 +688,7 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
   let vehicleSegmentationV3: Awaited<ReturnType<typeof runVehicleSegmentationV3Isolated>> | null =
     null;
   let vehicleSegmentationV3Diagnostics: Record<string, unknown> | null = null;
-  const vehicleSegmentationV3Enabled = process.env.VEHICLE_SEGMENTATION_V3?.trim() === "1";
+  const vehicleSegmentationV3Enabled = vehicleSegmentationV3RolloutEnabled();
   const vehicleAwareEnabled = process.env.VEHICLE_AWARE_BACKGROUND_REMOVAL?.trim() === "1";
   if (vehicleSegmentationV3Enabled) {
     try {
