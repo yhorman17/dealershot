@@ -42,8 +42,11 @@ COPY --from=build --chown=node:node /app/scripts/vehicle-segmentation-v3-assets.
 COPY --from=build --chown=node:node /app/scripts/vehicle-segmentation-v3-runtime-fixture.jpg ./scripts/vehicle-segmentation-v3-runtime-fixture.jpg
 COPY --from=build --chown=node:node /app/scripts/verify-vehicle-segmentation-v3-worker-runtime.mjs ./scripts/verify-vehicle-segmentation-v3-worker-runtime.mjs
 # The worker bundle dynamically loads Sharp's platform-specific native addon.
-# Vite can bundle Sharp's JavaScript, but the matching glibc addon and libvips
-# packages must remain available at runtime.
+# The package, its direct JavaScript dependencies, and the matching glibc addon
+# and libvips packages must remain available at runtime.
+COPY --from=build --chown=node:node /app/node_modules/sharp ./node_modules/sharp
+COPY --from=build --chown=node:node /app/node_modules/detect-libc ./node_modules/detect-libc
+COPY --from=build --chown=node:node /app/node_modules/semver ./node_modules/semver
 COPY --from=build --chown=node:node /app/node_modules/@img ./node_modules/@img
 # Bulk Capture can queue private background removal. The verified model chunks
 # live in .output/public and inference loads lazily; only ONNX's native runtime
@@ -55,6 +58,9 @@ USER node
 
 # Run the inference contract under the same Node/glibc runtime used by the
 # deployed worker. The Bun build stage is not a valid proxy for native memory.
+# Exercise Sharp itself first so a missing JavaScript package, native addon, or
+# libvips runtime fails the image build before the V3 child starts.
+RUN node --input-type=module -e "const { default: sharp } = await import('sharp'); const png = await sharp({ create: { width: 1, height: 1, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer(); if (png.length < 8 || sharp.versions.sharp !== '0.35.3') throw new Error('Sharp runtime verification failed')"
 RUN node .worker-verify/verify.mjs
 RUN node scripts/verify-vehicle-segmentation-v3-worker-runtime.mjs
 

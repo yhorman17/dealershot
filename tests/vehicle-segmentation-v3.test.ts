@@ -260,6 +260,12 @@ test("V3 is enabled only in the hosted worker and rolls out as review-required d
   assert.match(dockerfile, /\.worker-v3/);
   assert.match(dockerfile, /worker-assets\/vehicle-segmentation-v3/);
   assert.match(dockerfile, /verify-vehicle-segmentation-v3-worker-runtime\.mjs/);
+  assert.match(dockerfile, /node_modules\/sharp \.\/node_modules\/sharp/);
+  assert.match(dockerfile, /node_modules\/detect-libc \.\/node_modules\/detect-libc/);
+  assert.match(dockerfile, /node_modules\/semver \.\/node_modules\/semver/);
+  assert.match(dockerfile, /node_modules\/@img \.\/node_modules\/@img/);
+  assert.match(dockerfile, /await import\('sharp'\)/);
+  assert.match(dockerfile, /sharp\.versions\.sharp !== '0\.35\.3'/);
   assert.match(reviewRolloutMigration, /worker_commit_vehicle_segmentation_v3_review/);
   assert.match(reviewRolloutMigration, /'needs_review'/);
   assert.match(reviewRolloutMigration, /'auto_promoted', false/);
