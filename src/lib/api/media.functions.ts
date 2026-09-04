@@ -279,6 +279,7 @@ export const getAuthorizedMediaVariantUrl = createServerFn({ method: "POST" })
 const prepareVariantInput = z.object({
   photo_id: uuidSchema,
   variant_type: z.enum(["cutout", "corrected_cutout", "customized", "enhanced", "dealer_render"]),
+  source_mode: z.enum(["approved", "original", "active_cutout"]).default("approved"),
   content_type: allowedMime,
   byte_size: z.number().int().min(1).max(MAX_IMAGE_BYTES),
 });
@@ -289,14 +290,27 @@ export const preparePrivateVariantUpload = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: photo, error: photoError } = await context.supabase
       .from("photos")
-      .select("id, vehicle_id, media_asset_id, approved_variant_id")
+      .select(
+        "id, vehicle_id, media_asset_id, approved_variant_id, cutout_image_url, corrected_cutout_url",
+      )
       .eq("id", data.photo_id)
       .maybeSingle();
     if (photoError || !photo?.media_asset_id)
       throw new Error(photoError?.message || "Photo not found.");
+    const cutoutReference = photo.corrected_cutout_url || photo.cutout_image_url;
+    const cutoutVariantMatch =
+      data.source_mode === "active_cutout" && cutoutReference
+        ? /^private-media:\/\/([0-9a-f-]{36})$/i.exec(cutoutReference)
+        : null;
+    if (data.source_mode === "active_cutout" && !cutoutVariantMatch)
+      throw new Error("The cutout source variant is unavailable.");
     const { data: manifestValue, error: manifestError } = await context.supabase.rpc(
       "get_media_delivery_manifest",
-      { _media_asset_id: photo.media_asset_id, _purpose: "editor" },
+      {
+        _media_asset_id: photo.media_asset_id,
+        _purpose: data.source_mode === "original" ? "original" : "editor",
+        _variant_id: cutoutVariantMatch?.[1] ?? undefined,
+      },
     );
     if (manifestError) throw new Error(manifestError.message);
     const manifest = parseJsonObject<DeliveryManifest>(manifestValue);
@@ -313,7 +327,10 @@ export const preparePrivateVariantUpload = createServerFn({ method: "POST" })
       token: target.token,
       variant_id: variantId,
       media_asset_id: photo.media_asset_id,
-      source_variant_id: photo.approved_variant_id ?? manifest.variant_id,
+      source_variant_id:
+        data.source_mode === "approved"
+          ? (photo.approved_variant_id ?? manifest.variant_id)
+          : manifest.variant_id,
     };
   });
 

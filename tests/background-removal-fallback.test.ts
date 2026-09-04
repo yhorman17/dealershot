@@ -16,6 +16,9 @@ const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 const migration = read(
   "supabase/migrations/20260819220143_background_removal_failure_diagnostics.sql",
 );
+const alphaIntegrityMigration = read(
+  "supabase/migrations/20260904213000_automatic_cutout_alpha_integrity.sql",
+);
 
 function rectangleMask(
   width: number,
@@ -68,6 +71,18 @@ test("mask diagnostics distinguish good, fixable, and unusable ISNet output", ()
   assert.equal(ghostedResult.quality, "needs_review");
   assert.ok(ghostedResult.diagnostics.reasons.includes("diffuse_alpha_mask"));
   assert.ok(ghostedResult.diagnostics.reasons.includes("weak_foreground_core"));
+
+  const haze = rectangleMask(100, 80, [{ x: 18, y: 20, width: 64, height: 42 }]);
+  for (let index = 0; index < haze.length; index += 1) {
+    if (haze[index]) continue;
+    haze[index] = 38;
+  }
+  const hazeResult = analyzeBackgroundMask(haze, 100, 80);
+  assert.equal(hazeResult.quality, "bad");
+  assert.ok(hazeResult.diagnostics.reasons.includes("broad_translucent_haze"));
+  assert.ok(hazeResult.diagnostics.reasons.includes("foreground_covers_image"));
+  assert.ok(hazeResult.diagnostics.low_alpha_ratio > 0.5);
+  assert.equal(hazeResult.diagnostics.alpha_histogram.length, 16);
 });
 
 test("automatic processing stays on parity ISNet unless V3 has explicit dual opt-in", () => {
@@ -84,6 +99,22 @@ test("automatic processing stays on parity ISNet unless V3 has explicit dual opt
   assert.match(worker, /model: "isnet_quint8"/);
   assert.match(browser, /model: "isnet_quint8"/);
   assert.match(worker, /kernel: "linear"/);
+  assert.match(worker, /\.greyscale\(\)/);
+  assert.match(worker, /resizedAlpha\.info\.channels !== 1/);
+  assert.match(worker, /analyzeBackgroundMask\(resizedAlpha\.data/);
+  assert.match(worker, /background_output_mask_invalid/);
+});
+
+test("legacy auto cutouts are demoted and previews follow only the approved lineage", () => {
+  assert.match(alphaIntegrityMigration, /processing_provider = 'dealershot-isnet-node'/);
+  assert.match(alphaIntegrityMigration, /variant_role = 'draft'/);
+  assert.match(alphaIntegrityMigration, /approved_variant_id = affected\.original_variant_id/);
+  assert.match(alphaIntegrityMigration, /cutout_image_url = NULL/);
+  assert.match(alphaIntegrityMigration, /is_cutout = false/);
+  assert.match(alphaIntegrityMigration, /cutout_status = 'needs_review'/);
+  assert.match(alphaIntegrityMigration, /source_variant_id = photo\.approved_variant_id/);
+  assert.match(alphaIntegrityMigration, /legacy_output_alpha_channel_corruption/);
+  assert.doesNotMatch(alphaIntegrityMigration, /DELETE FROM public\.media_variants/);
 });
 
 test("failures retain safe categories and only transient work retries automatically", () => {

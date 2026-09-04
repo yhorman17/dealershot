@@ -416,17 +416,16 @@ export async function createTransparentVehicleCutoutResult(original: Buffer) {
   if (releaseFailure) throw releaseFailure;
   const runDurationMs = Math.round(performance.now() - runStartedAt);
   const rssAfter = process.memoryUsage().rss;
-  const { quality, diagnostics } = analyzeBackgroundMask(
-    mask,
-    SEGMENTATION_SIZE,
-    SEGMENTATION_SIZE,
-  );
-  if (minimum === maximum || (quality === "bad" && !diagnostics.draft_usable)) {
+  const modelMaskResult = analyzeBackgroundMask(mask, SEGMENTATION_SIZE, SEGMENTATION_SIZE);
+  if (
+    minimum === maximum ||
+    (modelMaskResult.quality === "bad" && !modelMaskResult.diagnostics.draft_usable)
+  ) {
     throw new BackgroundProcessingError(
       "background_inference_mask_invalid",
       "model_rejection",
       false,
-      diagnostics,
+      modelMaskResult.diagnostics,
     );
   }
 
@@ -443,14 +442,53 @@ export async function createTransparentVehicleCutoutResult(original: Buffer) {
   } catch {
     throw new BackgroundProcessingError("background_source_decode_failed", "source_invalid", false);
   }
-  const alpha = await sharp(mask, {
+  const resizedAlpha = await sharp(mask, {
     raw: { width: SEGMENTATION_SIZE, height: SEGMENTATION_SIZE, channels: 1 },
   })
     .resize(info.width, info.height, { fit: "fill", kernel: "linear" })
+    // Sharp promotes a one-channel raw resize to sRGB unless grayscale output
+    // is requested explicitly. Reading that three-channel buffer as one alpha
+    // plane produced scan-lined, spatially corrupt automatic cutouts.
+    .greyscale()
     .raw()
-    .toBuffer();
+    .toBuffer({ resolveWithObject: true });
+  if (resizedAlpha.info.channels !== 1 || resizedAlpha.data.length !== info.width * info.height) {
+    throw new BackgroundProcessingError(
+      "background_output_alpha_contract_invalid",
+      "resource_failure",
+      false,
+      {
+        stage: "alpha_resample",
+        alpha_channels: resizedAlpha.info.channels,
+        alpha_elements: resizedAlpha.data.length,
+        expected_elements: info.width * info.height,
+      },
+    );
+  }
+  const outputMaskResult = analyzeBackgroundMask(resizedAlpha.data, info.width, info.height);
+  const qualityRank: Record<MaskQuality, number> = { good: 0, needs_review: 1, bad: 2 };
+  const quality =
+    qualityRank[modelMaskResult.quality] >= qualityRank[outputMaskResult.quality]
+      ? modelMaskResult.quality
+      : outputMaskResult.quality;
+  const diagnostics: SafeMaskDiagnostics = {
+    ...outputMaskResult.diagnostics,
+    reasons: [
+      ...new Set([...modelMaskResult.diagnostics.reasons, ...outputMaskResult.diagnostics.reasons]),
+    ],
+    draft_usable:
+      modelMaskResult.diagnostics.draft_usable && outputMaskResult.diagnostics.draft_usable,
+  };
+  if (quality === "bad" && !diagnostics.draft_usable) {
+    throw new BackgroundProcessingError(
+      "background_output_mask_invalid",
+      "model_rejection",
+      false,
+      diagnostics,
+    );
+  }
   for (let pixel = 0; pixel < info.width * info.height; pixel += 1) {
-    sourcePixels[pixel * 4 + 3] = alpha[pixel];
+    sourcePixels[pixel * 4 + 3] = resizedAlpha.data[pixel];
   }
   try {
     const bytes = await sharp(sourcePixels, {
@@ -473,6 +511,9 @@ export async function createTransparentVehicleCutoutResult(original: Buffer) {
         session_run_ms: runDurationMs,
         rss_before_mib: Math.round((rssBefore / 1024 / 1024) * 10) / 10,
         rss_after_mib: Math.round((rssAfter / 1024 / 1024) * 10) / 10,
+        model_mask_quality: modelMaskResult.quality,
+        output_mask_quality: outputMaskResult.quality,
+        output_alpha_channels: resizedAlpha.info.channels,
       },
     };
   } catch {

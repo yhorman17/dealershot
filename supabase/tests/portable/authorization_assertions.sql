@@ -2809,6 +2809,34 @@ SELECT public.worker_commit_background_cutout_result(
   100, 1600, 1200, repeat('c', 64), 'good', '{"fixture":"explicit-reprocess"}'::jsonb
 );
 RESET ROLE;
+-- A preview rendered for the previously approved cutout must not outrank the
+-- newly promoted reprocess result. Until a preview for the new source exists,
+-- delivery falls back to that exact approved cutout.
+INSERT INTO public.media_variants (
+  id, photo_id, media_asset_id, variant_type, source_variant_id, image_url,
+  storage_bucket, storage_path, content_type, processing_provider, processing_status,
+  width, height, byte_size, checksum, variant_role, created_by, metadata
+) VALUES (
+  'fc300000-0000-4000-8000-000000000707',
+  'fc200000-0000-4000-8000-000000000005',
+  'fc100000-0000-4000-8000-000000000005',
+  'preview',
+  'fc300000-0000-4000-8000-000000000505',
+  'private-media://fc300000-0000-4000-8000-000000000707',
+  'dealer-media-private',
+  'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/fc000000-0000-4000-8000-000000000001/media/fc100000-0000-4000-8000-000000000005/variants/preview/stale.webp',
+  'image/webp', 'sharp', 'completed', 640, 480, 80, repeat('d', 64),
+  'display', '00000000-0000-0000-0000-000000000002', '{}'::jsonb
+);
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT manifest->>'variant_id' AS reprocess_preview_variant_id
+FROM (
+  SELECT public.get_media_delivery_manifest(
+    'fc100000-0000-4000-8000-000000000005', 'preview'
+  ) AS manifest
+) AS resolved \gset
+RESET ROLE;
 SELECT test.assert_true(
   (
     SELECT approved_variant_id = 'fc300000-0000-4000-8000-000000000606'
@@ -2822,10 +2850,11 @@ SELECT test.assert_true(
     FROM public.media_variants WHERE id = 'fc300000-0000-4000-8000-000000000606'
   )
   AND (
-    SELECT count(*) = 3 FROM public.media_variants
+    SELECT count(*) = 4 FROM public.media_variants
     WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000005'
-  ),
-  'successful explicit reprocessing promotes the new cutout and preserves prior lineage'
+  )
+  AND :'reprocess_preview_variant_id' = 'fc300000-0000-4000-8000-000000000606',
+  'successful explicit reprocessing promotes the new cutout, preserves lineage, and ignores stale previews'
 );
 DELETE FROM private.background_jobs WHERE id = :'explicit_reprocess_job_id'::uuid;
 DELETE FROM public.media_variants

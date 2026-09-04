@@ -18,8 +18,15 @@ export type SafeMaskDiagnostics = {
   edge_contact_ratio: number;
   hole_ratio: number;
   entropy: number;
+  alpha_histogram: number[];
+  transparent_alpha_ratio: number;
+  low_alpha_ratio: number;
   uncertain_alpha_ratio: number;
+  soft_opaque_alpha_ratio: number;
+  opaque_pixel_ratio: number;
   opaque_core_ratio: number;
+  non_core_alpha_mass_ratio: number;
+  bounding_box_solidity: number;
   bounding_box: { x: number; y: number; width: number; height: number } | null;
   reasons: string[];
   draft_usable: boolean;
@@ -142,7 +149,10 @@ export function analyzeBackgroundMask(alpha: Uint8Array, width: number, height: 
   let edgeForeground = 0;
   let alphaTotal = 0;
   let uncertainAlpha = 0;
+  let lowAlpha = 0;
+  let softOpaqueAlpha = 0;
   let opaqueCore = 0;
+  let nonCoreAlphaMass = 0;
   const edgePixels = Math.max(1, width * 2 + Math.max(0, height - 2) * 2);
 
   for (let index = 0; index < alpha.length; index += 1) {
@@ -151,8 +161,11 @@ export function analyzeBackgroundMask(alpha: Uint8Array, width: number, height: 
     minimum = Math.min(minimum, value);
     maximum = Math.max(maximum, value);
     alphaTotal += value;
+    if (value >= 16 && value <= 63) lowAlpha += 1;
     if (value >= 64 && value <= 191) uncertainAlpha += 1;
+    if (value >= 192 && value <= 223) softOpaqueAlpha += 1;
     if (value >= 224) opaqueCore += 1;
+    else nonCoreAlphaMass += value;
     if (value < 16) continue;
     binary[index] = 1;
     foreground += 1;
@@ -166,6 +179,9 @@ export function analyzeBackgroundMask(alpha: Uint8Array, width: number, height: 
   }
 
   const coverage = foreground / alpha.length;
+  const boundingBoxPixels =
+    maxX >= minX && maxY >= minY ? (maxX - minX + 1) * (maxY - minY + 1) : 0;
+  const boundingBoxSolidity = foreground / Math.max(1, boundingBoxPixels);
   const components = connectedComponents(binary, width, height).sort((a, b) => b - a);
   const largestComponentRatio = foreground > 0 ? (components[0] ?? 0) / foreground : 0;
   const holes = foreground > 0 ? enclosedHolePixels(binary, width, height) / foreground : 0;
@@ -188,8 +204,14 @@ export function analyzeBackgroundMask(alpha: Uint8Array, width: number, height: 
   if (edgeForeground / edgePixels > 0.6) reasons.push("excessive_edge_contact");
   if (holes > 0.35) reasons.push("excessive_holes");
   if (entropy < 0.015) reasons.push("low_mask_entropy");
-  if (uncertainAlpha / alpha.length > 0.24) reasons.push("diffuse_alpha_mask");
+  const softAlphaRatio = (lowAlpha + uncertainAlpha + softOpaqueAlpha) / alpha.length;
+  const nonCoreAlphaMassRatio = nonCoreAlphaMass / Math.max(1, alphaTotal);
+  if (uncertainAlpha / alpha.length > 0.24 || softAlphaRatio > 0.28)
+    reasons.push("diffuse_alpha_mask");
   if (foreground > 0 && opaqueCore / foreground < 0.22) reasons.push("weak_foreground_core");
+  if (nonCoreAlphaMassRatio > 0.42 || (lowAlpha / alpha.length > 0.35 && coverage > 0.8))
+    reasons.push("broad_translucent_haze");
+  if (coverage > 0.08 && boundingBoxSolidity < 0.12) reasons.push("sparse_foreground_box");
 
   const draftUsable =
     coverage >= 0.005 && coverage <= 0.985 && alphaRange >= 8 && largestComponentRatio >= 0.2;
@@ -210,8 +232,15 @@ export function analyzeBackgroundMask(alpha: Uint8Array, width: number, height: 
     edge_contact_ratio: round(edgeForeground / edgePixels),
     hole_ratio: round(holes),
     entropy: round(entropy),
+    alpha_histogram: Array.from(histogram),
+    transparent_alpha_ratio: round(histogram[0] / alpha.length),
+    low_alpha_ratio: round(lowAlpha / alpha.length),
     uncertain_alpha_ratio: round(uncertainAlpha / alpha.length),
+    soft_opaque_alpha_ratio: round(softOpaqueAlpha / alpha.length),
+    opaque_pixel_ratio: round(opaqueCore / alpha.length),
     opaque_core_ratio: round(opaqueCore / Math.max(1, foreground)),
+    non_core_alpha_mass_ratio: round(nonCoreAlphaMassRatio),
+    bounding_box_solidity: round(boundingBoxSolidity),
     bounding_box:
       maxX >= minX && maxY >= minY
         ? {

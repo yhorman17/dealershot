@@ -289,8 +289,9 @@ function buildContactShadowCanvas(
       carHeight * (profile.view === "front" || profile.view === "rear" ? 0.034 : 0.026) * s,
     );
     const zoneCenter = shadowXFor(zone.center);
+    const zoneGroundY = zone.groundY + offsetY;
     ctx.save();
-    ctx.translate(zoneCenter, groundY + zoneDepth * 0.08);
+    ctx.translate(zoneCenter, zoneGroundY + zoneDepth * 0.08);
     ctx.scale(1, zoneDepth / Math.max(1, zoneWidth));
     const contact = ctx.createRadialGradient(0, 0, 0, 0, 0, zoneWidth * 0.52);
     contact.addColorStop(0, `rgba(0,0,0,${opacity * (0.76 + zone.strength * 0.2)})`);
@@ -345,7 +346,8 @@ function buildReflectionCanvas(
   reflectionLayer.height = targetH;
   const reflectionContext = reflectionLayer.getContext("2d")!;
   const sourceW = Math.max(1, bounds.right - bounds.left + 1);
-  const sourceH = Math.max(1, bounds.bottom - bounds.top + 1);
+  const sourceGroundY = Math.max(bounds.top, Math.min(bounds.bottom, analysis.groundY));
+  const sourceH = Math.max(1, sourceGroundY - bounds.top + 1);
   const slices = Math.min(72, Math.max(32, Math.round(sourceH / 8)));
 
   // Warp horizontal silhouette slices independently. The bottom-most source
@@ -354,7 +356,7 @@ function buildReflectionCanvas(
   for (let index = 0; index < slices; index += 1) {
     const near = index / slices;
     const far = (index + 1) / slices;
-    const sourceTop = bounds.bottom + 1 - far * sourceH;
+    const sourceTop = sourceGroundY + 1 - far * sourceH;
     const sourceHeight = Math.max(1, (far - near) * sourceH + 0.75);
     const distance = (near + far) / 2;
     const sliceWidth = reflectionW * (1 - profile.reflection.perspectiveTaper * distance);
@@ -641,6 +643,7 @@ export function BackgroundEditor({
   const [activeTab, setActiveTab] = useState<TabKey>("background");
   const [maskOpen, setMaskOpen] = useState(false);
   const pendingCutoutBlobRef = useRef<Blob | null>(null);
+  const pendingCutoutSourceRef = useRef<"original" | "active_cutout">("active_cutout");
   const sourceBlobRef = useRef<Blob | null>(null);
   const removeInFlightRef = useRef(false);
 
@@ -987,6 +990,7 @@ export function BackgroundEditor({
         if (total > 0) setRemoveProgress(Math.min(100, Math.round((current / total) * 100)));
       });
       pendingCutoutBlobRef.current = blob;
+      pendingCutoutSourceRef.current = "original";
       const url = URL.createObjectURL(blob);
       if (cutoutUrlRef.current) URL.revokeObjectURL(cutoutUrlRef.current);
       cutoutUrlRef.current = url;
@@ -1007,6 +1011,7 @@ export function BackgroundEditor({
       const correctedImage = await loadImage(url);
       const previousUrl = cutoutUrlRef.current;
       pendingCutoutBlobRef.current = blob;
+      pendingCutoutSourceRef.current = "active_cutout";
       cutoutUrlRef.current = url;
       setRawCutoutImg(correctedImage);
       if (previousUrl) URL.revokeObjectURL(previousUrl);
@@ -1244,6 +1249,7 @@ export function BackgroundEditor({
           blob: pendingCutoutBlobRef.current,
           variantType: photo.cutout_image_url ? "corrected_cutout" : "cutout",
           processingProvider: "imgly-client",
+          sourceMode: pendingCutoutSourceRef.current,
         });
         cutoutUrl = URL.createObjectURL(pendingCutoutBlobRef.current);
       }

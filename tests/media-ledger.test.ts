@@ -34,6 +34,9 @@ const mediaRelationshipIndexes = readFileSync(
   "utf8",
 );
 const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
+const mediaApi = readFileSync(path.join(root, "src/lib/api/media.functions.ts"), "utf8");
+const privateMedia = readFileSync(path.join(root, "src/lib/private-media.ts"), "utf8");
+const editor = readFileSync(path.join(root, "src/components/BackgroundEditor.tsx"), "utf8");
 
 const mediaAssetId = "10000000-0000-0000-0000-000000000001";
 const migrationId = "20000000-0000-0000-0000-000000000001";
@@ -189,6 +192,16 @@ test("media ledger migration enforces private identity, lineage, and trusted fin
     migration,
     /GRANT EXECUTE ON FUNCTION public\.finalize_private_photo_upload\([\s\S]{0,220}\) TO service_role/,
   );
+});
+
+test("manual Create New Cutout records immutable-original lineage", () => {
+  assert.match(mediaApi, /source_mode: z\.enum\(\["approved", "original", "active_cutout"\]\)/);
+  assert.match(mediaApi, /data\.source_mode === "original" \? "original" : "editor"/);
+  assert.match(mediaApi, /data\.source_mode === "active_cutout"/);
+  assert.match(privateMedia, /sourceMode\?: "approved" \| "original" \| "active_cutout"/);
+  assert.match(editor, /pendingCutoutSourceRef\.current = "original"/);
+  assert.match(editor, /pendingCutoutSourceRef\.current = "active_cutout"/);
+  assert.match(editor, /sourceMode: pendingCutoutSourceRef\.current/);
 });
 
 test("worker creates and maintains a private constrained media bucket", async () => {

@@ -69,7 +69,7 @@ test("uncertain silhouettes choose reduced effects instead of an obvious generic
   const profile = buildGroundEffectProfile(analysis);
 
   assert.ok(analysis.alphaCoverage < 0.015);
-  assert.equal(profile.reflection.opacity, 3);
+  assert.equal(profile.reflection.opacity, 0);
   assert.equal(profile.shadow.opacity, 18);
   assert.ok(profile.reflection.heightFactor <= 0.2);
   assert.ok(profile.reflection.widthFactor <= 0.76);
@@ -124,7 +124,7 @@ test("alpha analysis anchors effects to the actual lower contact region", () => 
   assert.ok(analysis.lowerContour.length >= 20);
 });
 
-test("front, rear, side, and three-quarter fixtures share the framing ground plane", () => {
+test("front, rear, side, and three-quarter fixtures share one plane without flattening far contacts", () => {
   const fixtures = [
     { label: "Front", width: 160, left: 45, right: 115 },
     { label: "Rear", width: 160, left: 43, right: 117 },
@@ -144,8 +144,9 @@ test("front, rear, side, and three-quarter fixtures share the framing ground pla
     const geometry = buildGroundPlaneGeometry(fixture.width, 140, analysis);
     assert.ok(Math.abs(geometry.baseline - geometry.frame.groundBaseline) < 0.001);
     assert.ok(geometry.contactZones.length >= 2, fixture.label);
+    assert.ok(geometry.contactZones.every((zone) => zone.groundY <= geometry.frame.groundBaseline));
     assert.ok(
-      geometry.contactZones.every(
+      geometry.contactZones.some(
         (zone) => Math.abs(zone.groundY - geometry.frame.groundBaseline) < 0.001,
       ),
       fixture.label,
@@ -172,7 +173,24 @@ test("ground-plane projection follows manual vehicle adjustments without stale a
   assert.ok(adjusted.baseline < automatic.baseline);
   assert.ok(adjusted.contactCenter > automatic.contactCenter);
   assert.ok(adjusted.vehicleWidth < automatic.vehicleWidth);
-  assert.ok(Math.abs(adjusted.contactZones[0]!.groundY - adjusted.baseline) < 0.001);
+  assert.ok(adjusted.contactZones.every((zone) => zone.groundY <= adjusted.baseline));
+});
+
+test("wide asymmetric dealership silhouettes remain three-quarter and recover two supports", () => {
+  const wideThreeQuarter = alphaMask(240, 140, (x, y) => {
+    const bodyBottom = Math.round(92 + ((x - 24) / 190) * 8);
+    const body = x >= 24 && x <= 214 && y >= 32 && y <= bodyBottom;
+    const nearWheel = x >= 126 && x <= 158 && y >= 86 && y <= 126;
+    const farWheel = x >= 48 && x <= 70 && y >= 84 && y <= 113;
+    return body || nearWheel || farWheel;
+  });
+  const analysis = analyzeVehicleAlpha(wideThreeQuarter, 240, 140);
+  const geometry = buildGroundPlaneGeometry(240, 140, analysis);
+
+  assert.equal(analysis.view, "three-quarter");
+  assert.ok(analysis.contactZones.length >= 2);
+  assert.ok(new Set(geometry.contactZones.map((zone) => Math.round(zone.groundY))).size >= 2);
+  assert.equal(Math.max(...geometry.contactZones.map((zone) => zone.groundY)), geometry.baseline);
 });
 
 test("rendering remains silhouette-based and manual controls remain wired", async () => {
@@ -187,7 +205,9 @@ test("rendering remains silhouette-based and manual controls remain wired", asyn
   assert.match(editor, /profile\.reflection\.heightFactor/);
   assert.match(editor, /buildGroundPlaneGeometry/);
   assert.match(editor, /geometry\.contactZones/);
+  assert.match(editor, /const zoneGroundY = zone\.groundY \+ offsetY/);
   assert.match(editor, /profile\.reflection\.perspectiveTaper/);
+  assert.match(editor, /const sourceGroundY =/);
   assert.match(editor, /const slices =/);
   assert.match(editor, /createRadialGradient/);
   assert.match(editor, /buildVehicleCompositionFrame/);

@@ -155,6 +155,7 @@ export async function uploadPrivateVariant(input: {
   blob: Blob;
   variantType: "cutout" | "corrected_cutout" | "customized" | "enhanced" | "dealer_render";
   processingProvider: string;
+  sourceMode?: "approved" | "original" | "active_cutout";
 }) {
   const contentType = normalizedImageMime(input.blob.type);
   if (!contentType) throw new Error("Editor output must be JPEG, PNG, or WebP.");
@@ -162,6 +163,7 @@ export async function uploadPrivateVariant(input: {
     data: {
       photo_id: input.photoId,
       variant_type: input.variantType,
+      source_mode: input.sourceMode ?? "approved",
       content_type: contentType,
       byte_size: input.blob.size,
     },
