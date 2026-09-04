@@ -22,6 +22,7 @@ export type BackgroundRemovalQueueResult = {
   needs_review_existing_count: number;
   invalid_media_count: number;
   failed_to_queue_count: number;
+  reprocessed_count: number;
   skipped_count: number;
   outcomes: BackgroundRemovalQueueItem[];
 };
@@ -40,13 +41,17 @@ export type BackgroundRemovalQueueFeedback = {
   shouldLeaveReview: boolean;
 };
 
-export function queueableReviewPhotoIds(items: ReviewQueueItem[], exteriorOnly = false) {
+export function queueableReviewPhotoIds(
+  items: ReviewQueueItem[],
+  exteriorOnly = false,
+  includeCompleted = false,
+) {
   return items
     .filter(
       (item) =>
         item.processing_state !== "queued" &&
         item.processing_state !== "processing" &&
-        item.processing_state !== "ready" &&
+        (includeCompleted || item.processing_state !== "ready") &&
         (!exteriorOnly || item.media_category === "exterior"),
     )
     .map((item) => item.id);
@@ -78,6 +83,7 @@ export function parseBackgroundRemovalQueueResult(value: unknown): BackgroundRem
     needs_review_existing_count: count("needs_review_existing_count"),
     invalid_media_count: count("invalid_media_count"),
     failed_to_queue_count: count("failed_to_queue_count"),
+    reprocessed_count: count("reprocessed_count"),
     skipped_count: count("skipped_count"),
     outcomes,
   };
@@ -85,9 +91,14 @@ export function parseBackgroundRemovalQueueResult(value: unknown): BackgroundRem
 
 export function describeBackgroundRemovalQueueResult(
   result: BackgroundRemovalQueueResult,
+  options: { explicitReprocess?: boolean } = {},
 ): BackgroundRemovalQueueFeedback {
   const parts = [
-    result.queued_count ? `${result.queued_count} queued` : "",
+    result.queued_count
+      ? options.explicitReprocess
+        ? `${result.queued_count} queued from original`
+        : `${result.queued_count} queued`
+      : "",
     result.already_active_count ? `${result.already_active_count} already processing` : "",
     result.already_completed_count ? `${result.already_completed_count} already completed` : "",
     result.needs_review_existing_count
@@ -107,8 +118,12 @@ export function describeBackgroundRemovalQueueResult(
   if (result.queued_count > 0) {
     return {
       kind: "success",
-      title: "Photo review complete",
-      description: `${parts.join(" · ")}. Processing continues in the background.`,
+      title: options.explicitReprocess
+        ? "Automatic cutout reprocessing queued"
+        : "Photo review complete",
+      description: options.explicitReprocess
+        ? `${parts.join(" · ")}. DealerShot will use the immutable original and make a successful new cutout active.`
+        : `${parts.join(" · ")}. Processing continues in the background.`,
       shouldLeaveReview: true,
     };
   }

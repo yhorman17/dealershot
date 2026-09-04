@@ -212,6 +212,19 @@ SELECT test.assert_true(
   ),
   'existing vehicle photo review queue is authenticated-only'
 );
+SELECT test.assert_true(
+  has_function_privilege(
+    'authenticated',
+    'public.reprocess_vehicle_background_removal(uuid,uuid[])',
+    'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'anon',
+    'public.reprocess_vehicle_background_removal(uuid,uuid[])',
+    'EXECUTE'
+  ),
+  'explicit vehicle photo reprocessing is authenticated-only'
+);
 
 SET ROLE authenticated;
 SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
@@ -229,6 +242,14 @@ SELECT test.expect_sqlstate(
   )$$,
   '42501',
   'cross-store vehicle review is denied'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.reprocess_vehicle_background_removal(
+    '10000000-0000-0000-0000-000000000003',
+    ARRAY[]::uuid[]
+  )$$,
+  '42501',
+  'cross-store explicit vehicle reprocessing is denied'
 );
 RESET ROLE;
 
@@ -308,6 +329,14 @@ SELECT test.expect_sqlstate(
   )$$,
   '42501',
   'capture-only staff cannot queue office media review work'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.reprocess_vehicle_background_removal(
+    '10000000-0000-0000-0000-000000000001',
+    ARRAY[]::uuid[]
+  )$$,
+  '42501',
+  'capture-only staff cannot explicitly reprocess office media'
 );
 RESET ROLE;
 
@@ -2666,6 +2695,143 @@ SELECT test.assert_true(
   ),
   'a dead-letter generation remains auditable and does not block a new Review request'
 );
+
+-- Passive Review still skips a completed cutout. The separate explicit action
+-- creates one new generation from the original variant, preserves the existing
+-- cutout, and remains idempotent while that generation is active.
+INSERT INTO public.media_assets (
+  id, organization_id, dealership_id, vehicle_id, uploaded_by,
+  source_type, content_type, byte_size, checksum_sha256,
+  storage_bucket, storage_object_path
+) VALUES (
+  'fc100000-0000-4000-8000-000000000005',
+  '11111111-aaaa-4000-8000-000000000001',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  'fc000000-0000-4000-8000-000000000001',
+  '00000000-0000-0000-0000-000000000002',
+  'capture', 'image/jpeg', 100, repeat('a', 64), 'dealer-media-private',
+  'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/fc000000-0000-4000-8000-000000000001/media/fc100000-0000-4000-8000-000000000005/original/source.jpg'
+);
+INSERT INTO public.photos (
+  id, vehicle_id, media_asset_id, image_url, original_image_url
+) VALUES (
+  'fc200000-0000-4000-8000-000000000005',
+  'fc000000-0000-4000-8000-000000000001',
+  'fc100000-0000-4000-8000-000000000005',
+  'private-media://fc300000-0000-4000-8000-000000000005',
+  'private-media://fc300000-0000-4000-8000-000000000005'
+);
+UPDATE public.media_variants
+SET storage_bucket = 'dealer-media-private',
+    storage_path = 'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/fc000000-0000-4000-8000-000000000001/media/fc100000-0000-4000-8000-000000000005/original/source.jpg',
+    content_type = 'image/jpeg', byte_size = 100, checksum = repeat('a', 64)
+WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000005'
+  AND variant_type = 'original';
+INSERT INTO public.media_variants (
+  id, photo_id, media_asset_id, variant_type, source_variant_id, image_url,
+  storage_bucket, storage_path, content_type, processing_provider, processing_status,
+  width, height, byte_size, checksum, variant_role, created_by, metadata
+)
+SELECT
+  'fc300000-0000-4000-8000-000000000505', photo.id, asset.id, 'cutout', original.id,
+  'private-media://fc300000-0000-4000-8000-000000000505',
+  'dealer-media-private',
+  'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/fc000000-0000-4000-8000-000000000001/media/fc100000-0000-4000-8000-000000000005/variants/cutout/completed.png',
+  'image/png', 'dealershot-isnet-node', 'completed', 1600, 1200, 100, repeat('b', 64),
+  'prepared', '00000000-0000-0000-0000-000000000002',
+  '{"quality_class":"good","auto_promoted":true}'::jsonb
+FROM public.media_assets AS asset
+JOIN public.photos AS photo ON photo.media_asset_id = asset.id
+JOIN public.media_variants AS original ON original.media_asset_id = asset.id
+  AND original.variant_type = 'original'
+WHERE asset.id = 'fc100000-0000-4000-8000-000000000005';
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT (result->>'already_completed_count')::integer AS passive_completed_skip_count
+FROM (
+  SELECT public.queue_vehicle_background_removal(
+    'fc000000-0000-4000-8000-000000000001',
+    ARRAY['fc100000-0000-4000-8000-000000000005'::uuid]
+  ) AS result
+) AS passive \gset
+SELECT
+  (result->>'queued_count')::integer AS explicit_reprocess_queued_count,
+  (result->>'reprocessed_count')::integer AS explicit_reprocess_count,
+  result->'outcomes'->0->>'job_id' AS explicit_reprocess_job_id,
+  result->'outcomes'->0->>'source_variant_id' AS explicit_reprocess_source_id
+FROM (
+  SELECT public.reprocess_vehicle_background_removal(
+    'fc000000-0000-4000-8000-000000000001',
+    ARRAY['fc100000-0000-4000-8000-000000000005'::uuid]
+  ) AS result
+) AS explicit \gset
+SELECT (result->>'already_active_count')::integer AS explicit_reprocess_duplicate_count
+FROM (
+  SELECT public.reprocess_vehicle_background_removal(
+    'fc000000-0000-4000-8000-000000000001',
+    ARRAY['fc100000-0000-4000-8000-000000000005'::uuid]
+  ) AS result
+) AS duplicate \gset
+RESET ROLE;
+SELECT test.assert_true(
+  :'passive_completed_skip_count'::integer = 1
+  AND :'explicit_reprocess_queued_count'::integer = 1
+  AND :'explicit_reprocess_count'::integer = 1
+  AND :'explicit_reprocess_duplicate_count'::integer = 1
+  AND :'explicit_reprocess_source_id' = (
+    SELECT id::text FROM public.media_variants
+    WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000005'
+      AND variant_type = 'original'
+  )
+  AND (
+    SELECT payload->>'request_mode' = 'explicit_reprocess_from_original'
+      AND payload->>'source_variant_id' = :'explicit_reprocess_source_id'
+    FROM private.background_jobs
+    WHERE id = :'explicit_reprocess_job_id'::uuid
+  )
+  AND (
+    SELECT count(*) = 2 FROM public.media_variants
+    WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000005'
+  ),
+  'explicit Review reprocessing uses the original, preserves history, and reuses active work'
+);
+UPDATE private.background_jobs
+SET status = 'running', lease_owner = 'explicit-reprocess-worker',
+    lease_expires_at = now() + interval '1 minute'
+WHERE id = :'explicit_reprocess_job_id'::uuid;
+SET ROLE service_role;
+SELECT public.worker_commit_background_cutout_result(
+  :'explicit_reprocess_job_id'::uuid,
+  'fc300000-0000-4000-8000-000000000606',
+  'dealer-media-private',
+  'stores/aaaaaaaa-0000-0000-0000-000000000001/vehicles/fc000000-0000-4000-8000-000000000001/media/fc100000-0000-4000-8000-000000000005/variants/cutout/reprocessed.png',
+  100, 1600, 1200, repeat('c', 64), 'good', '{"fixture":"explicit-reprocess"}'::jsonb
+);
+RESET ROLE;
+SELECT test.assert_true(
+  (
+    SELECT approved_variant_id = 'fc300000-0000-4000-8000-000000000606'
+      AND image_url = 'private-media://fc300000-0000-4000-8000-000000000606'
+    FROM public.photos WHERE id = 'fc200000-0000-4000-8000-000000000005'
+  )
+  AND (
+    SELECT source_variant_id::text = :'explicit_reprocess_source_id'
+      AND variant_role = 'prepared'
+      AND metadata->>'job_id' = :'explicit_reprocess_job_id'
+    FROM public.media_variants WHERE id = 'fc300000-0000-4000-8000-000000000606'
+  )
+  AND (
+    SELECT count(*) = 3 FROM public.media_variants
+    WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000005'
+  ),
+  'successful explicit reprocessing promotes the new cutout and preserves prior lineage'
+);
+DELETE FROM private.background_jobs WHERE id = :'explicit_reprocess_job_id'::uuid;
+DELETE FROM public.media_variants
+WHERE media_asset_id = 'fc100000-0000-4000-8000-000000000005';
+DELETE FROM public.photos WHERE id = 'fc200000-0000-4000-8000-000000000005';
+DELETE FROM public.media_assets WHERE id = 'fc100000-0000-4000-8000-000000000005';
 
 -- Bulk processing controls operate once per authorized store, reuse the
 -- single-job locking semantics, skip deterministic failures, and never touch

@@ -4,6 +4,7 @@ import {
   analyzeVehicleAlpha,
   buildVehicleCompositionFrame,
   buildGroundEffectProfile,
+  buildGroundPlaneGeometry,
   PREPARED_IMAGE_HEIGHT,
   PREPARED_IMAGE_WIDTH,
 } from "../src/lib/vehicle-ground-effects.ts";
@@ -116,6 +117,62 @@ test("alpha analysis anchors effects to the actual lower contact region", () => 
   assert.ok(analysis.contactBounds.left >= analysis.bounds.left);
   assert.ok(analysis.contactBounds.right <= analysis.bounds.right);
   assert.ok(Math.abs(analysis.contactBounds.center - 102) < 5);
+  assert.equal(analysis.contactZones.length, 2);
+  assert.ok(Math.abs(analysis.contactZones[0]!.center - 53.5) < 3);
+  assert.ok(Math.abs(analysis.contactZones[1]!.center - 150.5) < 3);
+  assert.equal(analysis.groundY, 106);
+  assert.ok(analysis.lowerContour.length >= 20);
+});
+
+test("front, rear, side, and three-quarter fixtures share the framing ground plane", () => {
+  const fixtures = [
+    { label: "Front", width: 160, left: 45, right: 115 },
+    { label: "Rear", width: 160, left: 43, right: 117 },
+    { label: "Driver side", width: 220, left: 20, right: 200 },
+    { label: "Front 3/4", width: 210, left: 24, right: 190 },
+    { label: "Rear 3/4", width: 210, left: 22, right: 188 },
+  ];
+
+  for (const fixture of fixtures) {
+    const rgba = alphaMask(fixture.width, 140, (x, y) => {
+      const body = x >= fixture.left && x <= fixture.right && y >= 34 && y <= 102;
+      const leftWheel = x >= fixture.left + 14 && x <= fixture.left + 30 && y >= 96 && y <= 120;
+      const rightWheel = x >= fixture.right - 30 && x <= fixture.right - 14 && y >= 96 && y <= 120;
+      return body || leftWheel || rightWheel;
+    });
+    const analysis = analyzeVehicleAlpha(rgba, fixture.width, 140, fixture.label);
+    const geometry = buildGroundPlaneGeometry(fixture.width, 140, analysis);
+    assert.ok(Math.abs(geometry.baseline - geometry.frame.groundBaseline) < 0.001);
+    assert.ok(geometry.contactZones.length >= 2, fixture.label);
+    assert.ok(
+      geometry.contactZones.every(
+        (zone) => Math.abs(zone.groundY - geometry.frame.groundBaseline) < 0.001,
+      ),
+      fixture.label,
+    );
+    assert.ok(geometry.contactLeft >= geometry.vehicleLeft, fixture.label);
+    assert.ok(geometry.contactRight <= geometry.vehicleRight, fixture.label);
+  }
+});
+
+test("ground-plane projection follows manual vehicle adjustments without stale anchors", () => {
+  const rgba = alphaMask(240, 150, (x, y) => {
+    const body = x >= 32 && x <= 208 && y >= 40 && y <= 108;
+    const wheels = ((x >= 52 && x <= 76) || (x >= 164 && x <= 188)) && y >= 100 && y <= 132;
+    return body || wheels;
+  });
+  const analysis = analyzeVehicleAlpha(rgba, 240, 150, "Front 3/4");
+  const automatic = buildGroundPlaneGeometry(240, 150, analysis);
+  const adjusted = buildGroundPlaneGeometry(240, 150, analysis, 1600, 1200, {
+    offsetXPct: 4,
+    offsetYPct: -2,
+    scalePct: 92,
+  });
+
+  assert.ok(adjusted.baseline < automatic.baseline);
+  assert.ok(adjusted.contactCenter > automatic.contactCenter);
+  assert.ok(adjusted.vehicleWidth < automatic.vehicleWidth);
+  assert.ok(Math.abs(adjusted.contactZones[0]!.groundY - adjusted.baseline) < 0.001);
 });
 
 test("rendering remains silhouette-based and manual controls remain wired", async () => {
@@ -128,7 +185,10 @@ test("rendering remains silhouette-based and manual controls remain wired", asyn
   assert.match(editor, /buildContactShadowCanvas/);
   assert.match(editor, /buildReflectionCanvas/);
   assert.match(editor, /profile\.reflection\.heightFactor/);
-  assert.match(editor, /analysis\.contactBounds/);
+  assert.match(editor, /buildGroundPlaneGeometry/);
+  assert.match(editor, /geometry\.contactZones/);
+  assert.match(editor, /profile\.reflection\.perspectiveTaper/);
+  assert.match(editor, /const slices =/);
   assert.match(editor, /createRadialGradient/);
   assert.match(editor, /buildVehicleCompositionFrame/);
   assert.match(editor, /PREPARED_IMAGE_WIDTH/);
@@ -136,4 +196,5 @@ test("rendering remains silhouette-based and manual controls remain wired", asyn
   assert.match(editor, /trackGroundEffect\(setShadowOpacity\)/);
   assert.match(editor, /trackGroundEffect\(setReflectionOpacity\)/);
   assert.doesNotMatch(editor, /buildOvalShadowCanvas/);
+  assert.doesNotMatch(editor, /drawTintedProjection/);
 });

@@ -70,6 +70,7 @@ function ExistingVehicleReviewPage() {
   const [items, setItems] = useState<ReviewPhotoItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedForProcessing, setSelectedForProcessing] = useState<Set<string>>(new Set());
+  const [reprocessCompleted, setReprocessCompleted] = useState(false);
   const [stage, setStage] = useState<"review" | "processing">("review");
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -230,12 +231,16 @@ function ExistingVehicleReviewPage() {
     try {
       const mediaIds = selectedMediaAssetIds(items, selectedForProcessing);
       const { data, error: queueError } = await supabase.rpc(
-        "queue_vehicle_background_removal" as never,
+        (reprocessCompleted
+          ? "reprocess_vehicle_background_removal"
+          : "queue_vehicle_background_removal") as never,
         { _vehicle_id: id, _media_asset_ids: mediaIds } as never,
       );
       if (queueError) throw queueError;
       const result = parseBackgroundRemovalQueueResult(data);
-      const feedback = describeBackgroundRemovalQueueResult(result);
+      const feedback = describeBackgroundRemovalQueueResult(result, {
+        explicitReprocess: reprocessCompleted,
+      });
       if (result.queued_count) announceBackgroundProcessingChange();
       toast[feedback.kind](feedback.title, { description: feedback.description });
       if (!feedback.shouldLeaveReview) {
@@ -356,6 +361,8 @@ function ExistingVehicleReviewPage() {
           busy={busy}
           onChange={setSelectedForProcessing}
           onDone={() => void finish()}
+          reprocessCompleted={reprocessCompleted}
+          onReprocessCompletedChange={setReprocessCompleted}
         />
       )}
       {retakeItem && (

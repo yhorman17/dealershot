@@ -14,9 +14,22 @@ export type SilhouetteBounds = {
   right: number;
 };
 
+export type VehicleContactZone = {
+  left: number;
+  right: number;
+  center: number;
+  groundY: number;
+  strength: number;
+};
+
+export type SilhouetteContourPoint = { x: number; y: number };
+
 export type VehicleSilhouetteAnalysis = {
   bounds: SilhouetteBounds;
   contactBounds: { left: number; right: number; center: number };
+  contactZones: VehicleContactZone[];
+  lowerContour: SilhouetteContourPoint[];
+  groundY: number;
   view: VehicleView;
   viewConfidence: number;
   silhouetteAspect: number;
@@ -42,6 +55,7 @@ export type GroundEffectProfile = {
     heightFactor: number;
     blurFactor: number;
     skew: number;
+    perspectiveTaper: number;
   };
 };
 
@@ -55,6 +69,20 @@ export type VehicleCompositionFrame = {
   height: number;
   groundBaseline: number;
   visibleBounds: SilhouetteBounds;
+};
+
+export type GroundPlaneGeometry = {
+  frame: VehicleCompositionFrame;
+  baseline: number;
+  vehicleLeft: number;
+  vehicleRight: number;
+  vehicleWidth: number;
+  vehicleHeight: number;
+  contactLeft: number;
+  contactRight: number;
+  contactCenter: number;
+  contactZones: VehicleContactZone[];
+  lowerContour: SilhouetteContourPoint[];
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -105,7 +133,8 @@ export function buildVehicleCompositionFrame(
     targetHeight * fit.baseline + ((options.offsetYPct ?? 0) / 100) * targetHeight;
   const x =
     targetWidth / 2 - visibleCenterX * scale + ((options.offsetXPct ?? 0) / 100) * targetWidth;
-  const y = groundBaseline - (bounds.bottom + 1) * scale;
+  const sourceGroundY = analysis.alphaCoverage > 0 ? analysis.groundY : bounds.bottom;
+  const y = groundBaseline - (sourceGroundY + 1) * scale;
 
   return {
     x,
@@ -119,6 +148,57 @@ export function buildVehicleCompositionFrame(
       left: x + bounds.left * scale,
       right: x + (bounds.right + 1) * scale,
     },
+  };
+}
+
+/**
+ * Project the analyzed silhouette onto the same stage-space ground plane used
+ * by automatic framing. Shadows and reflections consume this shared geometry
+ * so car movement can never leave the effects anchored to stale PNG bounds.
+ */
+export function buildGroundPlaneGeometry(
+  sourceWidth: number,
+  sourceHeight: number,
+  analysis: VehicleSilhouetteAnalysis,
+  targetWidth = PREPARED_IMAGE_WIDTH,
+  targetHeight = PREPARED_IMAGE_HEIGHT,
+  options: { offsetXPct?: number; offsetYPct?: number; scalePct?: number } = {},
+): GroundPlaneGeometry {
+  const frame = buildVehicleCompositionFrame(
+    sourceWidth,
+    sourceHeight,
+    analysis,
+    targetWidth,
+    targetHeight,
+    options,
+  );
+  const scale = frame.width / Math.max(1, sourceWidth);
+  const bounds = analysis.bounds;
+  const projectX = (x: number) => frame.x + x * scale;
+  const projectY = (y: number) => frame.y + y * scale;
+  const contactZones = analysis.contactZones.map((zone) => ({
+    ...zone,
+    left: projectX(zone.left),
+    right: projectX(zone.right + 1),
+    center: projectX(zone.center),
+    groundY: frame.groundBaseline,
+  }));
+
+  return {
+    frame,
+    baseline: frame.groundBaseline,
+    vehicleLeft: projectX(bounds.left),
+    vehicleRight: projectX(bounds.right + 1),
+    vehicleWidth: Math.max(1, (bounds.right - bounds.left + 1) * scale),
+    vehicleHeight: Math.max(1, (bounds.bottom - bounds.top + 1) * scale),
+    contactLeft: projectX(analysis.contactBounds.left),
+    contactRight: projectX(analysis.contactBounds.right + 1),
+    contactCenter: projectX(analysis.contactBounds.center),
+    contactZones,
+    lowerContour: analysis.lowerContour.map((point) => ({
+      x: projectX(point.x),
+      y: projectY(point.y),
+    })),
   };
 }
 
@@ -157,6 +237,8 @@ export function analyzeVehicleAlpha(
   let right = -1;
   let alphaPixels = 0;
   let weightedX = 0;
+  const bottomByX = new Int32Array(Math.max(1, width));
+  bottomByX.fill(-1);
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -168,6 +250,7 @@ export function analyzeVehicleAlpha(
       bottom = Math.max(bottom, y);
       left = Math.min(left, x);
       right = Math.max(right, x);
+      bottomByX[x] = Math.max(bottomByX[x] ?? -1, y);
     }
   }
 
@@ -179,6 +262,9 @@ export function analyzeVehicleAlpha(
         right: Math.max(0, width - 1),
         center: Math.max(0, width - 1) / 2,
       },
+      contactZones: [],
+      lowerContour: [],
+      groundY: Math.max(0, height - 1),
       view: "unknown",
       viewConfidence: 0,
       silhouetteAspect: width / Math.max(1, height),
@@ -214,6 +300,89 @@ export function analyzeVehicleAlpha(
     contactRight = right;
   }
 
+  const contourColumns = Array.from({ length: boundsWidth }, (_, index) => ({
+    x: left + index,
+    y: bottomByX[left + index] ?? -1,
+  })).filter((point) => point.y >= 0);
+  const sortedBottoms = contourColumns.map((point) => point.y).sort((a, b) => a - b);
+  const groundY =
+    sortedBottoms[Math.min(sortedBottoms.length - 1, Math.floor(sortedBottoms.length * 0.9))] ??
+    bottom;
+  const groundTolerance = Math.max(2, Math.round(boundsHeight * 0.045));
+  const mergeGap = Math.max(1, Math.round(boundsWidth * 0.018));
+  const minimumZoneWidth = Math.max(2, Math.round(boundsWidth * 0.018));
+  const groundedColumns = contourColumns.filter((point) => point.y >= groundY - groundTolerance);
+  const grouped: Array<{ left: number; right: number; ys: number[] }> = [];
+
+  for (const point of groundedColumns) {
+    const current = grouped.at(-1);
+    if (!current || point.x - current.right > mergeGap + 1) {
+      grouped.push({ left: point.x, right: point.x, ys: [point.y] });
+    } else {
+      current.right = point.x;
+      current.ys.push(point.y);
+    }
+  }
+
+  let contactZones = grouped
+    .filter((zone) => zone.right - zone.left + 1 >= minimumZoneWidth)
+    .map((zone): VehicleContactZone => {
+      const zoneWidth = zone.right - zone.left + 1;
+      const zoneGroundY = Math.max(...zone.ys);
+      const verticalConfidence =
+        zone.ys.reduce(
+          (sum, value) => sum + clamp(1 - (groundY - value) / (groundTolerance + 1), 0, 1),
+          0,
+        ) / Math.max(1, zone.ys.length);
+      return {
+        left: zone.left,
+        right: zone.right,
+        center: (zone.left + zone.right) / 2,
+        groundY: zoneGroundY,
+        strength: clamp(verticalConfidence * Math.sqrt(zoneWidth / boundsWidth) * 2.4, 0.35, 1),
+      };
+    });
+
+  if (contactZones.length === 0) {
+    contactZones = [
+      {
+        left: contactLeft,
+        right: contactRight,
+        center: (contactLeft + contactRight) / 2,
+        groundY,
+        strength: 0.55,
+      },
+    ];
+  } else if (contactZones.length > 4) {
+    contactZones = contactZones
+      .sort((a, b) => b.strength - a.strength)
+      .slice(0, 4)
+      .sort((a, b) => a.left - b.left);
+  }
+
+  contactLeft = Math.min(...contactZones.map((zone) => zone.left));
+  contactRight = Math.max(...contactZones.map((zone) => zone.right));
+
+  const contourBins = Math.min(36, boundsWidth);
+  const lowerContour: SilhouetteContourPoint[] = [];
+  for (let index = 0; index < contourBins; index += 1) {
+    const binLeft = left + Math.floor((index * boundsWidth) / contourBins);
+    const binRight = Math.min(
+      right,
+      left + Math.floor(((index + 1) * boundsWidth) / contourBins) - 1,
+    );
+    let binBottom = -1;
+    let binBottomX = binLeft;
+    for (let x = binLeft; x <= binRight; x += 1) {
+      const value = bottomByX[x] ?? -1;
+      if (value > binBottom) {
+        binBottom = value;
+        binBottomX = x;
+      }
+    }
+    if (binBottom >= 0) lowerContour.push({ x: binBottomX, y: binBottom });
+  }
+
   const silhouetteCenter = weightedX / Math.max(1, alphaPixels);
   const lowerCenter = lowerWeightedX / Math.max(1, lowerPixels);
   const lowerCenterOffset = clamp((lowerCenter - silhouetteCenter) / boundsWidth, -0.25, 0.25);
@@ -244,6 +413,9 @@ export function analyzeVehicleAlpha(
       right: contactRight,
       center: (contactLeft + contactRight) / 2,
     },
+    contactZones,
+    lowerContour,
+    groundY,
     view,
     viewConfidence,
     silhouetteAspect,
@@ -275,6 +447,7 @@ export function buildGroundEffectProfile(analysis: VehicleSilhouetteAnalysis): G
         heightFactor: 0.2,
         blurFactor: 0.007,
         skew: 0,
+        perspectiveTaper: 0.18,
       },
     };
   }
@@ -298,6 +471,7 @@ export function buildGroundEffectProfile(analysis: VehicleSilhouetteAnalysis): G
         heightFactor: 0.34,
         blurFactor: 0.005,
         skew: clamp(direction * 0.4, -0.05, 0.05),
+        perspectiveTaper: 0.06,
       },
     };
   }
@@ -321,6 +495,7 @@ export function buildGroundEffectProfile(analysis: VehicleSilhouetteAnalysis): G
         heightFactor: 0.24,
         blurFactor: 0.007,
         skew: 0,
+        perspectiveTaper: 0.2,
       },
     };
   }
@@ -343,6 +518,7 @@ export function buildGroundEffectProfile(analysis: VehicleSilhouetteAnalysis): G
       heightFactor: 0.28,
       blurFactor: 0.006,
       skew: clamp(direction * 0.8, -0.14, 0.14),
+      perspectiveTaper: 0.13,
     },
   };
 }

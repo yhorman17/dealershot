@@ -12,6 +12,7 @@ import {
   analyzeVehicleAlpha,
   buildVehicleCompositionFrame,
   buildGroundEffectProfile,
+  buildGroundPlaneGeometry,
   PREPARED_IMAGE_HEIGHT,
   PREPARED_IMAGE_WIDTH,
   type GroundEffectProfile,
@@ -169,46 +170,19 @@ function analyzeSilhouette(
       right: sampled.contactBounds.right * toSource,
       center: sampled.contactBounds.center * toSource,
     },
+    contactZones: sampled.contactZones.map((zone) => ({
+      ...zone,
+      left: zone.left * toSource,
+      right: zone.right * toSource,
+      center: zone.center * toSource,
+      groundY: zone.groundY * toSource,
+    })),
+    lowerContour: sampled.lowerContour.map((point) => ({
+      x: point.x * toSource,
+      y: point.y * toSource,
+    })),
+    groundY: sampled.groundY * toSource,
   };
-}
-
-function drawTintedProjection(
-  target: CanvasRenderingContext2D,
-  cutout: HTMLImageElement,
-  source: { x: number; y: number; w: number; h: number },
-  destination: { centerX: number; y: number; w: number; h: number },
-  skew: number,
-  blur: number,
-  opacity: number,
-) {
-  const layer = document.createElement("canvas");
-  layer.width = target.canvas.width;
-  layer.height = target.canvas.height;
-  const layerContext = layer.getContext("2d")!;
-  layerContext.save();
-  layerContext.translate(destination.centerX, destination.y);
-  layerContext.transform(1, 0, skew, 1, 0, 0);
-  layerContext.drawImage(
-    cutout,
-    source.x,
-    source.y,
-    source.w,
-    source.h,
-    -destination.w / 2,
-    -destination.h * 0.35,
-    destination.w,
-    destination.h,
-  );
-  layerContext.restore();
-  layerContext.globalCompositeOperation = "source-in";
-  layerContext.fillStyle = "#000";
-  layerContext.fillRect(0, 0, layer.width, layer.height);
-
-  target.save();
-  target.globalAlpha = opacity;
-  target.filter = `blur(${blur.toFixed(2)}px)`;
-  target.drawImage(layer, 0, 0);
-  target.restore();
 }
 
 function buildContactShadowCanvas(
@@ -227,75 +201,107 @@ function buildContactShadowCanvas(
   c.width = targetW;
   c.height = targetH;
   const ctx = c.getContext("2d")!;
-  const r = carRect(cutout, analysis, targetW, targetH, carOpts);
-  const sx = r.w / cutout.naturalWidth;
-  const sy = r.h / cutout.naturalHeight;
-  const bounds = analysis.bounds;
-  const carWidth = (bounds.right - bounds.left) * sx;
-  const carHeight = (bounds.bottom - bounds.top) * sy;
-  const carBottomY = r.y + bounds.bottom * sy;
-  const contactWidth = Math.max(
-    carWidth * 0.45,
-    (analysis.contactBounds.right - analysis.contactBounds.left) * sx,
+  const geometry = buildGroundPlaneGeometry(
+    cutout.naturalWidth,
+    cutout.naturalHeight,
+    analysis,
+    targetW,
+    targetH,
+    carOpts,
   );
-  const contactCenterX = r.x + analysis.contactBounds.center * sx;
+  const carWidth = geometry.vehicleWidth;
+  const carHeight = geometry.vehicleHeight;
   const s = scalePct / 100;
-  const width =
-    Math.min(carWidth * 0.98, Math.max(contactWidth, carWidth * 0.62)) *
-    profile.shadow.widthFactor *
-    s;
-  const depth = Math.max(4, carHeight * profile.shadow.depthFactor * s);
-  const centerX = contactCenterX + offsetX;
-  const groundY = carBottomY + offsetY;
-  const blur = Math.max(2, carWidth * profile.shadow.blurFactor);
-  const lowerSourceY = bounds.top + (bounds.bottom - bounds.top) * 0.68;
+  const groundY = geometry.baseline + offsetY;
+  const centerX = geometry.contactCenter + offsetX;
+  const widthScale = Math.max(0.25, profile.shadow.widthFactor * s);
+  const shadowXFor = (x: number) => centerX + (x - geometry.contactCenter) * widthScale;
+  const ambientWidth =
+    Math.min(
+      carWidth * 0.98,
+      Math.max(geometry.contactRight - geometry.contactLeft, carWidth * 0.62),
+    ) * widthScale;
+  const depth = Math.max(18, carHeight * profile.shadow.depthFactor * s);
+  const ambientLayer = document.createElement("canvas");
+  ambientLayer.width = targetW;
+  ambientLayer.height = targetH;
+  const ambient = ambientLayer.getContext("2d")!;
+  const contour = geometry.lowerContour;
 
-  // Start with a low-opacity floor falloff so front and rear views retain real
-  // depth instead of collapsing into a narrow horizontal strip. The stronger
-  // layers below still derive their shape from the vehicle's lower silhouette.
-  ctx.save();
-  ctx.translate(centerX, groundY + depth * 0.12);
-  ctx.scale(1, Math.max(0.02, depth / Math.max(1, width)));
-  const floorFalloff = ctx.createRadialGradient(0, 0, 0, 0, 0, width * 0.55);
-  floorFalloff.addColorStop(0, `rgba(0,0,0,${opacity * 0.46})`);
-  floorFalloff.addColorStop(0.5, `rgba(0,0,0,${opacity * 0.22})`);
-  floorFalloff.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = floorFalloff;
-  ctx.beginPath();
-  ctx.arc(0, 0, width * 0.55, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  // The ambient layer follows the sampled lower hull instead of using a stock
+  // oval. The vehicle is drawn later, hiding the small overlap and leaving a
+  // soft floor projection that starts at the same baseline as tire contact.
+  if (contour.length >= 2) {
+    ambient.save();
+    ambient.beginPath();
+    const first = contour[0]!;
+    ambient.moveTo(shadowXFor(first.x), Math.min(groundY, first.y + offsetY));
+    for (const point of contour) {
+      ambient.lineTo(shadowXFor(point.x), Math.min(groundY, point.y + offsetY));
+    }
+    for (let index = contour.length - 1; index >= 0; index -= 1) {
+      const point = contour[index]!;
+      const distance = Math.abs(point.x - centerX) / Math.max(1, ambientWidth / 2);
+      const perspectiveDepth = depth * (0.42 + 0.58 * Math.max(0, 1 - distance * distance));
+      const drift = profile.shadow.skew * perspectiveDepth;
+      ambient.lineTo(shadowXFor(point.x) + drift, groundY + perspectiveDepth);
+    }
+    ambient.closePath();
+    const fill = ambient.createLinearGradient(0, groundY - depth * 0.1, 0, groundY + depth);
+    fill.addColorStop(0, `rgba(0,0,0,${opacity * 0.34})`);
+    fill.addColorStop(0.32, `rgba(0,0,0,${opacity * 0.2})`);
+    fill.addColorStop(1, "rgba(0,0,0,0)");
+    ambient.fillStyle = fill;
+    ambient.fill();
+    ambient.restore();
 
-  // A broad projection follows the lower vehicle silhouette, while a tighter
-  // contact layer keeps the tires and rocker panels visually attached.
-  drawTintedProjection(
-    ctx,
-    cutout,
-    {
-      x: bounds.left,
-      y: lowerSourceY,
-      w: Math.max(1, bounds.right - bounds.left),
-      h: Math.max(1, bounds.bottom - lowerSourceY),
-    },
-    { centerX, y: groundY, w: width, h: depth },
-    profile.shadow.skew,
-    blur,
-    opacity * 0.62,
-  );
-  drawTintedProjection(
-    ctx,
-    cutout,
-    {
-      x: analysis.contactBounds.left,
-      y: bounds.top + (bounds.bottom - bounds.top) * 0.8,
-      w: Math.max(1, analysis.contactBounds.right - analysis.contactBounds.left),
-      h: Math.max(1, (bounds.bottom - bounds.top) * 0.2),
-    },
-    { centerX, y: groundY, w: width * 0.84, h: Math.max(2, depth * 0.48) },
-    profile.shadow.skew * 0.45,
-    Math.max(1.5, blur * 0.48),
-    opacity * 0.46,
-  );
+    ctx.save();
+    ctx.filter = `blur(${Math.max(5, carWidth * profile.shadow.blurFactor).toFixed(2)}px)`;
+    ctx.drawImage(ambientLayer, 0, 0);
+    ctx.restore();
+  }
+
+  // Each robust low-point cluster gets its own tight contact patch. These are
+  // deliberately darker and shallower than the ambient layer so tires and the
+  // rocker panel visually meet the floor rather than floating above a bar.
+  const zones = geometry.contactZones.length
+    ? geometry.contactZones
+    : [
+        {
+          left: geometry.contactLeft,
+          right: geometry.contactRight,
+          center: geometry.contactCenter,
+          groundY,
+          strength: 0.55,
+        },
+      ];
+  for (const zone of zones) {
+    const zoneSpan = Math.max(1, zone.right - zone.left) * widthScale;
+    const zoneWidth = Math.min(
+      carWidth * 0.34,
+      Math.max(
+        zoneSpan * 1.45,
+        carWidth * (profile.view === "front" || profile.view === "rear" ? 0.17 : 0.11),
+      ),
+    );
+    const zoneDepth = Math.max(
+      7,
+      carHeight * (profile.view === "front" || profile.view === "rear" ? 0.034 : 0.026) * s,
+    );
+    const zoneCenter = shadowXFor(zone.center);
+    ctx.save();
+    ctx.translate(zoneCenter, groundY + zoneDepth * 0.08);
+    ctx.scale(1, zoneDepth / Math.max(1, zoneWidth));
+    const contact = ctx.createRadialGradient(0, 0, 0, 0, 0, zoneWidth * 0.52);
+    contact.addColorStop(0, `rgba(0,0,0,${opacity * (0.76 + zone.strength * 0.2)})`);
+    contact.addColorStop(0.48, `rgba(0,0,0,${opacity * 0.42})`);
+    contact.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = contact;
+    ctx.beginPath();
+    ctx.arc(0, 0, zoneWidth * 0.52, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   return c;
 }
 
@@ -315,45 +321,58 @@ function buildReflectionCanvas(
   c.width = targetW;
   c.height = targetH;
   const ctx = c.getContext("2d")!;
-  const r = carRect(cutout, analysis, targetW, targetH, carOpts);
-  const sx = r.w / cutout.naturalWidth;
-  const sy = r.h / cutout.naturalHeight;
+  const geometry = buildGroundPlaneGeometry(
+    cutout.naturalWidth,
+    cutout.naturalHeight,
+    analysis,
+    targetW,
+    targetH,
+    carOpts,
+  );
   const bounds = analysis.bounds;
-  const carBottomY = r.y + bounds.bottom * sy;
-  const silCenterX = r.x + analysis.contactBounds.center * sx;
-  const silW = Math.max(1, (bounds.right - bounds.left) * sx);
-  const silH = Math.max(1, (bounds.bottom - bounds.top) * sy);
-  const groundY = carBottomY + offsetY;
+  const silW = geometry.vehicleWidth;
+  const silH = geometry.vehicleHeight;
+  const groundY = geometry.baseline + offsetY;
   const s = Math.max(0.1, scalePct / 100);
-  const centerX = silCenterX + offsetX;
+  const vehicleCenter = (geometry.vehicleLeft + geometry.vehicleRight) / 2;
+  const footprintWeight = profile.view.includes("three-quarter") ? 0.48 : 0.22;
+  const centerX =
+    vehicleCenter * (1 - footprintWeight) + geometry.contactCenter * footprintWeight + offsetX;
   const reflectionW = Math.min(silW, silW * profile.reflection.widthFactor * s);
   const reflectionH = Math.max(6, silH * profile.reflection.heightFactor * s);
   const reflectionLayer = document.createElement("canvas");
   reflectionLayer.width = targetW;
   reflectionLayer.height = targetH;
   const reflectionContext = reflectionLayer.getContext("2d")!;
-  const sourceW = Math.max(1, bounds.right - bounds.left);
-  const sourceH = Math.max(1, bounds.bottom - bounds.top);
+  const sourceW = Math.max(1, bounds.right - bounds.left + 1);
+  const sourceH = Math.max(1, bounds.bottom - bounds.top + 1);
+  const slices = Math.min(72, Math.max(32, Math.round(sourceH / 8)));
 
-  // Flip the real silhouette around its ground contact, then independently
-  // compress it vertically. Perspective is a small lower-edge drift, never a
-  // width expansion beyond the vehicle itself.
-  reflectionContext.save();
-  reflectionContext.translate(centerX, groundY);
-  reflectionContext.scale(1, -1);
-  reflectionContext.transform(1, 0, profile.reflection.skew, 1, 0, 0);
-  reflectionContext.drawImage(
-    cutout,
-    bounds.left,
-    bounds.top,
-    sourceW,
-    sourceH,
-    -reflectionW / 2,
-    -reflectionH,
-    reflectionW,
-    reflectionH,
-  );
-  reflectionContext.restore();
+  // Warp horizontal silhouette slices independently. The bottom-most source
+  // pixels touch the shared baseline; slices taper and drift with distance so
+  // three-quarter views read as a floor projection, not a mirrored rectangle.
+  for (let index = 0; index < slices; index += 1) {
+    const near = index / slices;
+    const far = (index + 1) / slices;
+    const sourceTop = bounds.bottom + 1 - far * sourceH;
+    const sourceHeight = Math.max(1, (far - near) * sourceH + 0.75);
+    const distance = (near + far) / 2;
+    const sliceWidth = reflectionW * (1 - profile.reflection.perspectiveTaper * distance);
+    const drift = profile.reflection.skew * reflectionH * distance;
+    const destinationY = groundY - 0.5 + near * reflectionH;
+    const destinationHeight = Math.max(1.4, (far - near) * reflectionH + 1);
+    reflectionContext.drawImage(
+      cutout,
+      bounds.left,
+      sourceTop,
+      sourceW,
+      sourceHeight,
+      centerX - sliceWidth / 2 + drift,
+      destinationY,
+      sliceWidth,
+      destinationHeight,
+    );
+  }
 
   reflectionContext.globalCompositeOperation = "destination-in";
   const fadeEnd = Math.min(targetH, groundY + reflectionH);
@@ -364,10 +383,27 @@ function buildReflectionCanvas(
   reflectionContext.fillStyle = grad;
   reflectionContext.fillRect(0, groundY, targetW, Math.max(1, reflectionH));
 
-  ctx.save();
-  ctx.filter = `blur(${Math.max(0.6, silW * profile.reflection.blurFactor).toFixed(2)}px)`;
-  ctx.drawImage(reflectionLayer, 0, 0);
-  ctx.restore();
+  const baseBlur = Math.max(0.8, silW * profile.reflection.blurFactor);
+  const bands = 5;
+  for (let index = 0; index < bands; index += 1) {
+    const bandY = groundY + (index / bands) * reflectionH;
+    const bandHeight = reflectionH / bands;
+    const padding = Math.ceil(baseBlur * 3);
+    ctx.save();
+    ctx.filter = `blur(${(baseBlur * (0.72 + index * 0.24)).toFixed(2)}px)`;
+    ctx.drawImage(
+      reflectionLayer,
+      0,
+      Math.max(0, bandY - padding),
+      targetW,
+      Math.min(targetH - Math.max(0, bandY - padding), bandHeight + padding * 2),
+      0,
+      Math.max(0, bandY - padding),
+      targetW,
+      Math.min(targetH - Math.max(0, bandY - padding), bandHeight + padding * 2),
+    );
+    ctx.restore();
+  }
   return c;
 }
 

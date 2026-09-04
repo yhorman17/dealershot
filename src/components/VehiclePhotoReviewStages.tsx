@@ -205,14 +205,27 @@ export function VehiclePhotoProcessingStage({
   busy,
   onChange,
   onDone,
+  reprocessCompleted = false,
+  onReprocessCompletedChange,
 }: {
   items: ReviewPhotoItem[];
   selected: Set<string>;
   busy: string | null;
   onChange: (value: Set<string>) => void;
   onDone: () => void;
+  reprocessCompleted?: boolean;
+  onReprocessCompletedChange?: (value: boolean) => void;
 }) {
   const choose = (ids: string[]) => onChange(new Set(ids));
+  const setReprocessCompleted = (value: boolean) => {
+    if (!value) {
+      const readyIds = new Set(
+        items.filter((item) => item.processing_state === "ready").map((item) => item.id),
+      );
+      onChange(new Set([...selected].filter((id) => !readyIds.has(id))));
+    }
+    onReprocessCompletedChange?.(value);
+  };
   return (
     <section className="ds-surface p-4 sm:p-6">
       <div className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
@@ -224,22 +237,22 @@ export function VehiclePhotoProcessingStage({
             Select photos to process
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Jobs run privately in the background. Ready or currently processing photos are not
-            queued again.
+            Jobs run privately in the background. Currently processing photos are never queued
+            twice.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => choose(queueableReviewPhotoIds(items, true))}
+            onClick={() => choose(queueableReviewPhotoIds(items, true, reprocessCompleted))}
           >
             Select exterior
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => choose(queueableReviewPhotoIds(items))}
+            onClick={() => choose(queueableReviewPhotoIds(items, false, reprocessCompleted))}
           >
             Select all
           </Button>
@@ -248,13 +261,31 @@ export function VehiclePhotoProcessingStage({
           </Button>
         </div>
       </div>
+      {onReprocessCompletedChange && (
+        <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-secondary/35 p-4">
+          <Checkbox
+            checked={reprocessCompleted}
+            onCheckedChange={(value) => setReprocessCompleted(value === true)}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="block text-sm font-semibold">
+              Reprocess completed cutouts from original
+            </span>
+            <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+              Enables completed photos for selection. A successful new cutout becomes active;
+              previous variants and the immutable original remain in the Media Ledger.
+            </span>
+          </span>
+        </label>
+      )}
       <div className="grid grid-cols-2 gap-3 py-5 sm:grid-cols-3 lg:grid-cols-5">
         {items.map((item) => {
           const checked = selected.has(item.id);
           const disabled =
             item.processing_state === "queued" ||
             item.processing_state === "processing" ||
-            item.processing_state === "ready";
+            (item.processing_state === "ready" && !reprocessCompleted);
           return (
             <button
               key={item.id}
@@ -289,7 +320,10 @@ export function VehiclePhotoProcessingStage({
       </div>
       <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
-          {selected.size} selected · processing continues in the background
+          {selected.size} selected ·{" "}
+          {reprocessCompleted
+            ? "reprocessing uses immutable originals"
+            : "processing continues in the background"}
         </p>
         <Button className="min-h-12" onClick={onDone} disabled={busy !== null}>
           {busy === "processing" ? "Queueing…" : "Done"}

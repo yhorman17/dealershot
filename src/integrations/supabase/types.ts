@@ -1474,6 +1474,10 @@ export type Database = {
         Args: { _media_asset_ids: string[]; _vehicle_id: string };
         Returns: Json;
       };
+      reprocess_vehicle_background_removal: {
+        Args: { _media_asset_ids: string[]; _vehicle_id: string };
+        Returns: Json;
+      };
       save_capture_method_configuration: {
         Args: {
           _bulk_enabled: boolean;
