@@ -8,8 +8,9 @@ import { composeDefaultProcessedPhoto } from "../worker/default-backdrop-composi
 const read = async (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("default processed backdrop is a store-owned resource with atomic cutout lineage", async () => {
-  const [migration, settings, editor, worker] = await Promise.all([
+  const [migration, groundingMigration, settings, editor, worker] = await Promise.all([
     read("supabase/migrations/20260905003307_default_backdrop_and_grounding_v2.sql"),
+    read("supabase/migrations/20260905012459_grounding_v3_grouped_background_activity.sql"),
     read("src/routes/_authenticated/settings.tsx"),
     read("src/components/BackgroundEditor.tsx"),
     read("worker/media.ts"),
@@ -32,6 +33,9 @@ test("default processed backdrop is a store-owned resource with atomic cutout li
   assert.match(editor, /perPhotoBackdrop \|\| storeDefault/);
   assert.match(worker, /standard_with_default_backdrop/);
   assert.match(worker, /source\.default_backdrop_bucket === "backdrops"/);
+  assert.match(groundingMigration, /floor_finish IN \('matte', 'semi_gloss', 'glossy'\)/);
+  assert.match(groundingMigration, /default_backdrop_floor_finish/);
+  assert.match(editor, /floor_finish/);
 });
 
 test("production worker creates a grounded 1600 by 1200 prepared composition", async () => {
@@ -69,13 +73,15 @@ test("production worker creates a grounded 1600 by 1200 prepared composition", a
     cutout,
     backdrop,
     shotType: "Front 3/4 driver",
+    floorFinish: "glossy",
   });
   const metadata = await sharp(result.bytes).metadata();
 
   assert.equal(metadata.format, "jpeg");
   assert.equal(metadata.width, 1600);
   assert.equal(metadata.height, 1200);
-  assert.equal(result.grounding.version, "ground-plane-v2");
+  assert.equal(result.grounding.version, "ground-plane-v3");
+  assert.equal(result.grounding.floor_finish, "glossy");
   assert.ok(result.grounding.contact_zones >= 2);
   assert.equal(result.grounding.reflection_enabled, true);
   assert.ok(result.frame.visibleBounds.bottom <= 1200);

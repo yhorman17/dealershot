@@ -4,6 +4,7 @@ import {
   Ban,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   ImageMinus,
   LoaderCircle,
@@ -32,59 +33,23 @@ import {
   announceBackgroundProcessingChange,
   BACKGROUND_PROCESSING_CHANGED_EVENT,
 } from "@/lib/background-processing-events";
+import {
+  filterHiddenFinishedGroups,
+  parseBackgroundActivityGroups,
+  summarizeBackgroundActivity,
+  vehicleActivitySummary,
+  type BackgroundActivity,
+  type BackgroundActivityGroup,
+  type BackgroundActivityStatus as ActivityStatus,
+} from "@/lib/background-processing-activity";
 import { cn } from "@/lib/utils";
-
-type ActivityStatus =
-  | "queued"
-  | "processing"
-  | "completed"
-  | "needs_review"
-  | "failed"
-  | "canceled";
-
-type BackgroundActivity = {
-  job_id: string;
-  media_asset_id: string | null;
-  photo_id: string | null;
-  vehicle_id: string | null;
-  stock_number: string | null;
-  vehicle_label: string | null;
-  status: ActivityStatus;
-  retryable: boolean;
-  cancelable: boolean;
-  cancel_requested: boolean;
-  safe_failure_label: string | null;
-  failure_category: string | null;
-  deterministic_failure_count: number;
-  has_draft: boolean;
-  fix_cutout_available: boolean;
-  attempt_count: number;
-  max_attempts: number;
-  created_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-  updated_at: string;
-};
 
 const ACTIVE_POLL_MS = 3_000;
 const IDLE_POLL_MS = 15_000;
 
-function isActivity(value: unknown): value is BackgroundActivity {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<BackgroundActivity>;
-  return (
-    typeof candidate.job_id === "string" &&
-    (candidate.status === "queued" ||
-      candidate.status === "processing" ||
-      candidate.status === "completed" ||
-      candidate.status === "needs_review" ||
-      candidate.status === "failed" ||
-      candidate.status === "canceled")
-  );
-}
-
 type ProcessingAction = "retry" | "cancel";
 type BulkProcessingAction = "retry_all" | "cancel_all";
+type VehicleProcessingAction = "retry_vehicle" | "cancel_vehicle";
 
 function actionResultStatus(value: unknown, fallback: ActivityStatus): ActivityStatus {
   if (!value || typeof value !== "object") return fallback;
@@ -113,13 +78,17 @@ export function BackgroundProcessingStatus() {
   const canView =
     Boolean(selectedDealershipId) &&
     (profile?.role !== "staff" || (!loadingCapabilities && capabilities?.media === true));
-  const [jobs, setJobs] = useState<BackgroundActivity[]>([]);
+  const [groups, setGroups] = useState<BackgroundActivityGroup[]>([]);
   const [expanded, setExpanded] = useState(false);
+  const [expandedVehicles, setExpandedVehicles] = useState<Set<string>>(new Set());
   const [cameraOpen, setCameraOpen] = useState(false);
   const [hiddenFinished, setHiddenFinished] = useState<Set<string>>(new Set());
   const [refreshToken, setRefreshToken] = useState(0);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [cancelAllOpen, setCancelAllOpen] = useState(false);
+  const [cancelVehicleTarget, setCancelVehicleTarget] = useState<BackgroundActivityGroup | null>(
+    null,
+  );
   const activeStoreRef = useRef(selectedDealershipId);
 
   useEffect(() => {
@@ -128,20 +97,22 @@ export function BackgroundProcessingStatus() {
 
   const refresh = useCallback(async () => {
     if (!selectedDealershipId || !canView) return [];
-    const { data, error } = await supabase.rpc("get_background_removal_activity", {
+    const { data, error } = await supabase.rpc("get_background_removal_activity_grouped", {
       _dealership_id: selectedDealershipId,
-      _limit: 20,
+      _vehicle_limit: 20,
     });
     if (error) return [];
-    return Array.isArray(data) ? data.filter(isActivity) : [];
+    return parseBackgroundActivityGroups(data);
   }, [canView, selectedDealershipId]);
 
   useEffect(() => {
-    setJobs([]);
+    setGroups([]);
     setHiddenFinished(new Set());
     setExpanded(false);
+    setExpandedVehicles(new Set());
     setSubmitting(null);
     setCancelAllOpen(false);
+    setCancelVehicleTarget(null);
   }, [selectedDealershipId]);
 
   useEffect(() => {
@@ -160,8 +131,10 @@ export function BackgroundProcessingStatus() {
     const poll = async () => {
       const next = await refresh();
       if (cancelled) return;
-      setJobs(next);
-      const hasActive = next.some((job) => job.status === "queued" || job.status === "processing");
+      setGroups(next);
+      const hasActive = next.some((group) =>
+        group.items.some((job) => job.status === "queued" || job.status === "processing"),
+      );
       timeout = window.setTimeout(poll, hasActive ? ACTIVE_POLL_MS : IDLE_POLL_MS);
     };
     void poll();
@@ -177,26 +150,12 @@ export function BackgroundProcessingStatus() {
     };
   }, [canView, refresh, refreshToken]);
 
-  const visibleJobs = useMemo(
-    () =>
-      jobs.filter(
-        (job) =>
-          (job.status !== "completed" && job.status !== "canceled") ||
-          !hiddenFinished.has(job.job_id),
-      ),
-    [hiddenFinished, jobs],
+  const visibleGroups = useMemo(
+    () => filterHiddenFinishedGroups(groups, hiddenFinished),
+    [groups, hiddenFinished],
   );
-  const counts = useMemo(
-    () => ({
-      queued: visibleJobs.filter((job) => job.status === "queued").length,
-      processing: visibleJobs.filter((job) => job.status === "processing").length,
-      completed: visibleJobs.filter((job) => job.status === "completed").length,
-      needsReview: visibleJobs.filter((job) => job.status === "needs_review").length,
-      failed: visibleJobs.filter((job) => job.status === "failed").length,
-      canceled: visibleJobs.filter((job) => job.status === "canceled").length,
-    }),
-    [visibleJobs],
-  );
+  const visibleJobs = useMemo(() => visibleGroups.flatMap((group) => group.items), [visibleGroups]);
+  const counts = useMemo(() => summarizeBackgroundActivity(visibleJobs), [visibleJobs]);
   const activeCount = counts.queued + counts.processing;
   const finishedCount = counts.completed + counts.needsReview + counts.failed + counts.canceled;
   const retryableFailedCount = visibleJobs.filter(
@@ -216,24 +175,27 @@ export function BackgroundProcessingStatus() {
       const nextStatus = actionResultStatus(data, action === "retry" ? "queued" : "canceled");
 
       if (activeStoreRef.current === storeAtSubmit) {
-        setJobs((current) =>
-          current.map((item) =>
-            item.job_id === job.job_id
-              ? {
-                  ...item,
-                  status: nextStatus,
-                  retryable: false,
-                  cancelable: action === "retry",
-                  cancel_requested: action === "cancel" && nextStatus === "canceled",
-                  updated_at: new Date().toISOString(),
-                }
-              : item,
-          ),
+        setGroups((current) =>
+          current.map((group) => ({
+            ...group,
+            items: group.items.map((item) =>
+              item.job_id === job.job_id
+                ? {
+                    ...item,
+                    status: nextStatus,
+                    retryable: false,
+                    cancelable: action === "retry",
+                    cancel_requested: action === "cancel" && nextStatus === "canceled",
+                    updated_at: new Date().toISOString(),
+                  }
+                : item,
+            ),
+          })),
         );
       }
       announceBackgroundProcessingChange();
       const authoritative = await refresh();
-      if (activeStoreRef.current === storeAtSubmit) setJobs(authoritative);
+      if (activeStoreRef.current === storeAtSubmit) setGroups(authoritative);
       const completedDuringAction = nextStatus === "completed";
       toast.success(
         completedDuringAction
@@ -274,29 +236,32 @@ export function BackgroundProcessingStatus() {
       if (error) throw error;
 
       if (activeStoreRef.current === storeAtSubmit) {
-        setJobs((current) =>
-          current.map((job) => {
-            if (action === "retry_all" && job.status === "failed" && job.retryable) {
-              return {
-                ...job,
-                status: "queued",
-                retryable: false,
-                cancelable: true,
-                updated_at: new Date().toISOString(),
-              };
-            }
-            if (action === "cancel_all" && job.cancelable) {
-              return {
-                ...job,
-                status: "canceled",
-                retryable: false,
-                cancelable: false,
-                cancel_requested: true,
-                updated_at: new Date().toISOString(),
-              };
-            }
-            return job;
-          }),
+        setGroups((current) =>
+          current.map((group) => ({
+            ...group,
+            items: group.items.map((job) => {
+              if (action === "retry_all" && job.status === "failed" && job.retryable) {
+                return {
+                  ...job,
+                  status: "queued",
+                  retryable: false,
+                  cancelable: true,
+                  updated_at: new Date().toISOString(),
+                };
+              }
+              if (action === "cancel_all" && job.cancelable) {
+                return {
+                  ...job,
+                  status: "canceled",
+                  retryable: false,
+                  cancelable: false,
+                  cancel_requested: true,
+                  updated_at: new Date().toISOString(),
+                };
+              }
+              return job;
+            }),
+          })),
         );
       }
 
@@ -333,12 +298,100 @@ export function BackgroundProcessingStatus() {
 
       announceBackgroundProcessingChange();
       const authoritative = await refresh();
-      if (activeStoreRef.current === storeAtSubmit) setJobs(authoritative);
+      if (activeStoreRef.current === storeAtSubmit) setGroups(authoritative);
     } catch {
       toast.error(
         action === "retry_all"
           ? "Failed jobs could not be retried"
           : "Background-removal work could not be canceled",
+        { description: "No original photos were changed. Try again." },
+      );
+      announceBackgroundProcessingChange();
+    } finally {
+      if (activeStoreRef.current === storeAtSubmit) setSubmitting(null);
+    }
+  };
+
+  const performVehicleAction = async (
+    group: BackgroundActivityGroup,
+    action: VehicleProcessingAction,
+  ) => {
+    if (submitting || !group.vehicleId) return;
+    const storeAtSubmit = selectedDealershipId;
+    if (!storeAtSubmit) return;
+    setSubmitting(`${action}:${group.groupKey}`);
+    try {
+      const rpc =
+        action === "retry_vehicle"
+          ? "retry_failed_background_removals_for_vehicle"
+          : "cancel_background_removals_for_vehicle";
+      const { data, error } = await supabase.rpc(rpc, {
+        _dealership_id: storeAtSubmit,
+        _vehicle_id: group.vehicleId,
+      });
+      if (error) throw error;
+
+      if (activeStoreRef.current === storeAtSubmit) {
+        setGroups((current) =>
+          current.map((candidate) =>
+            candidate.groupKey !== group.groupKey
+              ? candidate
+              : {
+                  ...candidate,
+                  items: candidate.items.map((job) => {
+                    if (action === "retry_vehicle" && job.status === "failed" && job.retryable) {
+                      return {
+                        ...job,
+                        status: "queued",
+                        retryable: false,
+                        cancelable: true,
+                        updated_at: new Date().toISOString(),
+                      };
+                    }
+                    if (action === "cancel_vehicle" && job.cancelable) {
+                      return {
+                        ...job,
+                        status: "canceled",
+                        retryable: false,
+                        cancelable: false,
+                        cancel_requested: true,
+                        updated_at: new Date().toISOString(),
+                      };
+                    }
+                    return job;
+                  }),
+                },
+          ),
+        );
+      }
+
+      if (action === "retry_vehicle") {
+        const retried = resultCount(data, "retried_count");
+        const notRetryable = resultCount(data, "not_retryable_count");
+        const message = `${retried} ${retried === 1 ? "photo" : "photos"} queued for retry`;
+        const options = {
+          description:
+            notRetryable > 0 ? `${notRetryable} cannot be retried automatically.` : undefined,
+        };
+        if (retried > 0) toast.success(message, options);
+        else toast.info("No failed photos were queued", options);
+      } else {
+        const canceled = resultCount(data, "canceled_count");
+        const requested = resultCount(data, "cancel_requested_count");
+        setCancelVehicleTarget(null);
+        toast.success("Vehicle processing canceled", {
+          description: `${canceled} canceled${requested > 0 ? ` · ${requested} finishing safely` : ""}. Originals remain intact.`,
+        });
+      }
+
+      announceBackgroundProcessingChange();
+      const authoritative = await refresh();
+      if (activeStoreRef.current === storeAtSubmit) setGroups(authoritative);
+    } catch {
+      toast.error(
+        action === "retry_vehicle"
+          ? "Vehicle retries could not be queued"
+          : "Vehicle processing could not be canceled",
         { description: "No original photos were changed. Try again." },
       );
       announceBackgroundProcessingChange();
@@ -357,7 +410,7 @@ export function BackgroundProcessingStatus() {
     });
   };
 
-  if (!canView || visibleJobs.length === 0) return null;
+  if (!canView || visibleGroups.length === 0) return null;
 
   if (cameraOpen) {
     return (
@@ -472,79 +525,182 @@ export function BackgroundProcessingStatus() {
             )}
             <div className="processing-widget-scrollbar max-h-64 overflow-y-auto overscroll-contain p-2">
               <ul className="space-y-1" aria-live="polite">
-                {visibleJobs.map((job) => (
-                  <li key={job.job_id} className="rounded-lg px-2.5 py-2 hover:bg-white/5">
-                    <div className="flex min-h-7 items-center gap-2">
-                      <JobIcon status={job.status} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-medium">
-                          {job.vehicle_label?.trim() || job.stock_number || "Vehicle photo"}
-                        </span>
-                        <span className="block truncate text-[11px] text-white/55">
-                          {job.stock_number ? `Stock ${job.stock_number} · ` : ""}
-                          {statusLabel(job)}
-                        </span>
-                      </span>
-                    </div>
-                    {(job.retryable || job.cancelable || job.fix_cutout_available) && (
-                      <div className="mt-2 flex flex-wrap justify-end gap-1.5">
-                        {job.fix_cutout_available && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-10 touch-manipulation px-3 text-xs text-amber-200 hover:bg-amber-400/15 hover:text-amber-100"
-                            disabled={submitting !== null}
-                            onClick={() => void openFixCutout(job)}
-                          >
-                            <Scissors className="size-3.5" aria-hidden />
-                            Fix Cutout
-                          </Button>
+                {visibleGroups.map((group) => {
+                  const vehicleExpanded = expandedVehicles.has(group.groupKey);
+                  const finishedIds = group.items
+                    .filter((job) => job.status === "completed" || job.status === "canceled")
+                    .map((job) => job.job_id);
+                  return (
+                    <li key={group.groupKey} className="rounded-lg bg-white/[0.035]">
+                      <button
+                        type="button"
+                        className="flex min-h-12 w-full touch-manipulation items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"
+                        onClick={() =>
+                          setExpandedVehicles((current) => {
+                            const next = new Set(current);
+                            if (next.has(group.groupKey)) next.delete(group.groupKey);
+                            else next.add(group.groupKey);
+                            return next;
+                          })
+                        }
+                        aria-expanded={vehicleExpanded}
+                      >
+                        {vehicleExpanded ? (
+                          <ChevronDown className="size-4 shrink-0 text-white/45" aria-hidden />
+                        ) : (
+                          <ChevronRight className="size-4 shrink-0 text-white/45" aria-hidden />
                         )}
-                        {job.retryable && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-10 touch-manipulation px-3 text-xs text-blue-200 hover:bg-blue-400/15 hover:text-blue-100"
-                            disabled={submitting !== null}
-                            onClick={() => void performAction(job, "retry")}
-                          >
-                            {submitting === `retry:${job.job_id}` ? (
-                              <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
-                            ) : (
-                              <RotateCcw className="size-3.5" aria-hidden />
-                            )}
-                            Retry
-                          </Button>
-                        )}
-                        {job.cancelable && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-10 touch-manipulation px-3 text-xs text-white/65 hover:bg-white/10 hover:text-white"
-                            disabled={submitting !== null}
-                            onClick={() => void performAction(job, "cancel")}
-                          >
-                            {submitting === `cancel:${job.job_id}` ? (
-                              <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
-                            ) : (
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <span className="block min-w-0 flex-1 truncate text-xs font-semibold">
+                              {group.vehicleLabel?.trim() || group.stockNumber || "Vehicle"}
+                            </span>
+                            <span className="shrink-0 text-[10px] tabular-nums text-white/50">
+                              {group.counts.terminal}/{group.counts.total}
+                            </span>
+                          </span>
+                          <span className="mt-0.5 block truncate text-[11px] text-white/55">
+                            {group.stockNumber ? `Stock ${group.stockNumber} · ` : ""}
+                            {vehicleActivitySummary(group)}
+                          </span>
+                          <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-white/10">
+                            <span
+                              className="block h-full rounded-full bg-blue-400 transition-[width] duration-300"
+                              style={{ width: `${group.progressPercent}%` }}
+                              role="progressbar"
+                              aria-label={`${group.vehicleLabel || "Vehicle"} background processing`}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-valuenow={group.progressPercent}
+                            />
+                          </span>
+                        </span>
+                      </button>
+
+                      {(group.retryableFailedCount > 0 ||
+                        group.cancelableCount > 0 ||
+                        finishedIds.length > 0) && (
+                        <div className="flex flex-wrap gap-1 border-t border-white/[0.06] px-2 py-1.5">
+                          {group.retryableFailedCount > 0 && group.vehicleId && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-9 touch-manipulation px-2 text-[11px] text-blue-200 hover:bg-blue-400/15 hover:text-blue-100"
+                              disabled={submitting !== null}
+                              onClick={() => void performVehicleAction(group, "retry_vehicle")}
+                            >
+                              {submitting === `retry_vehicle:${group.groupKey}` ? (
+                                <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+                              ) : (
+                                <RotateCcw className="size-3.5" aria-hidden />
+                              )}
+                              Retry failed
+                            </Button>
+                          )}
+                          {group.cancelableCount > 0 && group.vehicleId && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-9 touch-manipulation px-2 text-[11px] text-white/65 hover:bg-white/10 hover:text-white"
+                              disabled={submitting !== null}
+                              onClick={() => setCancelVehicleTarget(group)}
+                            >
                               <Ban className="size-3.5" aria-hidden />
-                            )}
-                            {job.status === "processing" ? "Cancel processing" : "Cancel"}
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                    {(job.status === "failed" || job.status === "needs_review") &&
-                      job.safe_failure_label && (
-                        <p className="mt-1.5 text-[11px] leading-4 text-amber-100/75">
-                          {job.safe_failure_label}
-                        </p>
+                              Cancel active
+                            </Button>
+                          )}
+                          {finishedIds.length > 0 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="ml-auto h-9 touch-manipulation px-2 text-[11px] text-white/55 hover:bg-white/10 hover:text-white"
+                              onClick={() =>
+                                setHiddenFinished(
+                                  (current) => new Set([...current, ...finishedIds]),
+                                )
+                              }
+                            >
+                              Clear finished
+                            </Button>
+                          )}
+                        </div>
                       )}
-                  </li>
-                ))}
+
+                      {vehicleExpanded && (
+                        <ul className="space-y-1 border-t border-white/[0.06] p-1.5">
+                          {group.items.map((job, index) => (
+                            <li
+                              key={job.job_id}
+                              className="rounded-md px-2 py-1.5 hover:bg-white/5"
+                            >
+                              <div className="flex min-h-7 items-center gap-2">
+                                <JobIcon status={job.status} />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-[11px] font-medium">
+                                    {job.shot_type?.trim() ||
+                                      `Photo ${job.photo_sort_order != null ? job.photo_sort_order + 1 : index + 1}`}
+                                  </span>
+                                  <span className="block truncate text-[10px] text-white/50">
+                                    {statusLabel(job)}
+                                  </span>
+                                </span>
+                              </div>
+                              {(job.retryable || job.cancelable || job.fix_cutout_available) && (
+                                <div className="mt-1 flex flex-wrap justify-end gap-1">
+                                  {job.fix_cutout_available && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-9 touch-manipulation px-2 text-[11px] text-amber-200 hover:bg-amber-400/15 hover:text-amber-100"
+                                      disabled={submitting !== null}
+                                      onClick={() => void openFixCutout(job)}
+                                    >
+                                      <Scissors className="size-3.5" aria-hidden /> Fix Cutout
+                                    </Button>
+                                  )}
+                                  {job.retryable && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-9 touch-manipulation px-2 text-[11px] text-blue-200 hover:bg-blue-400/15 hover:text-blue-100"
+                                      disabled={submitting !== null}
+                                      onClick={() => void performAction(job, "retry")}
+                                    >
+                                      <RotateCcw className="size-3.5" aria-hidden /> Retry
+                                    </Button>
+                                  )}
+                                  {job.cancelable && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-9 touch-manipulation px-2 text-[11px] text-white/65 hover:bg-white/10 hover:text-white"
+                                      disabled={submitting !== null}
+                                      onClick={() => void performAction(job, "cancel")}
+                                    >
+                                      <Ban className="size-3.5" aria-hidden /> Cancel
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                              {(job.status === "failed" || job.status === "needs_review") &&
+                                job.safe_failure_label && (
+                                  <p className="mt-1 text-[10px] leading-4 text-amber-100/75">
+                                    {job.safe_failure_label}
+                                  </p>
+                                )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
             <div className="flex items-center justify-between border-t border-white/10 px-2 py-1.5">
@@ -566,7 +722,8 @@ export function BackgroundProcessingStatus() {
                   onClick={() => {
                     setHiddenFinished(
                       new Set(
-                        jobs
+                        groups
+                          .flatMap((group) => group.items)
                           .filter((job) => job.status === "completed" || job.status === "canceled")
                           .map((job) => job.job_id),
                       ),
@@ -604,6 +761,38 @@ export function BackgroundProcessingStatus() {
                 <LoaderCircle className="size-4 animate-spin" aria-hidden />
               )}
               Cancel all processing
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={cancelVehicleTarget !== null}
+        onOpenChange={(open) => !open && setCancelVehicleTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel processing for this vehicle?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Queued photos will stop and running work will finish safely without promoting its
+              result. Original photos and completed cutouts remain intact.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting !== null}>Keep processing</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={submitting !== null || !cancelVehicleTarget}
+              onClick={(event) => {
+                event.preventDefault();
+                if (cancelVehicleTarget) {
+                  void performVehicleAction(cancelVehicleTarget, "cancel_vehicle");
+                }
+              }}
+            >
+              {cancelVehicleTarget &&
+                submitting === `cancel_vehicle:${cancelVehicleTarget.groupKey}` && (
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                )}
+              Cancel vehicle processing
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

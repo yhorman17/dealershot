@@ -3,11 +3,13 @@ import sharp from "sharp";
 import {
   analyzeVehicleAlpha,
   buildAmbientShadowFootprint,
+  buildContactShadowLobes,
   buildGroundEffectProfile,
   buildGroundPlaneGeometry,
   buildGroundReflectionSlices,
   PREPARED_IMAGE_HEIGHT,
   PREPARED_IMAGE_WIDTH,
+  type BackdropFloorFinish,
 } from "../src/lib/vehicle-ground-effects.ts";
 
 const clampInt = (value: number, min: number, max: number) =>
@@ -41,9 +43,20 @@ async function renderReflection(
     const height = clampInt(slice.sourceHeight, 1, sourceHeight - top);
     const destinationWidth = clampInt(slice.destinationWidth, 1, PREPARED_IMAGE_WIDTH);
     const destinationHeight = clampInt(slice.destinationHeight, 1, PREPARED_IMAGE_HEIGHT);
-    const sliceBytes = await sharp(cutout)
+    const resized = await sharp(cutout)
       .extract({ left, top, width, height })
       .resize(destinationWidth, destinationHeight, { fit: "fill" })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const alphaMultiplier = opacity * slice.opacity;
+    for (let index = 3; index < resized.data.length; index += 4) {
+      resized.data[index] = Math.round((resized.data[index] ?? 0) * alphaMultiplier);
+    }
+    const sliceBytes = await sharp(resized.data, {
+      raw: { width: destinationWidth, height: destinationHeight, channels: 4 },
+    })
+      .blur(Math.max(0.3, slice.blur))
       .png()
       .toBuffer();
     inputs.push({
@@ -54,7 +67,7 @@ async function renderReflection(
     });
   }
 
-  const layer = await sharp({
+  return sharp({
     create: {
       width: PREPARED_IMAGE_WIDTH,
       height: PREPARED_IMAGE_HEIGHT,
@@ -63,29 +76,6 @@ async function renderReflection(
     },
   })
     .composite(inputs)
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-
-  const rgba = layer.data;
-  const baseline = Math.min(...slices.map((slice) => slice.destinationY));
-  const extent = Math.max(
-    1,
-    Math.max(...slices.map((slice) => slice.destinationY + slice.destinationHeight)) - baseline,
-  );
-  for (let y = Math.max(0, Math.floor(baseline)); y < PREPARED_IMAGE_HEIGHT; y += 1) {
-    const distance = Math.max(0, (y - baseline) / extent);
-    const fade = opacity * Math.exp(-4.2 * distance);
-    for (let x = 0; x < PREPARED_IMAGE_WIDTH; x += 1) {
-      const alphaIndex = (y * PREPARED_IMAGE_WIDTH + x) * 4 + 3;
-      rgba[alphaIndex] = Math.round((rgba[alphaIndex] ?? 0) * fade);
-    }
-  }
-
-  return sharp(rgba, {
-    raw: { width: PREPARED_IMAGE_WIDTH, height: PREPARED_IMAGE_HEIGHT, channels: 4 },
-  })
-    .blur(2.4)
     .png()
     .toBuffer();
 }
@@ -94,6 +84,7 @@ export async function composeDefaultProcessedPhoto(input: {
   cutout: Buffer;
   backdrop: Buffer;
   shotType?: string | null;
+  floorFinish?: BackdropFloorFinish | null;
 }) {
   const raw = await sharp(input.cutout).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   if (raw.info.channels !== 4) throw new Error("default_composition_cutout_alpha_unavailable");
@@ -105,7 +96,7 @@ export async function composeDefaultProcessedPhoto(input: {
   );
   if (analysis.alphaCoverage <= 0) throw new Error("default_composition_cutout_empty");
 
-  const profile = buildGroundEffectProfile(analysis);
+  const profile = buildGroundEffectProfile(analysis, input.floorFinish ?? "semi_gloss");
   const geometry = buildGroundPlaneGeometry(
     raw.info.width,
     raw.info.height,
@@ -114,6 +105,12 @@ export async function composeDefaultProcessedPhoto(input: {
     PREPARED_IMAGE_HEIGHT,
   );
   const footprint = buildAmbientShadowFootprint(geometry, profile, profile.shadow.scale);
+  const contactLobes = buildContactShadowLobes(
+    geometry,
+    profile,
+    profile.shadow.opacity / 100,
+    profile.shadow.scale,
+  );
   const reflectionSlices = buildGroundReflectionSlices(
     analysis,
     geometry,
@@ -130,39 +127,24 @@ export async function composeDefaultProcessedPhoto(input: {
   );
 
   const ambientDepth = Math.max(18, geometry.vehicleHeight * profile.shadow.depthFactor);
-  const contactScale = Math.max(0.25, (profile.shadow.widthFactor * profile.shadow.scale) / 100);
-  const contactMarkup = geometry.contactZones
-    .map((zone, index) => {
-      const zoneWidth = Math.min(
-        geometry.vehicleWidth * 0.34,
-        Math.max(
-          (zone.right - zone.left) * contactScale * 1.45,
-          geometry.vehicleWidth *
-            (profile.view === "front" || profile.view === "rear" ? 0.17 : 0.11),
-        ),
-      );
-      const zoneDepth = Math.max(
-        7,
-        geometry.vehicleHeight *
-          (profile.view === "front" || profile.view === "rear" ? 0.034 : 0.026),
-      );
-      const zoneCenter =
-        geometry.contactCenter + (zone.center - geometry.contactCenter) * contactScale;
-      return `<ellipse cx="${svgNumber(zoneCenter)}" cy="${svgNumber(zone.groundY)}" rx="${svgNumber(zoneWidth * 0.52)}" ry="${svgNumber(zoneDepth * 0.54)}" fill="url(#contact-${index})"/>`;
-    })
-    .join("");
-  const contactDefs = geometry.contactZones
+  const contactMarkup = contactLobes
     .map(
-      (zone, index) =>
-        `<radialGradient id="contact-${index}"><stop offset="0" stop-color="#090b0d" stop-opacity="${svgNumber((profile.shadow.opacity / 100) * (0.74 + zone.strength * 0.2))}"/><stop offset="0.48" stop-color="#111418" stop-opacity="${svgNumber((profile.shadow.opacity / 100) * 0.42)}"/><stop offset="1" stop-color="#111418" stop-opacity="0"/></radialGradient>`,
+      (lobe, index) =>
+        `<ellipse cx="${svgNumber(lobe.centerX)}" cy="${svgNumber(lobe.centerY)}" rx="${svgNumber(lobe.radiusX)}" ry="${svgNumber(lobe.radiusY)}" fill="url(#contact-${index})"/>`,
+    )
+    .join("");
+  const contactDefs = contactLobes
+    .map(
+      (lobe, index) =>
+        `<radialGradient id="contact-${index}"><stop offset="0" stop-color="#090b0d" stop-opacity="${svgNumber(lobe.coreOpacity)}"/><stop offset="0.5" stop-color="#111418" stop-opacity="${svgNumber(lobe.midOpacity)}"/><stop offset="1" stop-color="#111418" stop-opacity="0"/></radialGradient>`,
     )
     .join("");
   const shadowSvg =
     Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${PREPARED_IMAGE_WIDTH}" height="${PREPARED_IMAGE_HEIGHT}">
     <defs>
       <linearGradient id="ambient" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#15181b" stop-opacity="${svgNumber((profile.shadow.opacity / 100) * 0.26)}"/>
-        <stop offset="0.38" stop-color="#1d2023" stop-opacity="${svgNumber((profile.shadow.opacity / 100) * 0.15)}"/>
+        <stop offset="0" stop-color="#15181b" stop-opacity="${svgNumber((profile.shadow.opacity / 100) * 0.36)}"/>
+        <stop offset="0.4" stop-color="#1d2023" stop-opacity="${svgNumber((profile.shadow.opacity / 100) * 0.21)}"/>
         <stop offset="1" stop-color="#1d2023" stop-opacity="0"/>
       </linearGradient>
       ${contactDefs}
@@ -220,7 +202,8 @@ export async function composeDefaultProcessedPhoto(input: {
     profile,
     frame: geometry.frame,
     grounding: {
-      version: "ground-plane-v2",
+      version: "ground-plane-v3",
+      floor_finish: profile.floorFinish,
       contact_zones: geometry.contactZones.length,
       contact_confidence: geometry.contactConfidence,
       reflection_enabled: reflectionSlices.length > 0,

@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Aperture, Eye, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EmptyState, ErrorState, PageHeader } from "@/components/product-ui";
+import { EmptyState, ErrorState, PageHeader, ProductSelect } from "@/components/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccessibleDealerships } from "@/hooks/use-accessible-dealerships";
 import { MediaPreviewDialog, RenameMediaDialog } from "@/components/MediaAssetDialogs";
@@ -33,7 +33,14 @@ type Backdrop = {
   image_url: string;
   dealership_id: string;
   created_at: string;
+  floor_finish: "matte" | "semi_gloss" | "glossy";
 };
+
+const FLOOR_FINISH_OPTIONS = [
+  { value: "matte", label: "Matte floor" },
+  { value: "semi_gloss", label: "Semi-gloss floor" },
+  { value: "glossy", label: "Glossy floor" },
+] as const;
 
 function BackdropsPage() {
   const { dealership } = Route.useSearch();
@@ -91,6 +98,27 @@ function BackdropsPage() {
     if (error) throw error;
     toast.success("Backdrop renamed");
     await load();
+  };
+
+  const handleFloorFinish = async (backdrop: Backdrop, floorFinish: string) => {
+    if (!selectedDealershipId || !["matte", "semi_gloss", "glossy"].includes(floorFinish)) return;
+    const { error } = await supabase
+      .from("backdrops")
+      .update({ floor_finish: floorFinish as Backdrop["floor_finish"] })
+      .eq("id", backdrop.id)
+      .eq("dealership_id", selectedDealershipId);
+    if (error) {
+      toast.error("Floor finish could not be updated");
+      return;
+    }
+    setItems((current) =>
+      current.map((item) =>
+        item.id === backdrop.id
+          ? { ...item, floor_finish: floorFinish as Backdrop["floor_finish"] }
+          : item,
+      ),
+    );
+    toast.success("Backdrop floor finish updated");
   };
 
   if (requestedDealershipDenied) {
@@ -155,6 +183,14 @@ function BackdropsPage() {
               </div>
               <div className="p-4">
                 <h3 className="font-medium text-card-foreground text-sm truncate">{b.name}</h3>
+                <div className="mt-3">
+                  <ProductSelect
+                    ariaLabel={`Floor finish for ${b.name}`}
+                    options={[...FLOOR_FINISH_OPTIONS]}
+                    value={b.floor_finish}
+                    onValueChange={(value) => void handleFloorFinish(b, value)}
+                  />
+                </div>
                 <div className="mt-3 flex flex-wrap justify-end gap-1">
                   <Button
                     type="button"
@@ -244,6 +280,7 @@ function BackdropForm({
 }) {
   const [name, setName] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [floorFinish, setFloorFinish] = useState<Backdrop["floor_finish"]>("semi_gloss");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -269,6 +306,7 @@ function BackdropForm({
         dealership_id: dealershipId,
         storage_bucket: "backdrops",
         storage_path: path,
+        floor_finish: floorFinish,
       });
       if (insErr) throw insErr;
       onSaved();
@@ -300,6 +338,20 @@ function BackdropForm({
               onChange={(e) => setName(e.target.value)}
               className="form-input"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-card-foreground mb-1.5">
+              Floor finish
+            </label>
+            <ProductSelect
+              ariaLabel="Backdrop floor finish"
+              options={[...FLOOR_FINISH_OPTIONS]}
+              value={floorFinish}
+              onValueChange={(value) => setFloorFinish(value as Backdrop["floor_finish"])}
+            />
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Controls the default shadow softness and reflection strength for this floor.
+            </p>
           </div>
           <div>
             <label className="block text-xs font-medium text-card-foreground mb-1.5">

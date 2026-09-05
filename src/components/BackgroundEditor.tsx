@@ -11,6 +11,7 @@ import { removeVehicleBackground } from "@/lib/background-removal";
 import {
   analyzeVehicleAlpha,
   buildAmbientShadowFootprint,
+  buildContactShadowLobes,
   buildGroundReflectionSlices,
   buildVehicleCompositionFrame,
   buildGroundEffectProfile,
@@ -18,6 +19,7 @@ import {
   PREPARED_IMAGE_HEIGHT,
   PREPARED_IMAGE_WIDTH,
   type GroundEffectProfile,
+  type BackdropFloorFinish,
   type VehicleSilhouetteAnalysis,
 } from "@/lib/vehicle-ground-effects";
 
@@ -32,7 +34,12 @@ const POSITIONS: { value: Position; label: string }[] = [
   { value: "br", label: "Bottom-right corner" },
 ];
 
-type Backdrop = { id: string; name: string; image_url: string };
+type Backdrop = {
+  id: string;
+  name: string;
+  image_url: string;
+  floor_finish: BackdropFloorFinish;
+};
 type OverlayTemplate = { id: string; name: string; image_url: string; category: string | null };
 
 type Photo = {
@@ -215,7 +222,6 @@ function buildContactShadowCanvas(
   const carHeight = geometry.vehicleHeight;
   const s = scalePct / 100;
   const groundY = geometry.baseline + offsetY;
-  const widthScale = Math.max(0.25, profile.shadow.widthFactor * s);
   const depth = Math.max(18, carHeight * profile.shadow.depthFactor * s);
   const ambientLayer = document.createElement("canvas");
   ambientLayer.width = targetW;
@@ -233,8 +239,8 @@ function buildContactShadowCanvas(
     for (const point of footprint.slice(1)) ambient.lineTo(point.x, point.y);
     ambient.closePath();
     const fill = ambient.createLinearGradient(0, groundY - 1, 0, groundY + depth);
-    fill.addColorStop(0, `rgba(18,21,24,${opacity * 0.26})`);
-    fill.addColorStop(0.36, `rgba(26,29,32,${opacity * 0.15})`);
+    fill.addColorStop(0, `rgba(18,21,24,${opacity * 0.36})`);
+    fill.addColorStop(0.4, `rgba(26,29,32,${opacity * 0.21})`);
     fill.addColorStop(1, "rgba(0,0,0,0)");
     ambient.fillStyle = fill;
     ambient.fill();
@@ -249,43 +255,18 @@ function buildContactShadowCanvas(
   // Each robust low-point cluster gets its own tight contact patch. These are
   // deliberately darker and shallower than the ambient layer so tires and the
   // rocker panel visually meet the floor rather than floating above a bar.
-  const zones = geometry.contactZones.length
-    ? geometry.contactZones
-    : [
-        {
-          left: geometry.contactLeft,
-          right: geometry.contactRight,
-          center: geometry.contactCenter,
-          groundY,
-          strength: 0.55,
-        },
-      ];
-  for (const zone of zones) {
-    const zoneSpan = Math.max(1, zone.right - zone.left) * widthScale;
-    const zoneWidth = Math.min(
-      carWidth * 0.34,
-      Math.max(
-        zoneSpan * 1.45,
-        carWidth * (profile.view === "front" || profile.view === "rear" ? 0.17 : 0.11),
-      ),
-    );
-    const zoneDepth = Math.max(
-      7,
-      carHeight * (profile.view === "front" || profile.view === "rear" ? 0.034 : 0.026) * s,
-    );
-    const zoneCenter =
-      geometry.contactCenter + offsetX + (zone.center - geometry.contactCenter) * widthScale;
-    const zoneGroundY = zone.groundY + offsetY;
+  const lobes = buildContactShadowLobes(geometry, profile, opacity, scalePct, offsetX, offsetY);
+  for (const lobe of lobes) {
     ctx.save();
-    ctx.translate(zoneCenter, zoneGroundY + zoneDepth * 0.08);
-    ctx.scale(1, zoneDepth / Math.max(1, zoneWidth));
-    const contact = ctx.createRadialGradient(0, 0, 0, 0, 0, zoneWidth * 0.52);
-    contact.addColorStop(0, `rgba(0,0,0,${opacity * (0.76 + zone.strength * 0.2)})`);
-    contact.addColorStop(0.48, `rgba(0,0,0,${opacity * 0.42})`);
+    ctx.translate(lobe.centerX, lobe.centerY);
+    ctx.scale(1, lobe.radiusY / Math.max(1, lobe.radiusX));
+    const contact = ctx.createRadialGradient(0, 0, 0, 0, 0, lobe.radiusX);
+    contact.addColorStop(0, `rgba(0,0,0,${lobe.coreOpacity})`);
+    contact.addColorStop(0.5, `rgba(0,0,0,${lobe.midOpacity})`);
     contact.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = contact;
     ctx.beginPath();
-    ctx.arc(0, 0, zoneWidth * 0.52, 0, Math.PI * 2);
+    ctx.arc(0, 0, lobe.radiusX, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -429,6 +410,14 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
       o.shadowX,
       o.shadowY,
     );
+    const reflectionSlices = buildGroundReflectionSlices(
+      o.analysis,
+      geometry,
+      o.groundEffectProfile,
+      o.reflectionScale,
+      o.reflectionX,
+      o.reflectionY,
+    );
     ctx.save();
     ctx.lineWidth = 3;
     ctx.strokeStyle = "#22d3ee";
@@ -455,6 +444,18 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
       ctx.beginPath();
       ctx.arc(zone.center, zone.groundY, 8, 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (reflectionSlices.length > 0) {
+      const first = reflectionSlices[0]!;
+      const last = reflectionSlices.at(-1)!;
+      ctx.strokeStyle = "#22c55e";
+      ctx.beginPath();
+      ctx.moveTo(first.destinationX + first.destinationWidth / 2, first.destinationY);
+      ctx.lineTo(
+        last.destinationX + last.destinationWidth / 2,
+        last.destinationY + last.destinationHeight,
+      );
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -674,14 +675,19 @@ export function BackgroundEditor({
     () => (cutoutImg ? analyzeSilhouette(cutoutImg, photo.shot_type) : null),
     [cutoutImg, photo.shot_type],
   );
+  const selectedFloorFinish = useMemo(
+    () => backdrops.find((backdrop) => backdrop.id === backdropId)?.floor_finish ?? "semi_gloss",
+    [backdropId, backdrops],
+  );
   const groundEffectProfile = useMemo(
-    () => (silhouetteAnalysis ? buildGroundEffectProfile(silhouetteAnalysis) : null),
-    [silhouetteAnalysis],
+    () =>
+      silhouetteAnalysis ? buildGroundEffectProfile(silhouetteAnalysis, selectedFloorFinish) : null,
+    [selectedFloorFinish, silhouetteAnalysis],
   );
 
   useEffect(() => {
     if (!rawCutoutImg || !groundEffectProfile || groundEffectsEditedRef.current) return;
-    const sourceKey = rawCutoutImg.src;
+    const sourceKey = `${rawCutoutImg.src}:${groundEffectProfile.floorFinish}`;
     if (appliedGroundEffectsSourceRef.current === sourceKey) return;
 
     appliedGroundEffectsSourceRef.current = sourceKey;
@@ -874,7 +880,7 @@ export function BackgroundEditor({
         await Promise.all([
           supabase
             .from("backdrops")
-            .select("id, name, image_url")
+            .select("id, name, image_url, floor_finish")
             .eq("dealership_id", dealershipId)
             .order("created_at", { ascending: false }),
           supabase
@@ -1293,7 +1299,8 @@ export function BackgroundEditor({
         metadata: {
           ...(backdropId ? { backdrop_resource_id: backdropId } : {}),
           composition_size: { width: 1600, height: 1200 },
-          grounding_version: "ground-plane-v2",
+          grounding_version: "ground-plane-v3",
+          grounding_floor_finish: groundEffectProfile?.floorFinish ?? "semi_gloss",
         },
       });
       onSaved();

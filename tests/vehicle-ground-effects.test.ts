@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   analyzeVehicleAlpha,
   buildAmbientShadowFootprint,
+  buildContactShadowLobes,
   buildVehicleCompositionFrame,
   buildGroundEffectProfile,
   buildGroundPlaneGeometry,
@@ -72,7 +73,7 @@ test("uncertain silhouettes choose reduced effects instead of an obvious generic
 
   assert.ok(analysis.alphaCoverage < 0.015);
   assert.equal(profile.reflection.opacity, 0);
-  assert.equal(profile.shadow.opacity, 18);
+  assert.equal(profile.shadow.opacity, 28);
   assert.ok(profile.reflection.heightFactor <= 0.2);
   assert.ok(profile.reflection.widthFactor <= 0.76);
 });
@@ -204,6 +205,12 @@ test("grounding V2 shares one baseline across localized contacts, ambient footpr
     const profile = buildGroundEffectProfile(analysis);
     const geometry = buildGroundPlaneGeometry(260, 160, analysis);
     const footprint = buildAmbientShadowFootprint(geometry, profile, profile.shadow.scale);
+    const contactLobes = buildContactShadowLobes(
+      geometry,
+      profile,
+      profile.shadow.opacity / 100,
+      profile.shadow.scale,
+    );
     const slices = buildGroundReflectionSlices(
       analysis,
       geometry,
@@ -216,12 +223,24 @@ test("grounding V2 shares one baseline across localized contacts, ambient footpr
       geometry.contactZones.every((zone) => zone.groundY <= geometry.baseline),
       view,
     );
-    assert.equal(Math.min(...footprint.map((point) => point.y)), geometry.baseline - 1, view);
+    assert.ok(
+      footprint.some((point) => Math.abs(point.y - (geometry.baseline - 1)) < 0.001),
+      view,
+    );
     assert.ok(
       footprint.some((point) => point.y > geometry.baseline),
       view,
     );
     assert.ok(slices.length > 0, view);
+    assert.equal(contactLobes.length, geometry.contactZones.length, view);
+    assert.ok(
+      contactLobes.every((lobe) => lobe.radiusY >= 4),
+      view,
+    );
+    assert.ok(
+      contactLobes.every((lobe) => lobe.coreOpacity > lobe.midOpacity),
+      view,
+    );
     assert.ok(Math.abs(slices[0]!.destinationY - geometry.baseline) < 0.001, view);
     assert.ok(
       slices.every((slice) => slice.destinationY >= geometry.baseline),
@@ -241,6 +260,27 @@ test("uncertain grounding keeps contact support but disables reflection", () => 
   assert.equal(profile.reflection.opacity, 0);
   assert.deepEqual(buildGroundReflectionSlices(analysis, geometry, profile), []);
   assert.ok(buildAmbientShadowFootprint(geometry, profile).length >= 4);
+});
+
+test("backdrop floor finish changes reflection honestly without moving the shared plane", () => {
+  const rgba = alphaMask(240, 150, (x, y) => {
+    const body = x >= 30 && x <= 210 && y >= 36 && y <= 108;
+    const wheels = ((x >= 48 && x <= 74) || (x >= 166 && x <= 192)) && y >= 100 && y <= 132;
+    return body || wheels;
+  });
+  const analysis = analyzeVehicleAlpha(rgba, 240, 150, "Front 3/4 driver");
+  const matte = buildGroundEffectProfile(analysis, "matte");
+  const glossy = buildGroundEffectProfile(analysis, "glossy");
+  const geometry = buildGroundPlaneGeometry(240, 150, analysis);
+  const matteSlices = buildGroundReflectionSlices(analysis, geometry, matte);
+  const glossySlices = buildGroundReflectionSlices(analysis, geometry, glossy);
+
+  assert.equal(matte.floorFinish, "matte");
+  assert.equal(glossy.floorFinish, "glossy");
+  assert.ok(glossy.reflection.opacity > matte.reflection.opacity * 4);
+  assert.ok(glossySlices.at(-1)!.destinationY > matteSlices.at(-1)!.destinationY);
+  assert.equal(glossySlices[0]!.destinationY, matteSlices[0]!.destinationY);
+  assert.equal(glossySlices[0]!.destinationY, geometry.baseline);
 });
 
 test("wide asymmetric dealership silhouettes remain three-quarter and recover two supports", () => {
@@ -270,13 +310,14 @@ test("rendering remains silhouette-based and manual controls remain wired", asyn
   assert.match(editor, /buildContactShadowCanvas/);
   assert.match(editor, /buildReflectionCanvas/);
   assert.match(editor, /buildGroundPlaneGeometry/);
+  assert.match(editor, /buildContactShadowLobes/);
   assert.match(editor, /geometry\.contactZones/);
-  assert.match(editor, /const zoneGroundY = zone\.groundY \+ offsetY/);
+  assert.match(editor, /ctx\.translate\(lobe\.centerX, lobe\.centerY\)/);
   assert.match(editor, /buildGroundReflectionSlices/);
   assert.match(editor, /buildAmbientShadowFootprint/);
   assert.match(effects, /profile\.reflection\.heightFactor/);
   assert.match(effects, /profile\.reflection\.perspectiveTaper/);
-  assert.match(effects, /Math\.exp\(-4\.2 \* distance\)/);
+  assert.match(effects, /Math\.exp\(-profile\.reflection\.distanceDecay \* distance\)/);
   assert.match(editor, /createRadialGradient/);
   assert.match(editor, /buildVehicleCompositionFrame/);
   assert.match(editor, /PREPARED_IMAGE_WIDTH/);

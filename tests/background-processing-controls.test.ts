@@ -12,6 +12,9 @@ const migration = read(
 const bulkMigration = read(
   "supabase/migrations/20260820130624_bulk_background_removal_controls.sql",
 );
+const groupedMigration = read(
+  "supabase/migrations/20260905012459_grounding_v3_grouped_background_activity.sql",
+);
 
 test("durable background jobs synchronize every user-facing photo state", () => {
   assert.match(migration, /CREATE TRIGGER background_jobs_sync_photo_state/);
@@ -107,5 +110,32 @@ test("Cancel All only closes eligible background work and preserves completed me
   assert.match(
     bulkMigration,
     /REVOKE ALL ON FUNCTION public\.cancel_background_removals\(uuid\)[\s\S]*GRANT EXECUTE ON FUNCTION public\.cancel_background_removals\(uuid\) TO authenticated/,
+  );
+});
+
+test("vehicle-level grouped controls remain capability and tenant scoped", () => {
+  assert.match(
+    groupedMigration,
+    /CREATE OR REPLACE FUNCTION public\.retry_failed_background_removals_for_vehicle/,
+  );
+  assert.match(
+    groupedMigration,
+    /CREATE OR REPLACE FUNCTION public\.cancel_background_removals_for_vehicle/,
+  );
+  assert.match(
+    groupedMigration,
+    /private\.current_user_has_store_capability\(_dealership_id, 'media'\)/,
+  );
+  assert.match(groupedMigration, /asset\.vehicle_id = _vehicle_id/);
+  assert.match(groupedMigration, /WHERE id = _vehicle_id AND dealership_id = _dealership_id/);
+  assert.match(groupedMigration, /public\.retry_background_removal\(target\.id\)/);
+  assert.match(groupedMigration, /public\.cancel_background_removal\(target\.id\)/);
+  assert.match(
+    groupedMigration,
+    /REVOKE ALL ON FUNCTION public\.retry_failed_background_removals_for_vehicle\(uuid, uuid\)[\s\S]*GRANT EXECUTE ON FUNCTION public\.retry_failed_background_removals_for_vehicle\(uuid, uuid\)[\s\S]*TO authenticated/,
+  );
+  assert.doesNotMatch(
+    groupedMigration,
+    /DELETE FROM public\.media_assets|DELETE FROM public\.media_variants|DELETE FROM public\.photos/,
   );
 });

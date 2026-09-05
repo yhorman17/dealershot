@@ -2941,6 +2941,71 @@ SELECT test.assert_true(
   'bulk background-removal controls are authenticated-only'
 );
 
+SELECT test.assert_true(
+  has_function_privilege(
+    'authenticated', 'public.get_background_removal_activity_grouped(uuid,integer)', 'EXECUTE'
+  )
+  AND has_function_privilege(
+    'authenticated',
+    'public.retry_failed_background_removals_for_vehicle(uuid,uuid)', 'EXECUTE'
+  )
+  AND has_function_privilege(
+    'authenticated',
+    'public.cancel_background_removals_for_vehicle(uuid,uuid)', 'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'anon', 'public.get_background_removal_activity_grouped(uuid,integer)', 'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'anon', 'public.retry_failed_background_removals_for_vehicle(uuid,uuid)', 'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'anon', 'public.cancel_background_removals_for_vehicle(uuid,uuid)', 'EXECUTE'
+  ),
+  'grouped background-removal activity and vehicle controls are authenticated-only'
+);
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT test.expect_sqlstate(
+  $$SELECT public.get_background_removal_activity_grouped(
+      'aaaaaaaa-0000-0000-0000-000000000001', 20
+    )$$,
+  '42501',
+  'capture-only staff cannot view grouped office media processing'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.retry_failed_background_removals_for_vehicle(
+      'aaaaaaaa-0000-0000-0000-000000000001',
+      'fc000000-0000-4000-8000-000000000001'
+    )$$,
+  '42501',
+  'capture-only staff cannot retry vehicle media processing'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000004';
+SELECT test.expect_sqlstate(
+  $$SELECT public.cancel_background_removals_for_vehicle(
+      'aaaaaaaa-0000-0000-0000-000000000001',
+      'fc000000-0000-4000-8000-000000000001'
+    )$$,
+  '42501',
+  'cross-store staff cannot cancel vehicle media processing'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT test.assert_true(
+  jsonb_typeof(public.get_background_removal_activity_grouped(
+    'aaaaaaaa-0000-0000-0000-000000000001', 20
+  )->'vehicles') = 'array',
+  'authorized media user receives a grouped vehicle activity projection'
+);
+RESET ROLE;
+
 INSERT INTO public.media_assets (
   id, organization_id, dealership_id, vehicle_id, uploaded_by,
   source_type, content_type, byte_size, checksum_sha256,

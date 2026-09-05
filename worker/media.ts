@@ -87,6 +87,7 @@ type BackgroundRemovalSource = {
   default_backdrop_id: string | null;
   default_backdrop_bucket: string | null;
   default_backdrop_path: string | null;
+  default_backdrop_floor_finish: "matte" | "semi_gloss" | "glossy" | null;
 };
 
 type BackgroundRemovalManifest = Record<
@@ -870,6 +871,7 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
         cutout: bytes,
         backdrop,
         shotType: source.shot_type,
+        floorFinish: source.default_backdrop_floor_finish,
       });
       const preparedVariantId = randomUUID();
       const preparedPath = `stores/${source.dealership_id}/vehicles/${source.vehicle_id}/media/${source.media_asset_id}/variants/customized/${job.job_id}-${preparedVariantId}.jpg`;

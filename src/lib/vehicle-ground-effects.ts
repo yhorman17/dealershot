@@ -7,6 +7,8 @@ export type VehicleView =
   | "three-quarter"
   | "unknown";
 
+export type BackdropFloorFinish = "matte" | "semi_gloss" | "glossy";
+
 export type SilhouetteBounds = {
   top: number;
   bottom: number;
@@ -41,6 +43,7 @@ export type VehicleSilhouetteAnalysis = {
 export type GroundEffectProfile = {
   view: VehicleView;
   confidence: number;
+  floorFinish: BackdropFloorFinish;
   shadow: {
     opacity: number;
     scale: number;
@@ -57,6 +60,7 @@ export type GroundEffectProfile = {
     blurFactor: number;
     skew: number;
     perspectiveTaper: number;
+    distanceDecay: number;
   };
 };
 
@@ -89,6 +93,15 @@ export type GroundPlaneGeometry = {
 };
 
 export type GroundFootprintPoint = { x: number; y: number };
+
+export type GroundContactShadowLobe = {
+  centerX: number;
+  centerY: number;
+  radiusX: number;
+  radiusY: number;
+  coreOpacity: number;
+  midOpacity: number;
+};
 
 export type GroundReflectionSlice = {
   sourceTop: number;
@@ -250,18 +263,76 @@ export function buildAmbientShadowFootprint(
   const direction = geometry.projectionDirection;
   const isEndView = profile.view === "front" || profile.view === "rear";
   const isSide = profile.view === "side";
-  const nearHalf = isEndView ? vehicleHalfWidth * 0.72 : contactHalfWidth;
+  const nearHalf = isEndView ? vehicleHalfWidth * 0.76 : contactHalfWidth;
   const farHalf = isSide ? vehicleHalfWidth * 0.94 : vehicleHalfWidth * 0.74;
   const drift = isEndView ? 0 : direction * depth * 0.48;
 
+  const groundedTop = geometry.contactZones
+    .map((zone) => ({
+      x: center + (zone.center - geometry.contactCenter) * widthFactor,
+      y: Math.min(baseline - 1, zone.groundY + offsetY - 1),
+    }))
+    .sort((a, b) => a.x - b.x);
+
   return [
     { x: center - nearHalf, y: baseline - 1 },
+    ...groundedTop,
     { x: center + nearHalf, y: baseline - 1 },
     { x: center + farHalf + drift, y: baseline + depth * 0.58 },
     { x: center + farHalf * 0.72 + drift * 1.25, y: baseline + depth },
     { x: center - farHalf * 0.72 + drift * 1.25, y: baseline + depth },
     { x: center - farHalf + drift, y: baseline + depth * 0.58 },
   ];
+}
+
+/**
+ * Localized tire/support shadows shared by the browser preview and the worker
+ * compositor. Keeping the lobe geometry here prevents saved output from
+ * drifting away from the editor's ground plane.
+ */
+export function buildContactShadowLobes(
+  geometry: GroundPlaneGeometry,
+  profile: GroundEffectProfile,
+  opacity: number,
+  scalePct = 100,
+  offsetX = 0,
+  offsetY = 0,
+): GroundContactShadowLobe[] {
+  const scale = clamp(scalePct / 100, 0.25, 1.8);
+  const widthScale = clamp(profile.shadow.widthFactor * scale, 0.3, 1.1);
+  const isEndView = profile.view === "front" || profile.view === "rear";
+  const normalizedOpacity = clamp(opacity, 0, 1);
+  const zones = geometry.contactZones.length
+    ? geometry.contactZones
+    : [
+        {
+          left: geometry.contactLeft,
+          right: geometry.contactRight,
+          center: geometry.contactCenter,
+          groundY: geometry.baseline,
+          strength: 0.55,
+        },
+      ];
+
+  return zones.map((zone) => {
+    const observedSpan = Math.max(1, zone.right - zone.left) * widthScale;
+    const minimumSpan = geometry.vehicleWidth * (isEndView ? 0.19 : 0.125);
+    const diameter = Math.min(
+      geometry.vehicleWidth * (isEndView ? 0.31 : 0.27),
+      Math.max(observedSpan * 1.55, minimumSpan),
+    );
+    const depth = Math.max(8, geometry.vehicleHeight * (isEndView ? 0.045 : 0.034) * scale);
+
+    return {
+      centerX:
+        geometry.contactCenter + offsetX + (zone.center - geometry.contactCenter) * widthScale,
+      centerY: zone.groundY + offsetY + depth * 0.04,
+      radiusX: diameter * 0.5,
+      radiusY: depth * 0.5,
+      coreOpacity: normalizedOpacity * (0.9 + zone.strength * 0.1),
+      midOpacity: normalizedOpacity * (0.48 + zone.strength * 0.08),
+    };
+  });
 }
 
 /**
@@ -276,7 +347,7 @@ export function buildGroundReflectionSlices(
   scalePct = 100,
   offsetX = 0,
   offsetY = 0,
-  sliceCount = 48,
+  sliceCount = 32,
 ): GroundReflectionSlice[] {
   if (
     profile.reflection.opacity <= 0 ||
@@ -330,7 +401,7 @@ export function buildGroundReflectionSlices(
       destinationY: baseline + mappedNear * reflectionHeight,
       destinationWidth: width,
       destinationHeight: Math.max(1.2, (mappedFar - mappedNear) * reflectionHeight + 0.9),
-      opacity: Math.exp(-4.2 * distance),
+      opacity: Math.exp(-profile.reflection.distanceDecay * distance),
       blur: Math.max(
         0.6,
         geometry.vehicleWidth * profile.reflection.blurFactor * (0.55 + 1.9 * distance),
@@ -630,20 +701,52 @@ export function analyzeVehicleAlpha(
   };
 }
 
-export function buildGroundEffectProfile(analysis: VehicleSilhouetteAnalysis): GroundEffectProfile {
+export function buildGroundEffectProfile(
+  analysis: VehicleSilhouetteAnalysis,
+  floorFinish: BackdropFloorFinish = "semi_gloss",
+): GroundEffectProfile {
   const direction = Math.abs(analysis.lowerCenterOffset) < 0.025 ? 0 : analysis.lowerCenterOffset;
   const conservative = analysis.viewConfidence < 0.58 || analysis.alphaCoverage < 0.015;
+  const floor =
+    floorFinish === "matte"
+      ? { shadow: 1.08, reflection: 0.18, reflectionHeight: 0.72, reflectionBlur: 1.35, decay: 6.4 }
+      : floorFinish === "glossy"
+        ? {
+            shadow: 0.96,
+            reflection: 1.34,
+            reflectionHeight: 1.08,
+            reflectionBlur: 0.9,
+            decay: 4.4,
+          }
+        : { shadow: 1, reflection: 1, reflectionHeight: 1, reflectionBlur: 1, decay: 5.1 };
+
+  const finish = (profile: GroundEffectProfile): GroundEffectProfile => ({
+    ...profile,
+    floorFinish,
+    shadow: {
+      ...profile.shadow,
+      opacity: Math.round(clamp(profile.shadow.opacity * floor.shadow, 0, 100)),
+    },
+    reflection: {
+      ...profile.reflection,
+      opacity: Math.round(clamp(profile.reflection.opacity * floor.reflection, 0, 100)),
+      heightFactor: profile.reflection.heightFactor * floor.reflectionHeight,
+      blurFactor: profile.reflection.blurFactor * floor.reflectionBlur,
+      distanceDecay: floor.decay,
+    },
+  });
 
   if (conservative || analysis.view === "unknown") {
-    return {
+    return finish({
       view: analysis.view,
       confidence: analysis.viewConfidence,
+      floorFinish,
       shadow: {
-        opacity: 18,
-        scale: 88,
-        widthFactor: 0.78,
-        depthFactor: 0.09,
-        blurFactor: 0.022,
+        opacity: 28,
+        scale: 90,
+        widthFactor: 0.74,
+        depthFactor: 0.085,
+        blurFactor: 0.018,
         skew: 0,
       },
       reflection: {
@@ -654,77 +757,84 @@ export function buildGroundEffectProfile(analysis: VehicleSilhouetteAnalysis): G
         blurFactor: 0.007,
         skew: 0,
         perspectiveTaper: 0.18,
+        distanceDecay: floor.decay,
       },
-    };
+    });
   }
 
   if (analysis.view === "side") {
-    return {
+    return finish({
       view: analysis.view,
       confidence: analysis.viewConfidence,
+      floorFinish,
       shadow: {
-        opacity: 26,
-        scale: 96,
+        opacity: 42,
+        scale: 98,
         widthFactor: 0.94,
-        depthFactor: 0.1,
-        blurFactor: 0.021,
+        depthFactor: 0.115,
+        blurFactor: 0.017,
         skew: clamp(direction * 0.35, -0.04, 0.04),
       },
       reflection: {
-        opacity: 8,
+        opacity: 15,
         scale: 94,
         widthFactor: 0.94,
-        heightFactor: 0.34,
-        blurFactor: 0.005,
+        heightFactor: 0.3,
+        blurFactor: 0.0045,
         skew: clamp(direction * 0.4, -0.05, 0.05),
-        perspectiveTaper: 0.06,
+        perspectiveTaper: 0.08,
+        distanceDecay: floor.decay,
       },
-    };
+    });
   }
 
   if (analysis.view === "front" || analysis.view === "rear") {
-    return {
+    return finish({
       view: analysis.view,
       confidence: analysis.viewConfidence,
+      floorFinish,
       shadow: {
-        opacity: 23,
-        scale: 88,
-        widthFactor: 0.82,
-        depthFactor: 0.11,
-        blurFactor: 0.023,
+        opacity: 40,
+        scale: 90,
+        widthFactor: 0.8,
+        depthFactor: 0.125,
+        blurFactor: 0.019,
         skew: 0,
       },
       reflection: {
-        opacity: 3,
-        scale: 84,
-        widthFactor: 0.8,
-        heightFactor: 0.21,
-        blurFactor: 0.007,
+        opacity: 7,
+        scale: 86,
+        widthFactor: 0.78,
+        heightFactor: 0.18,
+        blurFactor: 0.006,
         skew: 0,
-        perspectiveTaper: 0.2,
+        perspectiveTaper: 0.24,
+        distanceDecay: floor.decay,
       },
-    };
+    });
   }
 
-  return {
+  return finish({
     view: analysis.view,
     confidence: analysis.viewConfidence,
+    floorFinish,
     shadow: {
-      opacity: 25,
-      scale: 92,
-      widthFactor: 0.88,
-      depthFactor: 0.105,
-      blurFactor: 0.022,
+      opacity: 42,
+      scale: 94,
+      widthFactor: 0.9,
+      depthFactor: 0.135,
+      blurFactor: 0.018,
       skew: clamp(direction * 0.65, -0.11, 0.11),
     },
     reflection: {
-      opacity: 5,
-      scale: 89,
-      widthFactor: 0.87,
-      heightFactor: 0.25,
-      blurFactor: 0.006,
+      opacity: 11,
+      scale: 90,
+      widthFactor: 0.88,
+      heightFactor: 0.23,
+      blurFactor: 0.005,
       skew: clamp(direction * 0.8, -0.14, 0.14),
-      perspectiveTaper: 0.13,
+      perspectiveTaper: 0.18,
+      distanceDecay: floor.decay,
     },
-  };
+  });
 }

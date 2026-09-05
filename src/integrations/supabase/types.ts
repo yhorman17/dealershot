@@ -19,6 +19,7 @@ export type Database = {
         Row: {
           created_at: string;
           dealership_id: string;
+          floor_finish: "matte" | "semi_gloss" | "glossy";
           id: string;
           image_url: string;
           name: string;
@@ -28,6 +29,7 @@ export type Database = {
         Insert: {
           created_at?: string;
           dealership_id: string;
+          floor_finish?: "matte" | "semi_gloss" | "glossy";
           id?: string;
           image_url: string;
           name: string;
@@ -37,6 +39,7 @@ export type Database = {
         Update: {
           created_at?: string;
           dealership_id?: string;
+          floor_finish?: "matte" | "semi_gloss" | "glossy";
           id?: string;
           image_url?: string;
           name?: string;
@@ -1472,6 +1475,10 @@ export type Database = {
         Args: { _dealership_id: string; _limit?: number };
         Returns: Json;
       };
+      get_background_removal_activity_grouped: {
+        Args: { _dealership_id: string; _vehicle_limit?: number };
+        Returns: Json;
+      };
       retry_background_removal: {
         Args: { _job_id: string };
         Returns: Json;
@@ -1484,8 +1491,16 @@ export type Database = {
         Args: { _dealership_id: string };
         Returns: Json;
       };
+      retry_failed_background_removals_for_vehicle: {
+        Args: { _dealership_id: string; _vehicle_id: string };
+        Returns: Json;
+      };
       cancel_background_removals: {
         Args: { _dealership_id: string };
+        Returns: Json;
+      };
+      cancel_background_removals_for_vehicle: {
+        Args: { _dealership_id: string; _vehicle_id: string };
         Returns: Json;
       };
       mark_bulk_capture_ended: {
