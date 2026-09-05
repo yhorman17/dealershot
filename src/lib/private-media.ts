@@ -8,6 +8,7 @@ import {
   preparePrivateMediaUpload,
   preparePrivateVariantUpload,
 } from "@/lib/api/media.functions";
+import type { Json } from "@/integrations/supabase/types";
 
 export type MediaPurpose = "thumbnail" | "preview" | "original" | "editor" | "download";
 
@@ -156,6 +157,7 @@ export async function uploadPrivateVariant(input: {
   variantType: "cutout" | "corrected_cutout" | "customized" | "enhanced" | "dealer_render";
   processingProvider: string;
   sourceMode?: "approved" | "original" | "active_cutout";
+  metadata?: Json;
 }) {
   const contentType = normalizedImageMime(input.blob.type);
   if (!contentType) throw new Error("Editor output must be JPEG, PNG, or WebP.");
@@ -185,6 +187,13 @@ export async function uploadPrivateVariant(input: {
       variant_type: input.variantType,
       path: prepared.path,
       processing_provider: input.processingProvider,
+      metadata: input.metadata as
+        | {
+            backdrop_resource_id?: string;
+            composition_size?: { width: 1600; height: 1200 };
+            grounding_version?: "ground-plane-v2";
+          }
+        | undefined,
     },
   });
   clearAuthorizedMediaCache();

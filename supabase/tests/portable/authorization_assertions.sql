@@ -149,6 +149,26 @@ INSERT INTO public.documents (id, dealership_id, name, image_url) VALUES
   ('20000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'Doc A', 'https://example.test/doc-a.jpg'),
   ('20000000-0000-0000-0000-000000000002', 'bbbbbbbb-0000-0000-0000-000000000001', 'Doc B', 'https://example.test/doc-b.jpg');
 
+INSERT INTO public.backdrops (
+  id, dealership_id, name, image_url, storage_bucket, storage_path
+) VALUES
+  (
+    '25000000-0000-0000-0000-000000000001',
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'Dealer A showroom',
+    'https://example.test/backdrops/aaaaaaaa-0000-0000-0000-000000000001/showroom.jpg',
+    'backdrops',
+    'aaaaaaaa-0000-0000-0000-000000000001/showroom.jpg'
+  ),
+  (
+    '25000000-0000-0000-0000-000000000002',
+    'bbbbbbbb-0000-0000-0000-000000000001',
+    'Dealer B showroom',
+    'https://example.test/backdrops/bbbbbbbb-0000-0000-0000-000000000001/showroom.jpg',
+    'backdrops',
+    'bbbbbbbb-0000-0000-0000-000000000001/showroom.jpg'
+  );
+
 INSERT INTO storage.objects (bucket_id, name) VALUES
   ('vehicle-photos', '10000000-0000-0000-0000-000000000001/existing-a.jpg'),
   ('vehicle-photos', '10000000-0000-0000-0000-000000000002/existing-b.jpg');
@@ -252,6 +272,46 @@ SELECT test.expect_sqlstate(
   'cross-store explicit vehicle reprocessing is denied'
 );
 RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000002';
+SELECT test.assert_true(
+  (public.save_default_processed_backdrop(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    '25000000-0000-0000-0000-000000000001'
+  )->>'default_backdrop_id')::uuid = '25000000-0000-0000-0000-000000000001',
+  'settings-capable dealer administrator can select a stable same-store backdrop'
+);
+SELECT test.expect_sqlstate(
+  $$SELECT public.save_default_processed_backdrop(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    '25000000-0000-0000-0000-000000000002'
+  )$$,
+  '22023',
+  'default backdrop selection rejects a cross-store resource'
+);
+RESET ROLE;
+
+SET ROLE authenticated;
+SET "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000003';
+SELECT test.expect_sqlstate(
+  $$SELECT public.save_default_processed_backdrop(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    '25000000-0000-0000-0000-000000000001'
+  )$$,
+  '42501',
+  'capture-only staff cannot change the processed-photo backdrop'
+);
+RESET ROLE;
+
+SELECT test.assert_true(
+  NOT has_function_privilege(
+    'authenticated',
+    'public.worker_commit_background_cutout_and_default_composition(uuid,uuid,text,text,bigint,integer,integer,text,text,jsonb,uuid,text,text,bigint,integer,integer,text,uuid,jsonb)',
+    'EXECUTE'
+  ),
+  'browser roles cannot commit automatic prepared derivatives'
+);
 
 SELECT test.assert_true(
   has_function_privilege(

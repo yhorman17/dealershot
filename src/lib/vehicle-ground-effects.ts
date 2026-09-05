@@ -35,6 +35,7 @@ export type VehicleSilhouetteAnalysis = {
   silhouetteAspect: number;
   lowerCenterOffset: number;
   alphaCoverage: number;
+  contactConfidence: number;
 };
 
 export type GroundEffectProfile = {
@@ -83,6 +84,21 @@ export type GroundPlaneGeometry = {
   contactCenter: number;
   contactZones: VehicleContactZone[];
   lowerContour: SilhouetteContourPoint[];
+  projectionDirection: number;
+  contactConfidence: number;
+};
+
+export type GroundFootprintPoint = { x: number; y: number };
+
+export type GroundReflectionSlice = {
+  sourceTop: number;
+  sourceHeight: number;
+  destinationX: number;
+  destinationY: number;
+  destinationWidth: number;
+  destinationHeight: number;
+  opacity: number;
+  blur: number;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -203,7 +219,124 @@ export function buildGroundPlaneGeometry(
       x: projectX(point.x),
       y: projectY(point.y),
     })),
+    projectionDirection: clamp(analysis.lowerCenterOffset * 5, -1, 1),
+    contactConfidence: analysis.contactConfidence,
   };
+}
+
+/**
+ * Build a view-aware floor footprint in the same stage coordinates used by
+ * framing and contact zones. This intentionally forms a shallow polygon rather
+ * than a generic ellipse, so front/rear and three-quarter vehicles do not
+ * collapse into the same horizontal bar.
+ */
+export function buildAmbientShadowFootprint(
+  geometry: GroundPlaneGeometry,
+  profile: GroundEffectProfile,
+  scalePct = 100,
+  offsetX = 0,
+  offsetY = 0,
+): GroundFootprintPoint[] {
+  const scale = clamp(scalePct / 100, 0.25, 1.8);
+  const widthFactor = clamp(profile.shadow.widthFactor * scale, 0.4, 1.05);
+  const center = geometry.contactCenter + offsetX;
+  const vehicleHalfWidth = geometry.vehicleWidth * 0.5 * widthFactor;
+  const contactHalfWidth = Math.max(
+    geometry.vehicleWidth * 0.2,
+    (geometry.contactRight - geometry.contactLeft) * 0.5 * widthFactor,
+  );
+  const baseline = geometry.baseline + offsetY;
+  const depth = Math.max(18, geometry.vehicleHeight * profile.shadow.depthFactor * scale);
+  const direction = geometry.projectionDirection;
+  const isEndView = profile.view === "front" || profile.view === "rear";
+  const isSide = profile.view === "side";
+  const nearHalf = isEndView ? vehicleHalfWidth * 0.72 : contactHalfWidth;
+  const farHalf = isSide ? vehicleHalfWidth * 0.94 : vehicleHalfWidth * 0.74;
+  const drift = isEndView ? 0 : direction * depth * 0.48;
+
+  return [
+    { x: center - nearHalf, y: baseline - 1 },
+    { x: center + nearHalf, y: baseline - 1 },
+    { x: center + farHalf + drift, y: baseline + depth * 0.58 },
+    { x: center + farHalf * 0.72 + drift * 1.25, y: baseline + depth },
+    { x: center - farHalf * 0.72 + drift * 1.25, y: baseline + depth },
+    { x: center - farHalf + drift, y: baseline + depth * 0.58 },
+  ];
+}
+
+/**
+ * Map horizontal cutout slices onto the floor with a nonlinear perspective
+ * curve. Slice zero begins exactly at the shared baseline; farther slices
+ * compress, taper, drift, fade, and blur progressively.
+ */
+export function buildGroundReflectionSlices(
+  analysis: VehicleSilhouetteAnalysis,
+  geometry: GroundPlaneGeometry,
+  profile: GroundEffectProfile,
+  scalePct = 100,
+  offsetX = 0,
+  offsetY = 0,
+  sliceCount = 48,
+): GroundReflectionSlice[] {
+  if (
+    profile.reflection.opacity <= 0 ||
+    geometry.contactConfidence < 0.48 ||
+    analysis.viewConfidence < 0.58
+  ) {
+    return [];
+  }
+
+  const sourceGroundY = clamp(analysis.groundY, analysis.bounds.top, analysis.bounds.bottom);
+  const sourceHeight = Math.max(1, sourceGroundY - analysis.bounds.top + 1);
+  const count = Math.round(clamp(sliceCount, 16, 80));
+  const manualScale = clamp(scalePct / 100, 0.25, 1.6);
+  const reflectionWidth = Math.min(
+    geometry.vehicleWidth,
+    geometry.vehicleWidth * profile.reflection.widthFactor * manualScale,
+  );
+  const reflectionHeight = Math.max(
+    8,
+    geometry.vehicleHeight * profile.reflection.heightFactor * manualScale,
+  );
+  const vehicleCenter = (geometry.vehicleLeft + geometry.vehicleRight) / 2;
+  const centerWeight =
+    profile.view.includes("three-quarter") || profile.view === "three-quarter" ? 0.48 : 0.22;
+  const center =
+    vehicleCenter * (1 - centerWeight) + geometry.contactCenter * centerWeight + offsetX;
+  const baseline = geometry.baseline + offsetY;
+  const curve = (distance: number) => {
+    const k = profile.view === "side" ? 2.05 : 2.65;
+    return (1 - Math.exp(-k * distance)) / (1 - Math.exp(-k));
+  };
+
+  return Array.from({ length: count }, (_, index) => {
+    const near = index / count;
+    const far = (index + 1) / count;
+    const distance = (near + far) / 2;
+    const sourceTop = sourceGroundY + 1 - far * sourceHeight;
+    const sourceSliceHeight = Math.max(1, (far - near) * sourceHeight + 0.75);
+    const mappedNear = curve(near);
+    const mappedFar = curve(far);
+    const taper = 1 - profile.reflection.perspectiveTaper * Math.pow(distance, 1.25);
+    const width = reflectionWidth * taper;
+    const directionalDrift =
+      profile.reflection.skew * reflectionHeight * Math.pow(distance, 1.35) +
+      geometry.projectionDirection * reflectionHeight * 0.075 * Math.pow(distance, 1.5);
+
+    return {
+      sourceTop,
+      sourceHeight: sourceSliceHeight,
+      destinationX: center - width / 2 + directionalDrift,
+      destinationY: baseline + mappedNear * reflectionHeight,
+      destinationWidth: width,
+      destinationHeight: Math.max(1.2, (mappedFar - mappedNear) * reflectionHeight + 0.9),
+      opacity: Math.exp(-4.2 * distance),
+      blur: Math.max(
+        0.6,
+        geometry.vehicleWidth * profile.reflection.blurFactor * (0.55 + 1.9 * distance),
+      ),
+    };
+  });
 }
 
 function classifyShotType(shotType: string | null | undefined): VehicleView | null {
@@ -274,6 +407,7 @@ export function analyzeVehicleAlpha(
       silhouetteAspect: width / Math.max(1, height),
       lowerCenterOffset: 0,
       alphaCoverage: 0,
+      contactConfidence: 0,
     };
   }
 
@@ -364,11 +498,9 @@ export function analyzeVehicleAlpha(
       .sort((a, b) => a.left - b.left);
   }
 
-  // Perspective frequently leaves the far wheel a few pixels above the
-  // globally-lowest wheel. The old global threshold therefore returned one
-  // contact lobe for a real three-quarter vehicle. Recover one local low point
-  // from each half of the silhouette so contact shadow can attach at both
-  // visible support regions without requiring wheel detection or ML.
+  // Perspective frequently leaves the far wheel above the globally-lowest
+  // wheel. Recover supported local low plateaus from each half, avoiding the
+  // bumper-tip spikes that made earlier contact shadows float or stretch.
   if (contactZones.length < 2 && boundsWidth >= 16) {
     const midpoint = Math.floor((left + right) / 2);
     const searchRanges = [
@@ -376,12 +508,25 @@ export function analyzeVehicleAlpha(
       { start: midpoint + 1, end: right },
     ];
     for (const range of searchRanges) {
-      let peakX = range.start;
+      const edgeInset = Math.max(2, Math.round(boundsWidth * 0.055));
+      const windowRadius = Math.max(2, Math.round(boundsWidth * 0.018));
+      let peakX = range.start + edgeInset;
       let peakY = -1;
-      for (let x = range.start; x <= range.end; x += 1) {
-        if ((bottomByX[x] ?? -1) > peakY) {
-          peakY = bottomByX[x] ?? -1;
+      let peakSupport = 0;
+      for (let x = range.start + edgeInset; x <= range.end - edgeInset; x += 1) {
+        const samples: number[] = [];
+        for (let sx = x - windowRadius; sx <= x + windowRadius; sx += 1) {
+          const value = bottomByX[sx] ?? -1;
+          if (value >= 0) samples.push(value);
+        }
+        if (samples.length < windowRadius + 1) continue;
+        samples.sort((a, b) => a - b);
+        const supportedY = samples[Math.floor(samples.length * 0.55)] ?? -1;
+        const support = samples.filter((value) => value >= supportedY - groundTolerance).length;
+        if (supportedY > peakY || (supportedY === peakY && support > peakSupport)) {
+          peakY = supportedY;
           peakX = x;
+          peakSupport = support;
         }
       }
       if (peakY < top + boundsHeight * 0.68) continue;
@@ -392,7 +537,7 @@ export function analyzeVehicleAlpha(
         right: Math.min(right, peakX + halfSpan),
         center: peakX,
         groundY: peakY,
-        strength: 0.58,
+        strength: clamp(0.48 + peakSupport / Math.max(1, windowRadius * 10), 0.5, 0.72),
       });
     }
     contactZones.sort((a, b) => a.left - b.left);
@@ -437,6 +582,13 @@ export function analyzeVehicleAlpha(
           Math.min(...contactZones.map((zone) => zone.groundY))) /
         boundsHeight
       : 0;
+  const contactConfidence = clamp(
+    contactZones.reduce((sum, zone) => sum + zone.strength, 0) / Math.max(1, contactZones.length) +
+      (contactZones.length >= 2 ? 0.12 : -0.08) -
+      (contactDepthSpread > 0.18 ? 0.18 : 0),
+    0,
+    1,
+  );
 
   let view: VehicleView;
   let viewConfidence: number;
@@ -474,6 +626,7 @@ export function analyzeVehicleAlpha(
     silhouetteAspect,
     lowerCenterOffset,
     alphaCoverage: alphaPixels / Math.max(1, width * height),
+    contactConfidence,
   };
 }
 

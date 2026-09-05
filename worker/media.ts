@@ -19,6 +19,8 @@ import {
   type VehicleAwareCutoutResult,
 } from "./vehicle-aware-cutout.ts";
 import { runVehicleSegmentationV3Isolated } from "./vehicle-segmentation-v3-isolated.ts";
+import { composeDefaultProcessedPhoto } from "./default-backdrop-composition.ts";
+import { PREPARED_IMAGE_HEIGHT, PREPARED_IMAGE_WIDTH } from "../src/lib/vehicle-ground-effects.ts";
 
 const PRIVATE_BUCKET = "dealer-media-private";
 const LEGACY_PRIVATE_BUCKET = "dealer-media-legacy-private";
@@ -81,6 +83,10 @@ type BackgroundRemovalSource = {
   bucket: string;
   path: string;
   content_type: string;
+  shot_type: string | null;
+  default_backdrop_id: string | null;
+  default_backdrop_bucket: string | null;
+  default_backdrop_path: string | null;
 };
 
 type BackgroundRemovalManifest = Record<
@@ -839,11 +845,63 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
   const variantId = randomUUID();
   const path = `stores/${source.dealership_id}/vehicles/${source.vehicle_id}/media/${source.media_asset_id}/variants/cutout/${job.job_id}-${variantId}.png`;
   await uploadVerified(client, PRIVATE_BUCKET, path, bytes, "image/png");
-  const commitRpc = vehicleSegmentationV3
-    ? "worker_commit_vehicle_segmentation_v3_review"
-    : vehicleAware
-      ? "worker_commit_vehicle_aware_cutout"
-      : "worker_commit_background_cutout_result";
+  let prepared: {
+    variantId: string;
+    path: string;
+    bytes: Buffer;
+    metadata: Awaited<ReturnType<typeof composeDefaultProcessedPhoto>>;
+  } | null = null;
+  let preparedCandidatePath: string | null = null;
+  if (
+    !vehicleSegmentationV3 &&
+    !vehicleAware &&
+    standardQuality === "good" &&
+    source.default_backdrop_id &&
+    source.default_backdrop_bucket === "backdrops" &&
+    source.default_backdrop_path
+  ) {
+    try {
+      const backdrop = await downloadBytes(
+        client,
+        source.default_backdrop_bucket,
+        source.default_backdrop_path,
+      );
+      const composed = await composeDefaultProcessedPhoto({
+        cutout: bytes,
+        backdrop,
+        shotType: source.shot_type,
+      });
+      const preparedVariantId = randomUUID();
+      const preparedPath = `stores/${source.dealership_id}/vehicles/${source.vehicle_id}/media/${source.media_asset_id}/variants/customized/${job.job_id}-${preparedVariantId}.jpg`;
+      preparedCandidatePath = preparedPath;
+      await uploadVerified(client, PRIVATE_BUCKET, preparedPath, composed.bytes, "image/jpeg");
+      prepared = {
+        variantId: preparedVariantId,
+        path: preparedPath,
+        bytes: composed.bytes,
+        metadata: composed,
+      };
+    } catch (error) {
+      await client.storage
+        .from(PRIVATE_BUCKET)
+        .remove(preparedCandidatePath ? [path, preparedCandidatePath] : [path])
+        .catch(() => undefined);
+      throw new BackgroundProcessingError(
+        "default_backdrop_composition_failed",
+        "finalization_failure",
+        true,
+        { stage: "default_backdrop_composition", exception_name: safeExceptionName(error) },
+      );
+    }
+  }
+
+  const commitRpc = prepared
+    ? "worker_commit_background_cutout_and_default_composition"
+    : vehicleSegmentationV3
+      ? "worker_commit_vehicle_segmentation_v3_review"
+      : vehicleAware
+        ? "worker_commit_vehicle_aware_cutout"
+        : "worker_commit_background_cutout_result";
   const commitArguments = {
     _job_id: job.job_id,
     _variant_id: variantId,
@@ -853,32 +911,50 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
     _width: metadata.width,
     _height: metadata.height,
     _checksum_sha256: hash(bytes),
-    ...(vehicleSegmentationV3
+    ...(prepared
       ? {
-          _diagnostics: vehicleSegmentationV3Diagnostics,
-          _metadata: {
-            ...standardInference,
-            ...vehicleSegmentationV3Diagnostics,
-            framing: vehicleSegmentationV3.metadata.framing,
+          _quality_class: standardQuality,
+          _diagnostics: standardDiagnostics,
+          _prepared_variant_id: prepared.variantId,
+          _prepared_storage_bucket: PRIVATE_BUCKET,
+          _prepared_storage_path: prepared.path,
+          _prepared_byte_size: prepared.bytes.length,
+          _prepared_width: PREPARED_IMAGE_WIDTH,
+          _prepared_height: PREPARED_IMAGE_HEIGHT,
+          _prepared_checksum_sha256: hash(prepared.bytes),
+          _backdrop_id: source.default_backdrop_id,
+          _composition_metadata: {
+            frame: prepared.metadata.frame,
+            ground_effect_profile: prepared.metadata.profile,
+            grounding: prepared.metadata.grounding,
           },
         }
-      : vehicleAware
+      : vehicleSegmentationV3
         ? {
-            _quality_class: vehicleAware.quality.rating,
-            _quality_score: vehicleAware.quality.score,
+            _diagnostics: vehicleSegmentationV3Diagnostics,
             _metadata: {
-              pipeline_version: VEHICLE_AWARE_PIPELINE_VERSION,
-              method: vehicleAware.method,
-              detector: vehicleAware.detector,
-              roi: vehicleAware.roi,
-              quality: vehicleAware.quality,
-              framing: vehicleAware.framing,
+              ...standardInference,
+              ...vehicleSegmentationV3Diagnostics,
+              framing: vehicleSegmentationV3.metadata.framing,
             },
           }
-        : {
-            _quality_class: standardQuality,
-            _diagnostics: standardDiagnostics,
-          }),
+        : vehicleAware
+          ? {
+              _quality_class: vehicleAware.quality.rating,
+              _quality_score: vehicleAware.quality.score,
+              _metadata: {
+                pipeline_version: VEHICLE_AWARE_PIPELINE_VERSION,
+                method: vehicleAware.method,
+                detector: vehicleAware.detector,
+                roi: vehicleAware.roi,
+                quality: vehicleAware.quality,
+                framing: vehicleAware.framing,
+              },
+            }
+          : {
+              _quality_class: standardQuality,
+              _diagnostics: standardDiagnostics,
+            }),
   };
   const { data: committed, error: commitError } = await client.rpc(
     commitRpc as never,
@@ -889,22 +965,29 @@ async function removeMediaBackground(client: SupabaseClient<Database>, job: Back
     // just-produced object when finalization/cancellation rejects promotion.
     await client.storage
       .from(PRIVATE_BUCKET)
-      .remove([path])
+      .remove(prepared ? [path, prepared.path] : [path])
       .catch(() => undefined);
     throw new Error("background_variant_finalize_failed");
   }
   return {
     media_asset_id: source.media_asset_id,
     photo_id: source.photo_id,
-    variant_id: committed,
+    variant_id: prepared
+      ? asObject<{ prepared_variant_id: string }>(committed as Json).prepared_variant_id
+      : committed,
+    cutout_variant_id: prepared
+      ? asObject<{ cutout_variant_id: string }>(committed as Json).cutout_variant_id
+      : committed,
     width: metadata.width,
     height: metadata.height,
     bytes: bytes.length,
-    strategy: vehicleSegmentationV3
-      ? "vehicle_segmentation_v3_review"
-      : vehicleAware
-        ? vehicleAware.method
-        : "standard",
+    strategy: prepared
+      ? "standard_with_default_backdrop"
+      : vehicleSegmentationV3
+        ? "vehicle_segmentation_v3_review"
+        : vehicleAware
+          ? vehicleAware.method
+          : "standard",
     quality: vehicleSegmentationV3
       ? "needs_review"
       : (vehicleAware?.quality.rating ?? standardQuality),

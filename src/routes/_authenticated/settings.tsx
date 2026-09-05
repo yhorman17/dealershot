@@ -29,6 +29,7 @@ type ShotRequirement = Database["public"]["Tables"]["photo_shot_requirements"]["
 type ProcessingRule = Database["public"]["Tables"]["media_processing_rules"]["Row"];
 type DocumentRequirement = Database["public"]["Tables"]["document_requirements"]["Row"];
 type PayoutRule = Database["public"]["Tables"]["payout_rules"]["Row"];
+type Backdrop = Database["public"]["Tables"]["backdrops"]["Row"];
 
 const VEHICLE_TYPES = ["new", "used", "certified"];
 const PROCESSING_CATEGORIES = [
@@ -55,6 +56,8 @@ function SettingsPage() {
     DEFAULT_CAPTURE_METHOD_CONFIGURATION,
   );
   const [processing, setProcessing] = useState<ProcessingRule[]>([]);
+  const [backdrops, setBackdrops] = useState<Backdrop[]>([]);
+  const [defaultBackdropId, setDefaultBackdropId] = useState("none");
   const [documents, setDocuments] = useState<DocumentRequirement[]>([]);
   const [payoutRules, setPayoutRules] = useState<PayoutRule[]>([]);
 
@@ -104,6 +107,7 @@ function SettingsPage() {
       processingResult,
       documentResult,
       payoutResult,
+      backdropsResult,
     ] = await Promise.all([
       supabase
         .from("readiness_rules")
@@ -118,7 +122,7 @@ function SettingsPage() {
       supabase
         .from("photography_settings")
         .select(
-          "completion_policy, bulk_capture_enabled, guided_capture_enabled, default_capture_method",
+          "completion_policy, bulk_capture_enabled, guided_capture_enabled, default_capture_method, default_backdrop_id",
         )
         .eq("dealership_id", selectedDealershipId)
         .maybeSingle(),
@@ -137,6 +141,11 @@ function SettingsPage() {
         .select("*")
         .eq("dealership_id", selectedDealershipId)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("backdrops")
+        .select("*")
+        .eq("dealership_id", selectedDealershipId)
+        .order("name"),
     ]);
     const error = [
       readinessResult,
@@ -145,6 +154,7 @@ function SettingsPage() {
       processingResult,
       documentResult,
       payoutResult,
+      backdropsResult,
     ]
       .map((result) => result.error)
       .find(Boolean);
@@ -161,6 +171,8 @@ function SettingsPage() {
           default_method: photoSettingsResult.data?.default_capture_method ?? "bulk",
         }),
       );
+      setBackdrops(backdropsResult.data ?? []);
+      setDefaultBackdropId(photoSettingsResult.data?.default_backdrop_id ?? "none");
       setProcessing(processingResult.data ?? []);
       setDocuments(documentResult.data ?? []);
       setPayoutRules(payoutResult.data ?? []);
@@ -173,6 +185,7 @@ function SettingsPage() {
   const runSave = async (
     section: string,
     request: () => PromiseLike<{ error: { message: string } | null }>,
+    successDescription = "Affected inventory is being evaluated with the new store rules.",
   ) => {
     setSaving(section);
     const { error } = await request();
@@ -182,7 +195,7 @@ function SettingsPage() {
       return false;
     }
     toast.success(`${section} settings saved`, {
-      description: "Affected inventory is being evaluated with the new store rules.",
+      description: successDescription,
     });
     await load();
     return true;
@@ -570,6 +583,47 @@ function SettingsPage() {
               title="Media processing"
               description="Rules apply to newly captured media. Changing them does not silently reprocess existing inventory."
             >
+              <div className="grid gap-4 border-b border-border p-4 sm:grid-cols-[minmax(12rem,1fr)_minmax(14rem,20rem)_auto] sm:items-end">
+                <div>
+                  <p className="text-sm font-semibold">Default processed-photo backdrop</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Good automatic cutouts use this backdrop for future 1600 × 1200 prepared photos.
+                    The transparent cutout remains separately available.
+                  </p>
+                </div>
+                <div>
+                  <Label className="mb-1.5 block text-xs">Backdrop</Label>
+                  <ProductSelect
+                    value={defaultBackdropId}
+                    onValueChange={setDefaultBackdropId}
+                    ariaLabel="Default processed-photo backdrop"
+                    options={[
+                      { value: "none", label: "None / Transparent" },
+                      ...backdrops.map((backdrop) => ({
+                        value: backdrop.id,
+                        label: backdrop.name,
+                      })),
+                    ]}
+                  />
+                </div>
+                <Button
+                  disabled={saving === "Default Backdrop"}
+                  onClick={() =>
+                    void runSave(
+                      "Default Backdrop",
+                      () =>
+                        supabase.rpc("save_default_processed_backdrop", {
+                          _dealership_id: selectedDealershipId,
+                          _backdrop_id: defaultBackdropId === "none" ? null : defaultBackdropId,
+                        }),
+                      "Future successful background removals will use this backdrop; existing prepared photos were not changed.",
+                    )
+                  }
+                >
+                  <Save className="size-4" />
+                  {saving === "Default Backdrop" ? "Saving…" : "Save default"}
+                </Button>
+              </div>
               <div className="divide-y divide-border">
                 {PROCESSING_CATEGORIES.map((category) => {
                   const rule = processing.find((item) => item.media_category === category);

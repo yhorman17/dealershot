@@ -22,6 +22,8 @@ export type Database = {
           id: string;
           image_url: string;
           name: string;
+          storage_bucket: string | null;
+          storage_path: string | null;
         };
         Insert: {
           created_at?: string;
@@ -29,6 +31,8 @@ export type Database = {
           id?: string;
           image_url: string;
           name: string;
+          storage_bucket?: string | null;
+          storage_path?: string | null;
         };
         Update: {
           created_at?: string;
@@ -36,6 +40,8 @@ export type Database = {
           id?: string;
           image_url?: string;
           name?: string;
+          storage_bucket?: string | null;
+          storage_path?: string | null;
         };
         Relationships: [];
       };
@@ -315,6 +321,7 @@ export type Database = {
         bulk_capture_enabled: boolean;
         guided_capture_enabled: boolean;
         default_capture_method: "bulk" | "guided";
+        default_backdrop_id: string | null;
         updated_by: string | null;
         updated_at: string;
       }>;
@@ -1344,6 +1351,25 @@ export type Database = {
         };
         Returns: Json;
       };
+      commit_private_photo_variant_with_metadata: {
+        Args: {
+          _actor_id: string;
+          _photo_id: string;
+          _variant_id: string;
+          _variant_type: string;
+          _source_variant_id: string;
+          _storage_bucket: string;
+          _storage_path: string;
+          _content_type: string;
+          _byte_size: number;
+          _width: number;
+          _height: number;
+          _checksum_sha256: string;
+          _processing_provider: string;
+          _metadata: Json;
+        };
+        Returns: Json;
+      };
       archive_private_media_asset: {
         Args: { _actor_id: string; _media_asset_id: string };
         Returns: boolean;
@@ -1569,6 +1595,10 @@ export type Database = {
       save_media_processing_configuration: {
         Args: { _dealership_id: string; _rules: Json };
         Returns: undefined;
+      };
+      save_default_processed_backdrop: {
+        Args: { _dealership_id: string; _backdrop_id?: string | null };
+        Returns: Json;
       };
       cancel_bulk_capture_workflow: {
         Args: { _session_id: string };

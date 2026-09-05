@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   analyzeVehicleAlpha,
+  buildAmbientShadowFootprint,
   buildVehicleCompositionFrame,
   buildGroundEffectProfile,
   buildGroundPlaneGeometry,
+  buildGroundReflectionSlices,
   PREPARED_IMAGE_HEIGHT,
   PREPARED_IMAGE_WIDTH,
 } from "../src/lib/vehicle-ground-effects.ts";
@@ -176,6 +178,71 @@ test("ground-plane projection follows manual vehicle adjustments without stale a
   assert.ok(adjusted.contactZones.every((zone) => zone.groundY <= adjusted.baseline));
 });
 
+test("grounding V2 shares one baseline across localized contacts, ambient footprint, and reflection", () => {
+  const views = [
+    "Front",
+    "Rear",
+    "Driver side",
+    "Passenger side",
+    "Front 3/4 driver",
+    "Front 3/4 passenger",
+    "Rear 3/4 driver",
+    "Rear 3/4 passenger",
+  ];
+
+  for (const view of views) {
+    const rgba = alphaMask(260, 160, (x, y) => {
+      const threeQuarter = view.includes("3/4");
+      const direction = view.includes("passenger") ? -1 : 1;
+      const shift = threeQuarter ? Math.round(((y - 40) / 80) * direction * 14) : 0;
+      const body = y >= 38 && y <= 112 && x >= 35 + shift && x <= 225 + shift;
+      const nearWheel = x >= 155 + shift && x <= 185 + shift && y >= 103 && y <= 140;
+      const farWheel = x >= 62 + shift && x <= 83 + shift && y >= 100 && y <= 132;
+      return body || nearWheel || farWheel;
+    });
+    const analysis = analyzeVehicleAlpha(rgba, 260, 160, view);
+    const profile = buildGroundEffectProfile(analysis);
+    const geometry = buildGroundPlaneGeometry(260, 160, analysis);
+    const footprint = buildAmbientShadowFootprint(geometry, profile, profile.shadow.scale);
+    const slices = buildGroundReflectionSlices(
+      analysis,
+      geometry,
+      profile,
+      profile.reflection.scale,
+    );
+
+    assert.ok(geometry.contactZones.length >= 2, view);
+    assert.ok(
+      geometry.contactZones.every((zone) => zone.groundY <= geometry.baseline),
+      view,
+    );
+    assert.equal(Math.min(...footprint.map((point) => point.y)), geometry.baseline - 1, view);
+    assert.ok(
+      footprint.some((point) => point.y > geometry.baseline),
+      view,
+    );
+    assert.ok(slices.length > 0, view);
+    assert.ok(Math.abs(slices[0]!.destinationY - geometry.baseline) < 0.001, view);
+    assert.ok(
+      slices.every((slice) => slice.destinationY >= geometry.baseline),
+      view,
+    );
+    assert.ok(slices.at(-1)!.opacity < slices[0]!.opacity, view);
+    assert.ok(slices.at(-1)!.blur > slices[0]!.blur, view);
+  }
+});
+
+test("uncertain grounding keeps contact support but disables reflection", () => {
+  const sparse = alphaMask(240, 160, (x, y) => x >= 118 && x <= 121 && y >= 80 && y <= 84);
+  const analysis = analyzeVehicleAlpha(sparse, 240, 160);
+  const profile = buildGroundEffectProfile(analysis);
+  const geometry = buildGroundPlaneGeometry(240, 160, analysis);
+
+  assert.equal(profile.reflection.opacity, 0);
+  assert.deepEqual(buildGroundReflectionSlices(analysis, geometry, profile), []);
+  assert.ok(buildAmbientShadowFootprint(geometry, profile).length >= 4);
+});
+
 test("wide asymmetric dealership silhouettes remain three-quarter and recover two supports", () => {
   const wideThreeQuarter = alphaMask(240, 140, (x, y) => {
     const bodyBottom = Math.round(92 + ((x - 24) / 190) * 8);
@@ -195,20 +262,21 @@ test("wide asymmetric dealership silhouettes remain three-quarter and recover tw
 
 test("rendering remains silhouette-based and manual controls remain wired", async () => {
   const { readFile } = await import("node:fs/promises");
-  const editor = await readFile(
-    new URL("../src/components/BackgroundEditor.tsx", import.meta.url),
-    "utf8",
-  );
+  const [editor, effects] = await Promise.all([
+    readFile(new URL("../src/components/BackgroundEditor.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/vehicle-ground-effects.ts", import.meta.url), "utf8"),
+  ]);
 
   assert.match(editor, /buildContactShadowCanvas/);
   assert.match(editor, /buildReflectionCanvas/);
-  assert.match(editor, /profile\.reflection\.heightFactor/);
   assert.match(editor, /buildGroundPlaneGeometry/);
   assert.match(editor, /geometry\.contactZones/);
   assert.match(editor, /const zoneGroundY = zone\.groundY \+ offsetY/);
-  assert.match(editor, /profile\.reflection\.perspectiveTaper/);
-  assert.match(editor, /const sourceGroundY =/);
-  assert.match(editor, /const slices =/);
+  assert.match(editor, /buildGroundReflectionSlices/);
+  assert.match(editor, /buildAmbientShadowFootprint/);
+  assert.match(effects, /profile\.reflection\.heightFactor/);
+  assert.match(effects, /profile\.reflection\.perspectiveTaper/);
+  assert.match(effects, /Math\.exp\(-4\.2 \* distance\)/);
   assert.match(editor, /createRadialGradient/);
   assert.match(editor, /buildVehicleCompositionFrame/);
   assert.match(editor, /PREPARED_IMAGE_WIDTH/);

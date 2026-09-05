@@ -342,6 +342,14 @@ const finalizeVariantInput = z.object({
   variant_type: z.enum(["cutout", "corrected_cutout", "customized", "enhanced", "dealer_render"]),
   path: z.string().min(1).max(1024),
   processing_provider: z.string().trim().min(1).max(120),
+  metadata: z
+    .object({
+      backdrop_resource_id: uuidSchema.optional(),
+      composition_size: z.object({ width: z.literal(1600), height: z.literal(1200) }).optional(),
+      grounding_version: z.literal("ground-plane-v2").optional(),
+    })
+    .strict()
+    .optional(),
 });
 
 export const finalizePrivateVariantUpload = createServerFn({ method: "POST" })
@@ -350,7 +358,10 @@ export const finalizePrivateVariantUpload = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     try {
       const inspected = await inspectStoredImage(data.path);
-      const { data: result, error } = await supabaseAdmin.rpc("commit_private_photo_variant", {
+      const rpcName = data.metadata
+        ? "commit_private_photo_variant_with_metadata"
+        : "commit_private_photo_variant";
+      const { data: result, error } = await supabaseAdmin.rpc(rpcName, {
         _actor_id: context.userId,
         _photo_id: data.photo_id,
         _variant_id: data.variant_id,
@@ -364,6 +375,7 @@ export const finalizePrivateVariantUpload = createServerFn({ method: "POST" })
         _height: inspected.height,
         _checksum_sha256: inspected.checksum,
         _processing_provider: data.processing_provider,
+        ...(data.metadata ? { _metadata: data.metadata } : {}),
       });
       if (error) throw new Error(error.message);
       return parseJsonObject<Record<string, string>>(result);

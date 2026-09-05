@@ -257,8 +257,8 @@ function VehicleDetailPage() {
         </div>
       </PageHeader>
 
-      <section className="mb-5 grid overflow-hidden rounded-lg border border-border bg-card lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
-        <div className="relative min-h-64 bg-[color:oklch(0.22_0.025_252)] sm:min-h-96">
+      <section className="mb-5 grid gap-0 overflow-hidden rounded-lg border border-border bg-card xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] xl:items-start">
+        <div className="relative aspect-[4/3] w-full overflow-hidden bg-[color:oklch(0.22_0.025_252)]">
           {heroUrl ? (
             <img
               src={heroUrl}
@@ -266,7 +266,7 @@ function VehicleDetailPage() {
               className="absolute inset-0 h-full w-full object-contain"
             />
           ) : (
-            <div className="ds-grid-lines flex h-full min-h-64 flex-col items-center justify-center gap-3 text-white/45 sm:min-h-96">
+            <div className="ds-grid-lines flex h-full flex-col items-center justify-center gap-3 text-white/45">
               <Camera className="size-8" />
               <p className="text-sm font-medium">No lead photo selected</p>
             </div>
@@ -303,7 +303,7 @@ function VehicleDetailPage() {
       </section>
 
       <Tabs defaultValue={customize || capture ? "media" : "overview"} className="space-y-4">
-        <TabsList className="h-11 w-full justify-start overflow-x-auto rounded-lg border border-border bg-card p-1 sm:w-auto">
+        <TabsList className="ds-vehicle-workspace-tabs h-11 w-full max-w-full flex-nowrap justify-start overflow-x-auto rounded-lg border border-border bg-card p-1 lg:w-fit lg:overflow-visible">
           <TabsTrigger value="overview" className="min-h-9 gap-2">
             <CircleGauge className="size-4" />
             Overview

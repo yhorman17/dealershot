@@ -64,7 +64,10 @@ test("worker rechecks cancellation before Storage promotion and cleans the exact
   const worker = read("worker/media.ts");
   assert.match(worker, /Cancellation is cooperative/);
   assert.match(worker, /background_processing_cancelled/);
-  assert.match(worker, /\.from\(PRIVATE_BUCKET\)[\s\S]*?\.remove\(\[path\]\)/);
+  assert.match(
+    worker,
+    /\.from\(PRIVATE_BUCKET\)[\s\S]*?\.remove\(prepared \? \[path, prepared\.path\] : \[path\]\)/,
+  );
   assert.match(worker, /background_variant_finalize_failed/);
 });
 

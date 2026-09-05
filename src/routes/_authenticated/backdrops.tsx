@@ -267,6 +267,8 @@ function BackdropForm({
         name: name.trim(),
         image_url: pub.publicUrl,
         dealership_id: dealershipId,
+        storage_bucket: "backdrops",
+        storage_path: path,
       });
       if (insErr) throw insErr;
       onSaved();

@@ -10,6 +10,8 @@ import { uploadPrivateVariant } from "@/lib/private-media";
 import { removeVehicleBackground } from "@/lib/background-removal";
 import {
   analyzeVehicleAlpha,
+  buildAmbientShadowFootprint,
+  buildGroundReflectionSlices,
   buildVehicleCompositionFrame,
   buildGroundEffectProfile,
   buildGroundPlaneGeometry,
@@ -213,43 +215,26 @@ function buildContactShadowCanvas(
   const carHeight = geometry.vehicleHeight;
   const s = scalePct / 100;
   const groundY = geometry.baseline + offsetY;
-  const centerX = geometry.contactCenter + offsetX;
   const widthScale = Math.max(0.25, profile.shadow.widthFactor * s);
-  const shadowXFor = (x: number) => centerX + (x - geometry.contactCenter) * widthScale;
-  const ambientWidth =
-    Math.min(
-      carWidth * 0.98,
-      Math.max(geometry.contactRight - geometry.contactLeft, carWidth * 0.62),
-    ) * widthScale;
   const depth = Math.max(18, carHeight * profile.shadow.depthFactor * s);
   const ambientLayer = document.createElement("canvas");
   ambientLayer.width = targetW;
   ambientLayer.height = targetH;
   const ambient = ambientLayer.getContext("2d")!;
-  const contour = geometry.lowerContour;
+  const footprint = buildAmbientShadowFootprint(geometry, profile, scalePct, offsetX, offsetY);
 
   // The ambient layer follows the sampled lower hull instead of using a stock
   // oval. The vehicle is drawn later, hiding the small overlap and leaving a
   // soft floor projection that starts at the same baseline as tire contact.
-  if (contour.length >= 2) {
+  if (footprint.length >= 3) {
     ambient.save();
     ambient.beginPath();
-    const first = contour[0]!;
-    ambient.moveTo(shadowXFor(first.x), Math.min(groundY, first.y + offsetY));
-    for (const point of contour) {
-      ambient.lineTo(shadowXFor(point.x), Math.min(groundY, point.y + offsetY));
-    }
-    for (let index = contour.length - 1; index >= 0; index -= 1) {
-      const point = contour[index]!;
-      const distance = Math.abs(point.x - centerX) / Math.max(1, ambientWidth / 2);
-      const perspectiveDepth = depth * (0.42 + 0.58 * Math.max(0, 1 - distance * distance));
-      const drift = profile.shadow.skew * perspectiveDepth;
-      ambient.lineTo(shadowXFor(point.x) + drift, groundY + perspectiveDepth);
-    }
+    ambient.moveTo(footprint[0]!.x, footprint[0]!.y);
+    for (const point of footprint.slice(1)) ambient.lineTo(point.x, point.y);
     ambient.closePath();
-    const fill = ambient.createLinearGradient(0, groundY - depth * 0.1, 0, groundY + depth);
-    fill.addColorStop(0, `rgba(0,0,0,${opacity * 0.34})`);
-    fill.addColorStop(0.32, `rgba(0,0,0,${opacity * 0.2})`);
+    const fill = ambient.createLinearGradient(0, groundY - 1, 0, groundY + depth);
+    fill.addColorStop(0, `rgba(18,21,24,${opacity * 0.26})`);
+    fill.addColorStop(0.36, `rgba(26,29,32,${opacity * 0.15})`);
     fill.addColorStop(1, "rgba(0,0,0,0)");
     ambient.fillStyle = fill;
     ambient.fill();
@@ -288,7 +273,8 @@ function buildContactShadowCanvas(
       7,
       carHeight * (profile.view === "front" || profile.view === "rear" ? 0.034 : 0.026) * s,
     );
-    const zoneCenter = shadowXFor(zone.center);
+    const zoneCenter =
+      geometry.contactCenter + offsetX + (zone.center - geometry.contactCenter) * widthScale;
     const zoneGroundY = zone.groundY + offsetY;
     ctx.save();
     ctx.translate(zoneCenter, zoneGroundY + zoneDepth * 0.08);
@@ -331,78 +317,33 @@ function buildReflectionCanvas(
     carOpts,
   );
   const bounds = analysis.bounds;
-  const silW = geometry.vehicleWidth;
-  const silH = geometry.vehicleHeight;
-  const groundY = geometry.baseline + offsetY;
-  const s = Math.max(0.1, scalePct / 100);
-  const vehicleCenter = (geometry.vehicleLeft + geometry.vehicleRight) / 2;
-  const footprintWeight = profile.view.includes("three-quarter") ? 0.48 : 0.22;
-  const centerX =
-    vehicleCenter * (1 - footprintWeight) + geometry.contactCenter * footprintWeight + offsetX;
-  const reflectionW = Math.min(silW, silW * profile.reflection.widthFactor * s);
-  const reflectionH = Math.max(6, silH * profile.reflection.heightFactor * s);
-  const reflectionLayer = document.createElement("canvas");
-  reflectionLayer.width = targetW;
-  reflectionLayer.height = targetH;
-  const reflectionContext = reflectionLayer.getContext("2d")!;
   const sourceW = Math.max(1, bounds.right - bounds.left + 1);
-  const sourceGroundY = Math.max(bounds.top, Math.min(bounds.bottom, analysis.groundY));
-  const sourceH = Math.max(1, sourceGroundY - bounds.top + 1);
-  const slices = Math.min(72, Math.max(32, Math.round(sourceH / 8)));
+  const slices = buildGroundReflectionSlices(
+    analysis,
+    geometry,
+    profile,
+    scalePct,
+    offsetX,
+    offsetY,
+  );
 
   // Warp horizontal silhouette slices independently. The bottom-most source
   // pixels touch the shared baseline; slices taper and drift with distance so
   // three-quarter views read as a floor projection, not a mirrored rectangle.
-  for (let index = 0; index < slices; index += 1) {
-    const near = index / slices;
-    const far = (index + 1) / slices;
-    const sourceTop = sourceGroundY + 1 - far * sourceH;
-    const sourceHeight = Math.max(1, (far - near) * sourceH + 0.75);
-    const distance = (near + far) / 2;
-    const sliceWidth = reflectionW * (1 - profile.reflection.perspectiveTaper * distance);
-    const drift = profile.reflection.skew * reflectionH * distance;
-    const destinationY = groundY - 0.5 + near * reflectionH;
-    const destinationHeight = Math.max(1.4, (far - near) * reflectionH + 1);
-    reflectionContext.drawImage(
+  for (const slice of slices) {
+    ctx.save();
+    ctx.globalAlpha = intensity * slice.opacity;
+    ctx.filter = `blur(${slice.blur.toFixed(2)}px)`;
+    ctx.drawImage(
       cutout,
       bounds.left,
-      sourceTop,
+      slice.sourceTop,
       sourceW,
-      sourceHeight,
-      centerX - sliceWidth / 2 + drift,
-      destinationY,
-      sliceWidth,
-      destinationHeight,
-    );
-  }
-
-  reflectionContext.globalCompositeOperation = "destination-in";
-  const fadeEnd = Math.min(targetH, groundY + reflectionH);
-  const grad = reflectionContext.createLinearGradient(0, groundY, 0, fadeEnd);
-  grad.addColorStop(0, `rgba(0,0,0,${intensity})`);
-  grad.addColorStop(0.42, `rgba(0,0,0,${intensity * 0.34})`);
-  grad.addColorStop(1, "rgba(0,0,0,0)");
-  reflectionContext.fillStyle = grad;
-  reflectionContext.fillRect(0, groundY, targetW, Math.max(1, reflectionH));
-
-  const baseBlur = Math.max(0.8, silW * profile.reflection.blurFactor);
-  const bands = 5;
-  for (let index = 0; index < bands; index += 1) {
-    const bandY = groundY + (index / bands) * reflectionH;
-    const bandHeight = reflectionH / bands;
-    const padding = Math.ceil(baseBlur * 3);
-    ctx.save();
-    ctx.filter = `blur(${(baseBlur * (0.72 + index * 0.24)).toFixed(2)}px)`;
-    ctx.drawImage(
-      reflectionLayer,
-      0,
-      Math.max(0, bandY - padding),
-      targetW,
-      Math.min(targetH - Math.max(0, bandY - padding), bandHeight + padding * 2),
-      0,
-      Math.max(0, bandY - padding),
-      targetW,
-      Math.min(targetH - Math.max(0, bandY - padding), bandHeight + padding * 2),
+      slice.sourceHeight,
+      slice.destinationX,
+      slice.destinationY,
+      slice.destinationWidth,
+      slice.destinationHeight,
     );
     ctx.restore();
   }
@@ -471,6 +412,52 @@ function compose(ctx: CanvasRenderingContext2D, o: ComposeOpts) {
 
   const r = carRect(o.cutout, o.analysis, targetW, targetH, o.carOpts);
   ctx.drawImage(o.cutout, r.x, r.y, r.w, r.h);
+
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("groundDebug")) {
+    const geometry = buildGroundPlaneGeometry(
+      o.cutout.naturalWidth,
+      o.cutout.naturalHeight,
+      o.analysis,
+      targetW,
+      targetH,
+      o.carOpts,
+    );
+    const footprint = buildAmbientShadowFootprint(
+      geometry,
+      o.groundEffectProfile,
+      o.shadowScale,
+      o.shadowX,
+      o.shadowY,
+    );
+    ctx.save();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#22d3ee";
+    ctx.strokeRect(
+      geometry.vehicleLeft,
+      geometry.frame.visibleBounds.top,
+      geometry.vehicleWidth,
+      geometry.vehicleHeight,
+    );
+    ctx.strokeStyle = "#f59e0b";
+    ctx.beginPath();
+    ctx.moveTo(0, geometry.baseline + o.shadowY);
+    ctx.lineTo(targetW, geometry.baseline + o.shadowY);
+    ctx.stroke();
+    ctx.strokeStyle = "#a855f7";
+    ctx.beginPath();
+    footprint.forEach((point, index) =>
+      index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y),
+    );
+    ctx.closePath();
+    ctx.stroke();
+    for (const zone of geometry.contactZones) {
+      ctx.fillStyle = "#ef4444";
+      ctx.beginPath();
+      ctx.arc(zone.center, zone.groundY, 8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 
   if (o.overlay) {
     const dr = destRect(
@@ -883,32 +870,60 @@ export function BackgroundEditor({
 
   useEffect(() => {
     void (async () => {
-      const [{ data: bs }, { data: os }] = await Promise.all([
-        supabase
-          .from("backdrops")
-          .select("id, name, image_url")
-          .eq("dealership_id", dealershipId)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("overlay_templates")
-          .select("id, name, image_url, category")
-          .eq("dealership_id", dealershipId)
-          .order("created_at", { ascending: false }),
-      ]);
+      const [{ data: bs }, { data: os }, { data: settings }, { data: currentPhoto }] =
+        await Promise.all([
+          supabase
+            .from("backdrops")
+            .select("id, name, image_url")
+            .eq("dealership_id", dealershipId)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("overlay_templates")
+            .select("id, name, image_url, category")
+            .eq("dealership_id", dealershipId)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("photography_settings")
+            .select("default_backdrop_id")
+            .eq("dealership_id", dealershipId)
+            .maybeSingle(),
+          supabase.from("photos").select("approved_variant_id").eq("id", photo.id).maybeSingle(),
+        ]);
       const bList = (bs as Backdrop[]) || [];
       const oList = (os as OverlayTemplate[]) || [];
       setBackdrops(bList);
       setOverlays(oList);
-      if (bList.length > 0) {
-        suppressHistoryRef.current = true;
-        setBackdropId(bList[0].id);
-        setDefaultBackdropId(bList[0].id);
-        setTimeout(() => {
-          suppressHistoryRef.current = false;
-        }, 0);
+      const storeDefault =
+        typeof settings?.default_backdrop_id === "string" &&
+        bList.some((backdrop) => backdrop.id === settings.default_backdrop_id)
+          ? settings.default_backdrop_id
+          : "";
+      let perPhotoBackdrop = "";
+      if (currentPhoto?.approved_variant_id) {
+        const { data: approved } = await supabase
+          .from("media_variants")
+          .select("metadata")
+          .eq("id", currentPhoto.approved_variant_id)
+          .maybeSingle();
+        const metadata =
+          approved?.metadata &&
+          typeof approved.metadata === "object" &&
+          !Array.isArray(approved.metadata)
+            ? approved.metadata
+            : null;
+        const candidate = metadata?.backdrop_resource_id;
+        if (typeof candidate === "string" && bList.some((backdrop) => backdrop.id === candidate)) {
+          perPhotoBackdrop = candidate;
+        }
       }
+      suppressHistoryRef.current = true;
+      setDefaultBackdropId(storeDefault);
+      setBackdropId(perPhotoBackdrop || storeDefault);
+      setTimeout(() => {
+        suppressHistoryRef.current = false;
+      }, 0);
     })();
-  }, [dealershipId]);
+  }, [dealershipId, photo.id]);
 
   const originalUrl = photo.original_image_url || photo.image_url;
   const persistedCutoutUrl =
@@ -1242,7 +1257,6 @@ export function BackgroundEditor({
     setSaving(true);
     setError(null);
     try {
-      let cutoutUrl = persistedCutoutUrl;
       if (pendingCutoutBlobRef.current) {
         await uploadPrivateVariant({
           photoId: photo.id,
@@ -1251,22 +1265,22 @@ export function BackgroundEditor({
           processingProvider: "imgly-client",
           sourceMode: pendingCutoutSourceRef.current,
         });
-        cutoutUrl = URL.createObjectURL(pendingCutoutBlobRef.current);
       }
 
-      if (!backdropImg || !baseSize) {
-        if (!cutoutUrl) throw new Error("Create a cutout before saving.");
+      if (backdrops.length === 0) {
         onSaved();
         return;
       }
+
+      if (!baseSize) throw new Error("Create a cutout before saving.");
 
       if (!canvas) throw new Error("The customized preview is not ready yet.");
 
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
           (value) => (value ? resolve(value) : reject(new Error("Failed to render"))),
-          "image/jpeg",
-          0.92,
+          backdropImg ? "image/jpeg" : "image/png",
+          backdropImg ? 0.92 : undefined,
         );
       });
 
@@ -1275,6 +1289,12 @@ export function BackgroundEditor({
         blob,
         variantType: "customized",
         processingProvider: "dealershot-canvas",
+        sourceMode: "active_cutout",
+        metadata: {
+          ...(backdropId ? { backdrop_resource_id: backdropId } : {}),
+          composition_size: { width: 1600, height: 1200 },
+          grounding_version: "ground-plane-v2",
+        },
       });
       onSaved();
     } catch (err) {
@@ -1378,13 +1398,16 @@ export function BackgroundEditor({
                       Backdrop
                     </label>
                     <ProductSelect
-                      value={backdropId}
-                      onValueChange={track(setBackdropId)}
                       ariaLabel="Backdrop"
-                      options={backdrops.map((backdrop) => ({
-                        value: backdrop.id,
-                        label: backdrop.name,
-                      }))}
+                      options={[
+                        { value: "none", label: "None / Transparent" },
+                        ...backdrops.map((backdrop) => ({
+                          value: backdrop.id,
+                          label: backdrop.name,
+                        })),
+                      ]}
+                      onValueChange={(value) => track(setBackdropId)(value === "none" ? "" : value)}
+                      value={backdropId || "none"}
                     />
                   </div>
 

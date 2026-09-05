@@ -770,3 +770,12 @@
     animation-duration: 0.01ms !important;
   }
 }
+/* Vehicle workspace tabs remain touch-scrollable on narrow screens without
+   showing a desktop scrollbar when the complete strip already fits. */
+.ds-vehicle-workspace-tabs {
+  scrollbar-width: none;
+}
+
+.ds-vehicle-workspace-tabs::-webkit-scrollbar {
+  display: none;
+}
